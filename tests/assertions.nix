@@ -90,6 +90,20 @@ let
       assertion = "[internal] include => outbound";
     };
 
+    danglingPredialSubroutine = {
+      module =
+        { config, ... }:
+        {
+          services.asterisk-declarative.dialplan.contexts.internal.extensions."100" = [
+            (config.lib.asterisk.dialplan.page {
+              endpoints = [ "101" ];
+              predial = "page-autoanswer";
+            })
+          ];
+        };
+      assertion = "pre-dial subroutines refer to contexts that are not defined:\n  [internal] page-autoanswer";
+    };
+
     includeWithTimeSpecIsResolved = {
       module.services.asterisk-declarative.dialplan.contexts = {
         internal.includes = [ "daytime,09:00-17:00,mon-fri,*,*" ];

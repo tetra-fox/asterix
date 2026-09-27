@@ -188,6 +188,22 @@ let
       ) (toList (s.include or [ ]))
     )
   ) (attrValues dialplan);
+  # Pre-dial subroutines of Dial()/Page() written as b(context^exten^priority)
+  # or B(context^exten^priority).
+  gosubTargets =
+    line:
+    lib.concatMap (m: if builtins.isList m then [ (builtins.elemAt m 0) ] else [ ]) (
+      builtins.split "[bB][(]([^()^,]+)\\^[^()^,]+\\^[0-9n]+[)]" line
+    );
+  danglingSubroutines = lib.concatMap (
+    s:
+    lib.concatMap (
+      line:
+      map (target: "[${s.name}] ${target} (in: ${line})") (
+        filter (target: !(builtins.elem target contexts)) (gosubTargets line)
+      )
+    ) (filter isString (toList (s.exten or [ ])))
+  ) (attrValues dialplan);
   emptyExtensions = lib.concatLists (
     mapAttrsToList (
       name: context:
@@ -286,6 +302,13 @@ in
         message = ''
           services.asterisk-declarative: dialplan includes contexts that are not defined:
             ${concatStringsSep "\n  " danglingIncludes}
+        '';
+      }
+      {
+        assertion = !known || danglingSubroutines == [ ];
+        message = ''
+          services.asterisk-declarative: pre-dial subroutines refer to contexts that are not defined:
+            ${concatStringsSep "\n  " danglingSubroutines}
         '';
       }
       {

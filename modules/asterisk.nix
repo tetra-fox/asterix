@@ -837,9 +837,14 @@ in
 
         restartTriggers = [ restartOnlyConfig ] ++ optional (!cfg.reloadOnChange) generatedConfig;
         reloadTriggers = optional cfg.reloadOnChange generatedConfig;
+        # Keep the old daemon running during activation and restart it
+        # afterwards: shorter downtime.
+        stopIfChanged = false;
 
         serviceConfig = {
-          Type = "simple";
+          # exec, not simple: ExecStartPost= must not race the credential
+          # setup of the main process
+          Type = "exec";
           User = "asterisk";
           Group = "asterisk";
           ExecStartPre = "${configTool}/bin/asterisk-config start";

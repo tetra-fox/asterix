@@ -235,6 +235,39 @@ let
       assertion = "services.asterisk-declarative and services.asterisk cannot be enabled\ntogether";
     };
 
+    ariWithoutHttp = {
+      module =
+        { config, ... }:
+        {
+          services.asterisk-declarative.ari = {
+            enable = true;
+            users.app.password = config.lib.asterisk.secret "/run/agenix/ari";
+          };
+        };
+      assertion = "ari.enable requires services.asterisk-declarative.http.enable";
+    };
+
+    wssWithoutHttpTls = {
+      module.services.asterisk-declarative = {
+        http.enable = true;
+        pjsip.transports.wss.protocol = "wss";
+      };
+      assertion = "a wss transport requires services.asterisk-declarative.http.tls.enable";
+    };
+
+    websocketWithoutHttp = {
+      module.services.asterisk-declarative.pjsip.transports.ws.protocol = "ws";
+      assertion = "WebSocket transports (ws, wss) require services.asterisk-declarative.http.enable";
+    };
+
+    httpTlsWithoutKey = {
+      module.services.asterisk-declarative.http = {
+        enable = true;
+        tls.enable = true;
+      };
+      assertion = "http.tls needs certFile and keyFile";
+    };
+
     voicemailNameWithComma = {
       module =
         { config, ... }:

@@ -1,6 +1,7 @@
 # services.asterisk-declarative: all layers.
 {
   imports = [
+    ./ari.nix
     ./asterisk.nix
     ./confbridge.nix
     ./dialplan.nix

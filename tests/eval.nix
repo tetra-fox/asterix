@@ -614,6 +614,75 @@ lib.runTests {
     '';
   };
 
+  testAriLoadsModulesAndHttpTlsCredentials = {
+    expr =
+      let
+        config = evalConfig [
+          phone
+          (
+            { config, ... }:
+            {
+              services.asterisk-declarative = {
+                http = {
+                  enable = true;
+                  tls = {
+                    enable = true;
+                    certFile = "/var/lib/acme/pbx/cert.pem";
+                    keyFile = "/var/lib/acme/pbx/key.pem";
+                  };
+                };
+                ari = {
+                  enable = true;
+                  users.app.password = config.lib.asterisk.secret "/run/agenix/ari";
+                };
+              };
+            }
+          )
+        ];
+        files = config.services.asterisk-declarative.renderedFiles;
+      in
+      {
+        modules = map (m: lib.hasInfix "load => ${m}" files."modules.conf") [
+          "res_ari.so"
+          "res_ari_channels.so"
+          "app_stasis.so"
+          "res_http_websocket.so"
+        ];
+        tls =
+          lib.hasInfix "tlsprivatekey = /run/credentials/asterisk.service/http-tls-key"
+            files."http.conf";
+        credentials = builtins.filter (lib.hasPrefix "http-tls") config.systemd.services.asterisk.serviceConfig.LoadCredential;
+      };
+    expected = {
+      modules = [
+        true
+        true
+        true
+        true
+      ];
+      tls = true;
+      credentials = [
+        "http-tls-cert:/var/lib/acme/pbx/cert.pem"
+        "http-tls-key:/var/lib/acme/pbx/key.pem"
+      ];
+    };
+  };
+
+  testWebsocketTransportLoadsModules = {
+    expr =
+      lib.hasInfix "load => res_pjsip_transport_websocket.so"
+        (rendered [
+          phone
+          {
+            services.asterisk-declarative = {
+              http.enable = true;
+              pjsip.transports.ws.protocol = "ws";
+            };
+          }
+        ])."modules.conf";
+    expected = true;
+  };
+
   testMusicOnHoldDirectoryFromStore = {
     expr =
       lib.hasInfix "directory = ${builtins.storeDir}/"

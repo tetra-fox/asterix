@@ -18,7 +18,7 @@ class Phone:
     def start(self, extra=""):
         self.machine.succeed(
             f"sip-phone start {self.name} {self.user} {shlex.quote(self.password)} "
-            f"{self.server} {self.sip_port} {self.cli_port} {extra}"
+            f"{shlex.quote(self.server)} {self.sip_port} {self.cli_port} {extra}"
         )
         self.machine.wait_until_succeeds(f"test -f {self.log}")
 
@@ -28,7 +28,7 @@ class Phone:
     def wait_registered(self, timeout=120):
         self.machine.wait_until_succeeds(f"grep -q 'registration success' {self.log}", timeout=timeout)
 
-    def wait_registration_failed(self, pattern="registration failed", timeout=120):
+    def wait_registration_failed(self, pattern="registration (failed|error)", timeout=120):
         self.machine.wait_until_succeeds(f"grep -qE {shlex.quote(pattern)} {self.log}", timeout=timeout)
 
     def cli(self, command):

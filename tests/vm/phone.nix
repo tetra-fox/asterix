@@ -10,10 +10,21 @@
 # logged to /tmp/sip-phone-NAME.log.
 { pkgs, ... }:
 let
+  # pjsua never flushes its log file (upstream comments the call out for
+  # speed), so a line a test waits for could stay in the stdio buffer
+  # indefinitely. Flush after every message.
+  pjsip = pkgs.pjsip.overrideAttrs (old: {
+    postPatch = (old.postPatch or "") + ''
+      substituteInPlace pjsip/src/pjsua-lib/pjsua_core.c --replace-fail \
+        'pj_file_write(pjsua_var.log_file, buffer, &size);' \
+        'pj_file_write(pjsua_var.log_file, buffer, &size); pj_file_flush(pjsua_var.log_file);'
+    '';
+  });
+
   sipPhone = pkgs.writeShellApplication {
     name = "sip-phone";
     runtimeInputs = [
-      pkgs.pjsip
+      pjsip
       pkgs.coreutils
       pkgs.systemd
     ];

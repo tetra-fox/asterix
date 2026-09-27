@@ -16,6 +16,11 @@
     {
       lib = import ./lib { inherit lib; };
 
+      nixosModules = {
+        default = self.nixosModules.asterisk;
+        asterisk = ./modules;
+      };
+
       checks = forAllSystems (pkgs: import ./tests { inherit pkgs self; });
 
       formatter = forAllSystems (pkgs: pkgs.nixfmt-tree);

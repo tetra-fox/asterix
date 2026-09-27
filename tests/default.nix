@@ -55,6 +55,8 @@ in
 
   vm-minimal = import ./vm/minimal.nix { inherit pkgs self; };
 
+  vm-household-intercom = import ./vm/household-intercom.nix { inherit pkgs self; };
+
   formatting = pkgs.runCommand "asterisk-nixfmt-check" { nativeBuildInputs = [ pkgs.nixfmt ]; } ''
     cd ${nixSources}
     find . -name '*.nix' -print0 | xargs -0 nixfmt --check

@@ -2,5 +2,6 @@
 {
   imports = [
     ./asterisk.nix
+    ./modules-conf.nix
   ];
 }

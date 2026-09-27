@@ -4,5 +4,6 @@
     ./asterisk.nix
     ./logger.nix
     ./modules-conf.nix
+    ./pjsip.nix
   ];
 }

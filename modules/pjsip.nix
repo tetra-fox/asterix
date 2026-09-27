@@ -1,0 +1,936 @@
+# Typed PJSIP options (pjsip.conf).
+#
+# Every typed object is rendered as explicit pjsip.conf sections (not the
+# pjsip wizard) with the layer-1 ids documented below, so everything can be
+# extended or overridden through `settings."pjsip.conf"`:
+#
+#   transports.<n>  -> "transport:<n>"                     [<n>]  type=transport
+#   acls.<n>        -> "acl:<n>"                           [<n>]  type=acl
+#   endpoints.<n>   -> "endpoint:<n>"                      [<n>]  type=endpoint
+#                      "auth:<n>"          (auth)          [<n>]  type=auth
+#                      "outbound-auth:<n>" (outboundAuth)  [<n>-outbound] type=auth
+#                      "aor:<n>"           (aor)           [<n>]  type=aor
+#                      "identify:<n>"      (identify)      [<n>]  type=identify
+#   trunks.<n>      -> the same ids as an endpoint, plus
+#                      "registration:<n>"                  [<n>]  type=registration
+#
+# Single values generated here are defaults (mkDefault), so a value in
+# `settings` replaces them; list values (allow, match, permit, ...) are
+# extended by further definitions.
+{ config, lib, ... }:
+let
+  inherit (lib)
+    attrNames
+    attrValues
+    concatLists
+    concatStringsSep
+    filter
+    filterAttrs
+    hasInfix
+    isList
+    isString
+    mapAttrs
+    mapAttrsToList
+    mapAttrs'
+    mkDefault
+    mkIf
+    mkMerge
+    mkOption
+    nameValuePair
+    optional
+    optionalAttrs
+    optionalString
+    splitString
+    types
+    unique
+    ;
+
+  cfg = config.services.asterisk-declarative;
+  pcfg = cfg.pjsip;
+  asteriskLib = import ../lib { inherit lib; };
+  inherit (asteriskLib) format secrets;
+
+  secretOrString = types.either types.str format.types.secret // {
+    description = "string or secret reference";
+  };
+
+  settingsOption =
+    what:
+    mkOption {
+      type = types.attrsOf format.types.value;
+      default = { };
+      description = ''
+        Additional keys for the generated ${what} section. They take
+        precedence over single values generated from the typed options and
+        extend generated lists.
+      '';
+    };
+
+  # Scalars become defaults, lists stay regular definitions, nulls are dropped.
+  toSection =
+    attrs: mapAttrs (_: v: if isList v then v else mkDefault v) (filterAttrs (_: v: v != null) attrs);
+
+  section =
+    {
+      name,
+      type,
+      order ? 1000,
+      values,
+      extra ? { },
+    }:
+    mkMerge [
+      (
+        {
+          inherit name type order;
+        }
+        // toSection values
+      )
+      extra
+    ];
+
+  hostPort =
+    host: port:
+    (if hasInfix ":" host then "[${host}]" else host)
+    + optionalString (port != null) ":${toString port}";
+
+  # --- submodule types ----------------------------------------------------
+
+  authOptions =
+    { defaultName }:
+    {
+      options = {
+        name = mkOption {
+          type = types.str;
+          default = defaultName;
+          description = "Name of the auth section.";
+        };
+        username = mkOption {
+          type = types.str;
+          description = "User name used for digest authentication.";
+        };
+        password = mkOption {
+          type = secretOrString;
+          description = ''
+            Password, normally a secret reference such as
+            `config.lib.asterisk.secret "/run/agenix/alice"`. A plain string
+            ends up in the world-readable Nix store and triggers a warning.
+          '';
+        };
+        realm = mkOption {
+          type = types.nullOr types.str;
+          default = null;
+          description = "Authentication realm; Asterisk's default is `asterisk`.";
+        };
+        settings = settingsOption "auth";
+      };
+    };
+
+  inboundAuthType =
+    name:
+    types.submodule [
+      (authOptions { defaultName = name; })
+      { config.username = mkDefault name; }
+    ];
+
+  outboundAuthType =
+    name:
+    types.submodule (authOptions {
+      defaultName = "${name}-outbound";
+    });
+
+  aorType =
+    name:
+    types.submodule {
+      options = {
+        name = mkOption {
+          type = types.str;
+          default = name;
+          description = "Name of the aor section, which is also the user part phones register to.";
+        };
+        maxContacts = mkOption {
+          type = types.ints.unsigned;
+          default = 1;
+          description = "Maximum number of registered contacts (0 accepts no registrations).";
+        };
+        removeExisting = mkOption {
+          type = types.bool;
+          default = true;
+          description = "Replace the oldest contact when a new registration would exceed maxContacts.";
+        };
+        qualifyFrequency = mkOption {
+          type = types.ints.unsigned;
+          default = 60;
+          description = "Interval in seconds for OPTIONS keepalives (0 disables them).";
+        };
+        contacts = mkOption {
+          type = types.listOf types.str;
+          default = [ ];
+          example = [ "sip:10.0.2.21:5060" ];
+          description = "Static contacts, for devices that do not register.";
+        };
+        settings = settingsOption "aor";
+      };
+    };
+
+  identifyType =
+    name:
+    types.submodule {
+      options = {
+        name = mkOption {
+          type = types.str;
+          default = name;
+          description = "Name of the identify section.";
+        };
+        match = mkOption {
+          type = types.listOf types.str;
+          example = [
+            "203.0.113.10"
+            "198.51.100.0/24"
+            "sip.provider.example"
+          ];
+          description = "Source addresses, networks or host names identifying this endpoint.";
+        };
+        settings = settingsOption "identify";
+      };
+    };
+
+  commonEndpointOptions = name: {
+    context = mkOption {
+      type = types.str;
+      description = "Dialplan context calls from this endpoint start in.";
+    };
+    transport = mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      description = "Transport for outgoing requests; by default Asterisk picks a matching one.";
+    };
+    allow = mkOption {
+      type = types.nonEmptyListOf types.str;
+      default = [
+        "g722"
+        "ulaw"
+        "alaw"
+      ];
+      description = "Allowed codecs in order of preference (`disallow = all` is rendered first).";
+    };
+    directMedia = mkOption {
+      type = types.bool;
+      default = false;
+      description = ''
+        Let RTP flow directly between endpoints. Off by default, so Asterisk
+        relays media, which works across VLANs and NAT.
+      '';
+    };
+    callerId = mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      example = ''"Kitchen" <101>'';
+      description = "Caller ID presented for calls from this endpoint.";
+    };
+    dtmfMode = mkOption {
+      type = types.nullOr (
+        types.enum [
+          "rfc4733"
+          "inband"
+          "info"
+          "auto"
+          "auto_info"
+        ]
+      );
+      default = null;
+      description = "DTMF mode; Asterisk's default is `rfc4733`.";
+    };
+    behindNat = mkOption {
+      type = types.bool;
+      default = false;
+      description = "Enable `rtp_symmetric`, `force_rport` and `rewrite_contact` for devices behind NAT.";
+    };
+    identify = mkOption {
+      type = types.nullOr (identifyType name);
+      default = null;
+      description = "Identify requests from these addresses as this endpoint (an identify section).";
+    };
+    outboundAuth = mkOption {
+      type = types.nullOr (outboundAuthType name);
+      default = null;
+      description = "Credentials Asterisk uses when the remote side challenges it.";
+    };
+    settings = settingsOption "endpoint";
+  };
+
+  endpointType = types.submodule (
+    { name, ... }:
+    {
+      options = commonEndpointOptions name // {
+        auth = mkOption {
+          type = types.nullOr (inboundAuthType name);
+          default = null;
+          description = ''
+            Credentials the device must present (an auth section named like
+            the endpoint). The user name defaults to the endpoint name.
+          '';
+        };
+        aor = mkOption {
+          type = types.nullOr (aorType name);
+          default = { };
+          defaultText = lib.literalExpression "{ }";
+          description = ''
+            Address of record (where to reach the endpoint): registrations or
+            static contacts. Set to `null` for endpoints that are never called.
+          '';
+        };
+        mailboxes = mkOption {
+          type = types.listOf types.str;
+          default = [ ];
+          example = [ "101@default" ];
+          description = "Voicemail boxes whose message-waiting state is sent to the device.";
+        };
+      };
+    }
+  );
+
+  trunkType = types.submodule (
+    { name, config, ... }:
+    {
+      options = commonEndpointOptions name // {
+        host = mkOption {
+          type = types.str;
+          example = "sip.provider.example";
+          description = "Provider SIP server (host name or address).";
+        };
+        port = mkOption {
+          type = types.nullOr types.port;
+          default = null;
+          description = "Provider SIP port; defaults to the transport's standard port.";
+        };
+        username = mkOption {
+          type = types.str;
+          description = "Account user name, used for authentication, registration and the From header.";
+        };
+        password = mkOption {
+          type = secretOrString;
+          description = "Account password, normally a secret reference.";
+        };
+        fromDomain = mkOption {
+          type = types.nullOr types.str;
+          default = config.host;
+          defaultText = lib.literalExpression "host";
+          description = "Domain of the From header of outgoing calls.";
+        };
+        register = mkOption {
+          type = types.bool;
+          default = true;
+          description = "Register to the provider (outbound registration).";
+        };
+        registration = {
+          expiration = mkOption {
+            type = types.ints.positive;
+            default = 3600;
+            description = "Requested registration lifetime in seconds.";
+          };
+          retryInterval = mkOption {
+            type = types.ints.positive;
+            default = 60;
+            description = "Seconds between registration attempts after a failure.";
+          };
+          contactUser = mkOption {
+            type = types.nullOr types.str;
+            default = null;
+            description = "User part of the registered Contact, i.e. the extension inbound calls arrive at.";
+          };
+          settings = settingsOption "registration";
+        };
+        qualifyFrequency = mkOption {
+          type = types.ints.unsigned;
+          default = 60;
+          description = "Interval in seconds for OPTIONS keepalives to the provider (0 disables them).";
+        };
+        matchProviderHost = mkOption {
+          type = types.bool;
+          default = true;
+          description = ''
+            Identify inbound requests coming from `host` as this trunk, in
+            addition to `identify.match`.
+          '';
+        };
+        aorSettings = settingsOption "aor";
+      };
+      config.identify.match = mkIf config.matchProviderHost [ config.host ];
+    }
+  );
+
+  transportType = types.submodule (
+    { name, config, ... }:
+    {
+      options = {
+        protocol = mkOption {
+          type = types.enum [
+            "udp"
+            "tcp"
+            "tls"
+            "ws"
+            "wss"
+          ];
+          default = "udp";
+          description = ''
+            Transport protocol. `ws` and `wss` run over Asterisk's HTTP server
+            (http.conf) and ignore the address and port here.
+          '';
+        };
+        address = mkOption {
+          type = types.str;
+          default = "0.0.0.0";
+          example = "10.0.2.1";
+          description = "Local address to bind; `0.0.0.0` or `::` for all addresses.";
+        };
+        port = mkOption {
+          type = types.port;
+          default = if config.protocol == "tls" then 5061 else 5060;
+          defaultText = lib.literalExpression "5061 for tls, else 5060";
+          description = "Local port to bind.";
+        };
+        externalMediaAddress = mkOption {
+          type = types.nullOr types.str;
+          default = null;
+          description = "Public address put in SDP for peers outside `localNet` (NAT).";
+        };
+        externalSignalingAddress = mkOption {
+          type = types.nullOr types.str;
+          default = null;
+          description = "Public address used in SIP headers for peers outside `localNet` (NAT).";
+        };
+        externalSignalingPort = mkOption {
+          type = types.nullOr types.port;
+          default = null;
+          description = "Public port used in SIP headers for peers outside `localNet`.";
+        };
+        localNet = mkOption {
+          type = types.listOf types.str;
+          default = [ ];
+          example = [ "10.0.0.0/8" ];
+          description = "Networks considered local, where no external address is substituted.";
+        };
+        tls = {
+          certFile = mkOption {
+            type = types.nullOr types.str;
+            default = null;
+            description = ''
+              Certificate chain (PEM). Loaded as a systemd credential, so it may
+              be readable by root only.
+            '';
+          };
+          keyFile = mkOption {
+            type = types.nullOr types.str;
+            default = null;
+            description = "Private key (PEM), loaded as a systemd credential.";
+          };
+          caListFile = mkOption {
+            type = types.nullOr types.str;
+            default = null;
+            description = "CA certificates used to verify peers, loaded as a systemd credential.";
+          };
+          method = mkOption {
+            type = types.nullOr types.str;
+            default = null;
+            example = "tlsv1_2";
+            description = "TLS protocol version (pjsip `method`).";
+          };
+          verifyClient = mkOption {
+            type = types.bool;
+            default = false;
+            description = "Verify client certificates.";
+          };
+          verifyServer = mkOption {
+            type = types.bool;
+            default = false;
+            description = "Verify the server certificate on outgoing connections.";
+          };
+        };
+        allowReload = mkOption {
+          type = types.bool;
+          default = false;
+          description = ''
+            Let `module reload res_pjsip.so` recreate this transport. Changing a
+            transport restarts Asterisk anyway when deployed through NixOS.
+          '';
+        };
+        settings = settingsOption "transport";
+      };
+    }
+  );
+
+  aclType = types.submodule {
+    options = {
+      deny = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        example = [
+          "0.0.0.0/0.0.0.0"
+          "::/0"
+        ];
+        description = "Networks to deny. Rendered before `permit`; the last matching rule wins.";
+      };
+      permit = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        example = [ "10.0.1.0/24" ];
+        description = "Networks to permit, overriding earlier `deny` rules.";
+      };
+      contactDeny = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        description = "Networks registered contacts must not be in.";
+      };
+      contactPermit = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        description = "Networks registered contacts may be in, overriding `contactDeny`.";
+      };
+      settings = settingsOption "acl";
+    };
+  };
+
+  # --- section generation --------------------------------------------------
+
+  credentialName = transport: kind: "pjsip-${transport}-${kind}";
+  credentialPath = transport: kind: "${cfg.paths.credentials}/${credentialName transport kind}";
+
+  transportSections = mapAttrs' (
+    name: t:
+    nameValuePair "transport:${name}" (section {
+      inherit name;
+      type = "transport";
+      order = 100;
+      values = {
+        inherit (t) protocol;
+        bind = hostPort t.address t.port;
+        external_media_address = t.externalMediaAddress;
+        external_signaling_address = t.externalSignalingAddress;
+        external_signaling_port = t.externalSignalingPort;
+        local_net = t.localNet;
+        cert_file = if t.tls.certFile != null then credentialPath name "cert" else null;
+        priv_key_file = if t.tls.keyFile != null then credentialPath name "key" else null;
+        ca_list_file = if t.tls.caListFile != null then credentialPath name "ca" else null;
+        method = t.tls.method;
+        verify_client = if t.protocol == "tls" then t.tls.verifyClient else null;
+        verify_server = if t.protocol == "tls" then t.tls.verifyServer else null;
+        allow_reload = if t.allowReload then true else null;
+      };
+      extra = t.settings;
+    })
+  ) pcfg.transports;
+
+  transportCredentials = concatLists (
+    mapAttrsToList (
+      name: t:
+      optional (t.tls.certFile != null) (nameValuePair (credentialName name "cert") t.tls.certFile)
+      ++ optional (t.tls.keyFile != null) (nameValuePair (credentialName name "key") t.tls.keyFile)
+      ++ optional (t.tls.caListFile != null) (nameValuePair (credentialName name "ca") t.tls.caListFile)
+    ) pcfg.transports
+  );
+
+  aclSections = mapAttrs' (
+    name: a:
+    nameValuePair "acl:${name}" (section {
+      inherit name;
+      type = "acl";
+      order = 200;
+      values = {
+        inherit (a) deny permit;
+        contact_deny = a.contactDeny;
+        contact_permit = a.contactPermit;
+      };
+      extra = a.settings;
+    })
+  ) pcfg.acls;
+
+  # Sections shared by endpoints and trunks. `e` is the endpoint-like
+  # attrset; `aor` and `auth` are normalized by the callers.
+  endpointSections =
+    name: e:
+    {
+      aor,
+      auth,
+      mailboxes ? [ ],
+      extraValues ? { },
+    }:
+    {
+      "endpoint:${name}" = section {
+        inherit name;
+        type = "endpoint";
+        values = {
+          inherit (e) context transport allow;
+          disallow = "all";
+          direct_media = e.directMedia;
+          callerid = e.callerId;
+          dtmf_mode = e.dtmfMode;
+          rtp_symmetric = if e.behindNat then true else null;
+          force_rport = if e.behindNat then true else null;
+          rewrite_contact = if e.behindNat then true else null;
+          auth = if auth != null then auth.name else null;
+          outbound_auth = if e.outboundAuth != null then e.outboundAuth.name else null;
+          aors = if aor != null then aor.name else null;
+          mailboxes = if mailboxes == [ ] then null else concatStringsSep "," mailboxes;
+        }
+        // extraValues;
+        extra = e.settings;
+      };
+    }
+    // optionalAttrs (auth != null) {
+      "auth:${name}" = section {
+        inherit (auth) name;
+        type = "auth";
+        values = {
+          inherit (auth) username password realm;
+        };
+        extra = auth.settings;
+      };
+    }
+    // optionalAttrs (e.outboundAuth != null) {
+      "outbound-auth:${name}" = section {
+        inherit (e.outboundAuth) name;
+        type = "auth";
+        values = {
+          inherit (e.outboundAuth) username password realm;
+        };
+        extra = e.outboundAuth.settings;
+      };
+    }
+    // optionalAttrs (aor != null) {
+      "aor:${name}" = section {
+        inherit (aor) name;
+        type = "aor";
+        values = {
+          max_contacts = aor.maxContacts;
+          remove_existing = aor.removeExisting;
+          qualify_frequency = aor.qualifyFrequency;
+          contact = aor.contacts;
+        };
+        extra = aor.settings;
+      };
+    }
+    // optionalAttrs (e.identify != null) {
+      "identify:${name}" = section {
+        inherit (e.identify) name;
+        type = "identify";
+        values = {
+          endpoint = name;
+          inherit (e.identify) match;
+        };
+        extra = e.identify.settings;
+      };
+    };
+
+  endpointSectionsFor =
+    name: e:
+    endpointSections name e {
+      inherit (e) aor auth mailboxes;
+    };
+
+  trunkSectionsFor =
+    name: t:
+    let
+      server = hostPort t.host t.port;
+      # A trunk always authenticates outbound with the account credentials.
+      t' = t // {
+        outboundAuth =
+          if t.outboundAuth != null then
+            t.outboundAuth
+          else
+            {
+              name = "${name}-outbound";
+              inherit (t) username password;
+              realm = null;
+              settings = { };
+            };
+      };
+    in
+    endpointSections name t' {
+      aor = {
+        inherit name;
+        maxContacts = 0;
+        removeExisting = false;
+        inherit (t) qualifyFrequency;
+        contacts = [ "sip:${server}" ];
+        settings = t.aorSettings;
+      };
+      auth = null;
+      extraValues = {
+        from_user = t.username;
+        from_domain = t.fromDomain;
+      };
+    }
+    // optionalAttrs t.register {
+      "registration:${name}" = section {
+        inherit name;
+        type = "registration";
+        values = {
+          inherit (t) transport;
+          outbound_auth = t'.outboundAuth.name;
+          server_uri = "sip:${server}";
+          client_uri = "sip:${t.username}@${server}";
+          contact_user = t.registration.contactUser;
+          retry_interval = t.registration.retryInterval;
+          expiration = t.registration.expiration;
+          endpoint = name;
+        };
+        extra = t.registration.settings;
+      };
+    };
+
+  globalSections =
+    optionalAttrs (pcfg.global != { }) {
+      global = section {
+        name = "global";
+        type = "global";
+        order = 0;
+        values = pcfg.global;
+      };
+    }
+    // optionalAttrs (pcfg.system != { }) {
+      system = section {
+        name = "system";
+        type = "system";
+        order = 0;
+        values = pcfg.system;
+      };
+    };
+
+  # --- validation on the final (layer 1) pjsip.conf ---------------------------
+
+  sip = cfg.settings."pjsip.conf" or { };
+  objects = filter (s: !(s.template or false)) (attrValues sip);
+  namesOfType = type: map (s: s.name) (filter (s: (s.type or null) == type) objects);
+
+  refList =
+    v:
+    if isString v then
+      filter (x: x != "") (map lib.trim (splitString "," v))
+    else if isList v then
+      lib.concatMap refList v
+    else
+      [ ];
+
+  danglingRefs =
+    let
+      check =
+        s: key: type:
+        map (ref: "[${s.name}] (type=${s.type}) ${key} = ${ref}: no ${type} named `${ref}`") (
+          filter (ref: !(builtins.elem ref (namesOfType type))) (refList (s.${key} or null))
+        );
+      checksFor =
+        s:
+        {
+          endpoint =
+            check s "auth" "auth"
+            ++ check s "outbound_auth" "auth"
+            ++ check s "aors" "aor"
+            ++ check s "transport" "transport";
+          identify = check s "endpoint" "endpoint";
+          registration =
+            check s "outbound_auth" "auth" ++ check s "transport" "transport" ++ check s "endpoint" "endpoint";
+          aor = check s "outbound_auth" "auth";
+        }
+        .${s.type or ""} or [ ];
+    in
+    lib.concatMap checksFor objects;
+
+  duplicateObjects =
+    let
+      keys = map (s: "${s.type or "?"} ${s.name}") (filter (s: s ? type) objects);
+    in
+    unique (filter (k: lib.count (x: x == k) keys > 1) keys);
+
+  tlsWithoutKeys = map (s: s.name) (
+    filter (
+      s:
+      (s.type or null) == "transport"
+      && (s.protocol or null) == "tls"
+      && !(s ? cert_file && s ? priv_key_file)
+    ) objects
+  );
+
+  # Dialplan contexts, where they can be known: sections of extensions.conf
+  # and section headers in its extraConfig, unless files are included.
+  dialplanExtra = cfg.extraConfig."extensions.conf" or "";
+  dialplanKnown =
+    (cfg.settings ? "extensions.conf" || dialplanExtra != "")
+    && !(builtins.any (file: cfg.settings ? ${file} || cfg.extraConfig ? ${file}) [
+      "extensions.ael"
+      "extensions.lua"
+    ])
+    && (cfg.includes."extensions.conf" or [ ]) == [ ]
+    && !(builtins.any (directive: hasInfix directive dialplanExtra) [
+      "#include"
+      "#tryinclude"
+      "#exec"
+    ]);
+  dialplanContexts =
+    map (s: s.name) (attrValues (cfg.settings."extensions.conf" or { }))
+    ++ lib.concatMap (
+      line:
+      let
+        m = builtins.match "[[:space:]]*[[]([^]]+)[]].*" line;
+      in
+      if m == null then [ ] else m
+    ) (splitString "\n" dialplanExtra);
+  missingContexts = filter (s: !(builtins.elem s.context dialplanContexts)) (
+    filter (s: (s.type or null) == "endpoint" && isString (s.context or null)) objects
+  );
+
+in
+{
+  options.services.asterisk-declarative.pjsip = {
+    global = mkOption {
+      type = types.attrsOf format.types.value;
+      default = { };
+      example = {
+        user_agent = "PBX";
+        endpoint_identifier_order = "ip,username";
+      };
+      description = "Keys of the `[global]` section (`type = global`).";
+    };
+
+    system = mkOption {
+      type = types.attrsOf format.types.value;
+      default = { };
+      example = {
+        timer_t1 = 500;
+      };
+      description = "Keys of the `[system]` section (`type = system`).";
+    };
+
+    transports = mkOption {
+      type = types.attrsOf transportType;
+      default = { };
+      example = lib.literalExpression ''
+        {
+          udp = { protocol = "udp"; port = 5060; };
+          tls = {
+            protocol = "tls";
+            tls.certFile = "/var/lib/acme/pbx.example.org/fullchain.pem";
+            tls.keyFile = "/var/lib/acme/pbx.example.org/key.pem";
+          };
+        }
+      '';
+      description = ''
+        PJSIP transports. Changing a transport restarts Asterisk, since
+        transports are not reloadable. The firewall ports are derived from
+        these (see {option}`services.asterisk-declarative.openFirewall`).
+      '';
+    };
+
+    acls = mkOption {
+      type = types.attrsOf aclType;
+      default = { };
+      example = lib.literalExpression ''
+        {
+          lan = {
+            deny = [ "0.0.0.0/0.0.0.0" "::/0" ];
+            permit = [ "10.0.1.0/24" "10.0.2.0/24" ];
+          };
+        }
+      '';
+      description = ''
+        Global ACLs (`type = acl`) applied to every incoming SIP request.
+        `permit` rules are rendered after `deny` rules and the last matching
+        rule wins, so "deny everything, permit these networks" works as
+        expected.
+      '';
+    };
+
+    endpoints = mkOption {
+      type = types.attrsOf endpointType;
+      default = { };
+      example = lib.literalExpression ''
+        {
+          "101" = {
+            context = "internal";
+            callerId = '''"Kitchen" <101>''';
+            auth.password = config.lib.asterisk.secret "/run/agenix/sip-101";
+          };
+        }
+      '';
+      description = ''
+        SIP devices. Each endpoint gets an auth section (when `auth` is set),
+        an aor section (unless `aor = null`) and optionally an identify
+        section, all named like the endpoint. Phones register with the
+        endpoint name as user name.
+      '';
+    };
+
+    trunks = mkOption {
+      type = types.attrsOf trunkType;
+      default = { };
+      example = lib.literalExpression ''
+        {
+          provider = {
+            host = "sip.provider.example";
+            username = "5551000";
+            password = config.lib.asterisk.secret "/run/agenix/trunk";
+            context = "from-provider";
+            identify.match = [ "203.0.113.0/24" ];
+          };
+        }
+      '';
+      description = ''
+        SIP provider accounts: an endpoint with outbound authentication, an
+        aor pointing at the provider, an identify section for the provider's
+        addresses and, unless `register = false`, an outbound registration.
+      '';
+    };
+  };
+
+  config = mkIf cfg.enable {
+    services.asterisk-declarative = {
+      settings."pjsip.conf" = mkMerge [
+        globalSections
+        transportSections
+        aclSections
+        (lib.concatMapAttrs endpointSectionsFor pcfg.endpoints)
+        # a trunk named like an endpoint is reported by an assertion below
+        # instead of producing conflicting definitions
+        (lib.concatMapAttrs trunkSectionsFor (
+          filterAttrs (name: _: !(pcfg.endpoints ? ${name})) pcfg.trunks
+        ))
+      ];
+
+      credentials = lib.listToAttrs transportCredentials;
+    };
+
+    assertions = [
+      {
+        assertion = danglingRefs == [ ];
+        message = ''
+          services.asterisk-declarative: pjsip.conf references objects that do not exist:
+            ${concatStringsSep "\n  " danglingRefs}
+        '';
+      }
+      {
+        assertion = duplicateObjects == [ ];
+        message = ''
+          services.asterisk-declarative: pjsip.conf defines these objects more than once (same type and name):
+            ${concatStringsSep "\n  " duplicateObjects}
+        '';
+      }
+      {
+        assertion = tlsWithoutKeys == [ ];
+        message = "services.asterisk-declarative: TLS transport(s) ${concatStringsSep ", " tlsWithoutKeys} need a certificate and a private key (pjsip.transports.<name>.tls.certFile and tls.keyFile, or cert_file and priv_key_file).";
+      }
+      {
+        assertion = !dialplanKnown || missingContexts == [ ];
+        message = ''
+          services.asterisk-declarative: PJSIP endpoints use dialplan contexts that are not defined:
+            ${concatStringsSep "\n  " (map (s: "[${s.name}] context = ${s.context}") missingContexts)}
+        '';
+      }
+      {
+        assertion = builtins.all (n: !(pcfg.endpoints ? ${n})) (attrNames pcfg.trunks);
+        message = "services.asterisk-declarative: pjsip.trunks and pjsip.endpoints share the name(s) ${
+          concatStringsSep ", " (filter (n: pcfg.endpoints ? ${n}) (attrNames pcfg.trunks))
+        }.";
+      }
+    ];
+
+  };
+}

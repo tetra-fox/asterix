@@ -11,8 +11,8 @@
 #   800           conference bridge
 #   *97           voicemail menu
 #
-# Voicemail, the queue and the conference use layer-1 settings here, which
-# shows how anything without a typed option is configured.
+# Keys without a typed option can be set through the `settings` attribute of
+# typed objects or through `services.asterisk-declarative.settings`.
 { config, ... }:
 let
   inherit (config.lib.asterisk) secret;
@@ -120,52 +120,39 @@ in
       };
     };
 
-    modules.load = [
-      "app_queue.so"
-      "app_voicemail.so"
-    ];
-
-    settings = {
-      "voicemail.conf" = {
-        general = {
-          format = "wav49|wav";
-          maxmsg = 100;
-          maxsecs = 300;
-          attach = false;
+    voicemail = {
+      mailboxes = {
+        "200" = {
+          fullName = "Sales team";
+          pin = secret "/run/agenix/vm-200";
         };
-        # mailbox => PIN,full name; the PIN is a secret interpolated into the value
-        default = {
-          "200" = "${secret "/run/agenix/vm-200"},Sales team";
-          "201" = "${secret "/run/agenix/vm-201"},Reception";
-          "202" = "${secret "/run/agenix/vm-202"},Sales";
-          "203" = "${secret "/run/agenix/vm-203"},Boss";
-        };
-      };
-
-      "queues.conf".support = {
-        strategy = "ringall";
-        timeout = 20;
-        retry = 5;
-        musicclass = "default";
-        member = [
-          "PJSIP/201"
-          "PJSIP/202"
-        ];
-      };
-
-      "confbridge.conf" = {
-        default_user = {
-          type = "user";
-          announce_join_leave = false;
-          music_on_hold_when_empty = true;
-        };
-        default_bridge = {
-          type = "bridge";
-          max_members = 20;
-        };
-      };
+      }
+      // builtins.mapAttrs (extension: name: {
+        fullName = name;
+        pin = secret "/run/agenix/vm-${extension}";
+      }) phones;
+      maxMessages = 100;
+      maxSeconds = 300;
     };
 
-    syntax."voicemail.conf".arrowSections = [ "default" ];
+    queues.queues.support = {
+      strategy = "ringall";
+      timeout = 20;
+      retry = 5;
+      musicOnHoldClass = "default";
+      members = [
+        "PJSIP/201"
+        "PJSIP/202"
+      ];
+    };
+
+    confbridge = {
+      bridges.default_bridge.maxMembers = 20;
+      users.default_user = {
+        musicOnHoldWhenEmpty = true;
+        # no typed option for this one: set the key directly
+        settings.announce_join_leave = false;
+      };
+    };
   };
 }

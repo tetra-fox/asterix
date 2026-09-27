@@ -453,8 +453,14 @@ let
 
   portRangeType = types.submodule {
     options = {
-      from = mkOption { type = types.port; };
-      to = mkOption { type = types.port; };
+      from = mkOption {
+        type = types.port;
+        description = "First port of the range.";
+      };
+      to = mkOption {
+        type = types.port;
+        description = "Last port of the range.";
+      };
     };
   };
 

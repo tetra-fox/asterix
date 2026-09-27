@@ -35,6 +35,8 @@ in
     }
   );
 
+  vm-core = import ./vm/core.nix { inherit pkgs self; };
+
   formatting = pkgs.runCommand "asterisk-nixfmt-check" { nativeBuildInputs = [ pkgs.nixfmt ]; } ''
     cd ${nixSources}
     find . -name '*.nix' -print0 | xargs -0 nixfmt --check

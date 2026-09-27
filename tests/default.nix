@@ -50,4 +50,10 @@ in
     find . -name '*.nix' -print0 | xargs -0 nixfmt --check
     touch $out
   '';
+
+  # no unused let bindings, function arguments or inherits
+  deadnix = pkgs.runCommand "asterisk-deadnix-check" { nativeBuildInputs = [ pkgs.deadnix ]; } ''
+    deadnix --fail --no-lambda-pattern-names ${nixSources}
+    touch $out
+  '';
 }

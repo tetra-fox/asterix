@@ -241,12 +241,12 @@ lib.runTests {
   };
 
   testTypedSettingsOptionReachesSection = {
-    expr = lib.hasInfix "rtp_timeout = 30" (
-      (rendered [
-        phone
-        { services.asterisk-declarative.pjsip.endpoints."101".settings.rtp_timeout = 30; }
-      ])."pjsip.conf"
-    );
+    expr =
+      lib.hasInfix "rtp_timeout = 30"
+        (rendered [
+          phone
+          { services.asterisk-declarative.pjsip.endpoints."101".settings.rtp_timeout = 30; }
+        ])."pjsip.conf";
     expected = true;
   };
 

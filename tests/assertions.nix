@@ -261,7 +261,7 @@ let
         case.module
       ];
       failed = failedAssertions config;
-      warnings = config.warnings;
+      inherit (config) warnings;
       has = needle: haystack: builtins.any (lib.hasInfix needle) haystack;
       problems =
         lib.optional (case ? assertion && !(has case.assertion failed)) {

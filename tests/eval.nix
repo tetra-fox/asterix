@@ -721,6 +721,68 @@ lib.runTests {
     expected = true;
   };
 
+  # the dialplan example in README.md renders as shown there
+  testReadmeDialplanExample = {
+    expr =
+      let
+        text =
+          (rendered [
+            { services.asterisk-declarative.enable = true; }
+            (
+              { config, ... }:
+              let
+                dp = config.lib.asterisk.dialplan;
+              in
+              {
+                services.asterisk-declarative.dialplan = {
+                  globals.TRUNK = "PJSIP/provider";
+                  contexts = {
+                    internal = {
+                      includes = [ "outbound" ];
+                      hints."101" = "PJSIP/101";
+                      extensions = {
+                        "101" = [
+                          "Dial(PJSIP/101,20)"
+                          {
+                            app = "VoiceMail";
+                            args = [
+                              "101@default"
+                              "u"
+                            ];
+                            label = "vm";
+                          }
+                          "Hangup()"
+                        ];
+                        "100" = [
+                          (dp.page {
+                            endpoints = [
+                              "101"
+                              "102"
+                            ];
+                            predial = "autoanswer";
+                          })
+                        ];
+                      };
+                    };
+                    autoanswer = dp.autoAnswerContext { };
+                    outbound.extensions."_9X." = [ "Dial(\${TRUNK}/\${EXTEN:1})" ];
+                  };
+                };
+              }
+            )
+          ])."extensions.conf";
+      in
+      lib.findFirst (lib.hasPrefix "[internal]") null (lib.splitString "\n\n" text);
+    expected = ''
+      [internal]
+      include => outbound
+      exten => 100,1,Page(PJSIP/101&PJSIP/102,db(autoanswer^s^1),20)
+      exten => 101,hint,PJSIP/101
+      exten => 101,1,Dial(PJSIP/101,20)
+       same => n(vm),VoiceMail(101@default,u)
+       same => n,Hangup()'';
+  };
+
   testChanSipAlwaysNoloaded = {
     expr = lib.hasInfix "noload => chan_sip.so" (rendered [ phone ])."modules.conf";
     expected = true;

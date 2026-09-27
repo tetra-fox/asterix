@@ -16,6 +16,8 @@
     {
       lib = import ./lib { inherit lib; };
 
+      checks = forAllSystems (pkgs: import ./tests { inherit pkgs self; });
+
       formatter = forAllSystems (pkgs: pkgs.nixfmt-tree);
     };
 }

@@ -7,6 +7,7 @@
     ./logger.nix
     ./modules-conf.nix
     ./pjsip.nix
+    ./queues.nix
     ./rtp.nix
     ./voicemail.nix
   ];

@@ -525,6 +525,34 @@ lib.runTests {
     '';
   };
 
+  testQueueMembers = {
+    expr = builtins.filter (lib.hasPrefix "member") (
+      lib.splitString "\n"
+        (rendered [
+          phone
+          {
+            services.asterisk-declarative.queues.queues.support.members = [
+              "PJSIP/101"
+              {
+                interface = "PJSIP/102";
+                penalty = 2;
+                name = "Bob";
+              }
+              {
+                interface = "Local/103@internal";
+                stateInterface = "PJSIP/103";
+              }
+            ];
+          }
+        ])."queues.conf"
+    );
+    expected = [
+      "member => PJSIP/101"
+      "member => PJSIP/102,2,Bob"
+      "member => Local/103@internal,,,PJSIP/103"
+    ];
+  };
+
   testChanSipAlwaysNoloaded = {
     expr = lib.hasInfix "noload => chan_sip.so" (rendered [ phone ])."modules.conf";
     expected = true;

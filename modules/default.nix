@@ -6,6 +6,7 @@
     ./dialplan.nix
     ./features.nix
     ./logger.nix
+    ./manager.nix
     ./modules-conf.nix
     ./musiconhold.nix
     ./pjsip.nix

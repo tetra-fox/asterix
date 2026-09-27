@@ -584,6 +584,36 @@ lib.runTests {
     '';
   };
 
+  testAmiUserSection = {
+    expr =
+      (rendered [
+        phone
+        (
+          { config, ... }:
+          {
+            services.asterisk-declarative.ami = {
+              enable = true;
+              users.monitor.secret = config.lib.asterisk.secret "/run/agenix/ami";
+            };
+          }
+        )
+      ])."manager.conf";
+    expected = header + ''
+      [general]
+      bindaddr = 127.0.0.1
+      enabled = yes
+      port = 5038
+
+      [monitor]
+      deny = 0.0.0.0/0.0.0.0
+      deny = ::/0
+      permit = 127.0.0.1/255.255.255.255
+      permit = ::1/128
+      read = all
+      secret = ${placeholder "/run/agenix/ami"}
+    '';
+  };
+
   testMusicOnHoldDirectoryFromStore = {
     expr =
       lib.hasInfix "directory = ${builtins.storeDir}/"

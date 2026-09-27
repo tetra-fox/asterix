@@ -20,11 +20,11 @@ let
     hasSuffix
     literalExpression
     mapAttrsToList
-    mkDefault
     mkEnableOption
     mkIf
     mkMerge
     mkOption
+    mkOptionDefault
     mkPackageOption
     optional
     types
@@ -754,6 +754,8 @@ in
     # Everything below is skipped when the upstream module is enabled too, so
     # the assertion above is reported instead of conflicting definitions.
     (mkIf (cfg.enable && !config.services.asterisk.enable) {
+      # Built-in defaults have the lowest priority (mkOptionDefault), below the
+      # mkDefault values of typed options and plain user definitions.
       services.asterisk-declarative.settings = {
         "asterisk.conf" = {
           directories = {
@@ -764,7 +766,7 @@ in
             astdbdir = paths.state;
             astkeydir = paths.state;
             astdatadir = "${dataDir}";
-            astagidir = mkDefault "${paths.state}/agi-bin";
+            astagidir = mkOptionDefault "${paths.state}/agi-bin";
             astspooldir = paths.spool;
             astrundir = paths.runtime;
             astlogdir = paths.log;
@@ -772,14 +774,14 @@ in
           };
           options = {
             order = 1;
-            documentation_language = mkDefault "en_US";
-            hideconnect = mkDefault true;
+            documentation_language = mkOptionDefault "en_US";
+            hideconnect = mkOptionDefault true;
           };
           # The socket is created by the asterisk user and group already;
           # astctlowner/astctlgroup would need chown(2), which is filtered.
           files = {
             order = 2;
-            astctlpermissions = mkDefault "0660";
+            astctlpermissions = mkOptionDefault "0660";
           };
         };
 
@@ -792,13 +794,13 @@ in
         "features.conf".general = { };
         "pjproject.conf" = { };
         "stasis.conf" = { };
-        "manager.conf".general.enabled = mkDefault false;
+        "manager.conf".general.enabled = mkOptionDefault false;
         "udptl.conf".general = { };
         "confbridge.conf".general = { };
-        "indications.conf".general.country = mkDefault "us";
+        "indications.conf".general.country = mkOptionDefault "us";
         "musiconhold.conf".default = {
-          mode = mkDefault "files";
-          directory = mkDefault "moh";
+          mode = mkOptionDefault "files";
+          directory = mkOptionDefault "moh";
         };
       };
 

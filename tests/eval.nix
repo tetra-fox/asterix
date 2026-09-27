@@ -483,6 +483,48 @@ lib.runTests {
     ];
   };
 
+  testConfbridgeProfiles = {
+    expr =
+      (rendered [
+        phone
+        (
+          { config, ... }:
+          {
+            services.asterisk-declarative.confbridge = {
+              bridges.board.maxMembers = 10;
+              users.chair = {
+                admin = true;
+                marked = true;
+                pin = config.lib.asterisk.secret "/run/agenix/conference";
+              };
+              menus.admin_menu = {
+                "*1" = "toggle_mute";
+                "*2" = "admin_kick_last";
+              };
+            };
+          }
+        )
+      ])."confbridge.conf";
+    expected = header + ''
+      [general]
+
+      [board]
+      type = bridge
+      max_members = 10
+
+      [admin_menu]
+      type = menu
+      *1 = toggle_mute
+      *2 = admin_kick_last
+
+      [chair]
+      type = user
+      admin = yes
+      marked = yes
+      pin = ${placeholder "/run/agenix/conference"}
+    '';
+  };
+
   testChanSipAlwaysNoloaded = {
     expr = lib.hasInfix "noload => chan_sip.so" (rendered [ phone ])."modules.conf";
     expected = true;

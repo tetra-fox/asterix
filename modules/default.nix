@@ -2,6 +2,7 @@
 {
   imports = [
     ./asterisk.nix
+    ./confbridge.nix
     ./dialplan.nix
     ./logger.nix
     ./modules-conf.nix

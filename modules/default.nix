@@ -7,5 +7,6 @@
     ./modules-conf.nix
     ./pjsip.nix
     ./rtp.nix
+    ./voicemail.nix
   ];
 }

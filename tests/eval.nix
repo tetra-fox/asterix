@@ -448,6 +448,41 @@ lib.runTests {
     ];
   };
 
+  # --- tier 2 -------------------------------------------------------------
+
+  testVoicemailMailboxLines = {
+    expr =
+      let
+        files = rendered [
+          phone
+          (
+            { config, ... }:
+            {
+              services.asterisk-declarative.voicemail.mailboxes = {
+                "101" = {
+                  pin = config.lib.asterisk.secret "/run/agenix/vm-101";
+                  fullName = "Alice";
+                  email = "alice@example.org";
+                  options.attach = true;
+                };
+                "200@sales".pin = config.lib.asterisk.secret "/run/agenix/vm-200";
+              };
+            }
+          )
+        ];
+      in
+      builtins.filter (line: builtins.match "(\\[.*|[0-9]+ => .*)" line != null) (
+        lib.splitString "\n" files."voicemail.conf"
+      );
+    expected = [
+      "[general]"
+      "[default]"
+      "101 => ${placeholder "/run/agenix/vm-101"},Alice,alice@example.org,,attach=yes"
+      "[sales]"
+      "200 => ${placeholder "/run/agenix/vm-200"},200"
+    ];
+  };
+
   testChanSipAlwaysNoloaded = {
     expr = lib.hasInfix "noload => chan_sip.so" (rendered [ phone ])."modules.conf";
     expected = true;

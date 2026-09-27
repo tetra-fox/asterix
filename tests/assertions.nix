@@ -235,6 +235,36 @@ let
       assertion = "services.asterisk-declarative and services.asterisk cannot be enabled\ntogether";
     };
 
+    voicemailNameWithComma = {
+      module =
+        { config, ... }:
+        {
+          services.asterisk-declarative.voicemail.mailboxes."101" = {
+            pin = config.lib.asterisk.secret "/run/agenix/vm";
+            fullName = "Doe, John";
+          };
+        };
+      assertion = "names and e-mail addresses cannot contain commas (101@default)";
+    };
+
+    mwiForUndefinedMailbox = {
+      module =
+        { config, ... }:
+        {
+          services.asterisk-declarative = {
+            voicemail.mailboxes."101".pin = config.lib.asterisk.secret "/run/agenix/vm";
+            pjsip.endpoints."101".mailboxes = [ "102@default" ];
+          };
+        };
+      assertion = "pjsip.endpoints.101.mailboxes: 102@default";
+    };
+
+    voicemailPlainPinWarns = {
+      module.services.asterisk-declarative.voicemail.mailboxes."101".pin = "1234";
+      assertions = [ ];
+      warning = "voicemail.mailboxes.\"101@default\".pin is a plain string";
+    };
+
     plainPasswordWarns = {
       module.services.asterisk-declarative.pjsip.endpoints."101".auth.password = lib.mkForce "hunter2";
       assertions = [ ];

@@ -2,6 +2,7 @@
 {
   imports = [
     ./asterisk.nix
+    ./logger.nix
     ./modules-conf.nix
   ];
 }

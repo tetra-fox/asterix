@@ -447,6 +447,26 @@ lib.runTests {
     '';
   };
 
+  testGeneralAndGlobalsComeFirst = {
+    expr = render { } {
+      sections = {
+        default."100" = "1234,Alice";
+        globals.A = 1;
+        general.format = "wav";
+      };
+    };
+    expected = ''
+      [general]
+      format = wav
+
+      [globals]
+      A = 1
+
+      [default]
+      100 = 1234,Alice
+    '';
+  };
+
   testEmptySection = {
     expr = render { } { sections.unauthorized = { }; };
     expected = ''

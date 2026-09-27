@@ -296,13 +296,24 @@ rec {
     else
       [ header ] ++ map (e: "${e.indent}${e.key} ${if e.arrow then "=>" else "="} ${e.value}") entries';
 
+  # Default position of a section: `[general]` (and extensions.conf's
+  # `[globals]`) first, everything else after.
+  defaultOrder =
+    name:
+    if name == "general" then
+      0
+    else if name == "globals" then
+      1
+    else
+      1000;
+
   # Section ids ordered by (order, templates first, id).
   sortSections =
     sections:
     let
       key = id: {
         inherit id;
-        order = sections.${id}.order or 1000;
+        order = sections.${id}.order or (defaultOrder (sections.${id}.name or id));
         template = sections.${id}.template or false;
       };
       lessThan =
@@ -401,7 +412,7 @@ rec {
     };
 
     section = lib.types.submodule (
-      { name, ... }:
+      { name, config, ... }:
       {
         freeformType = lib.types.attrsOf value;
         options = {
@@ -417,7 +428,8 @@ rec {
           };
           order = mkOption {
             type = lib.types.int;
-            default = 1000;
+            default = defaultOrder config.name;
+            defaultText = lib.literalMD "0 for `general`, 1 for `globals`, 1000 otherwise";
             description = ''
               Sections are rendered sorted by this value, then templates
               before other sections, then by attribute name.

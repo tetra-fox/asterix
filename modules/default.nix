@@ -6,5 +6,6 @@
     ./logger.nix
     ./modules-conf.nix
     ./pjsip.nix
+    ./rtp.nix
   ];
 }

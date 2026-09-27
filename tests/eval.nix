@@ -553,6 +553,37 @@ lib.runTests {
     ];
   };
 
+  testFeatureMapAndApplications = {
+    expr =
+      (rendered [
+        phone
+        {
+          services.asterisk-declarative.features = {
+            featureMap = {
+              blindxfer = "#1";
+              automixmon = "*3";
+            };
+            applications.monkeys = {
+              dtmf = "*9";
+              activateOn = "peer";
+              app = "Playback";
+              args = "tt-monkeys";
+            };
+          };
+        }
+      ])."features.conf";
+    expected = header + ''
+      [general]
+
+      [applicationmap]
+      monkeys => *9,peer,Playback,tt-monkeys
+
+      [featuremap]
+      automixmon = *3
+      blindxfer = #1
+    '';
+  };
+
   testMusicOnHoldDirectoryFromStore = {
     expr =
       lib.hasInfix "directory = ${builtins.storeDir}/"

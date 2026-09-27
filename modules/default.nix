@@ -4,6 +4,7 @@
     ./asterisk.nix
     ./confbridge.nix
     ./dialplan.nix
+    ./features.nix
     ./logger.nix
     ./modules-conf.nix
     ./musiconhold.nix

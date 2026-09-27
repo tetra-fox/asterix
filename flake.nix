@@ -25,6 +25,10 @@
 
       checks = forAllSystems (pkgs: import ./tests { inherit pkgs self; });
 
+      packages = forAllSystems (pkgs: {
+        docs = import ./docs { inherit pkgs self; };
+      });
+
       formatter = forAllSystems (pkgs: pkgs.nixfmt-tree);
     };
 }

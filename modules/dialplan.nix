@@ -1,0 +1,305 @@
+# Typed dialplan options (extensions.conf).
+#
+# Each context is rendered into `settings."extensions.conf".<context>`, so
+# extensions can be added there too. Every extension is written as one
+# contiguous block: optional hint, then `exten => ext,1,...` followed by
+# `same => n,...` lines.
+#
+# Escaping: Asterisk variables look like Nix antiquotations. Write
+# `"\${EXTEN}"` in double-quoted strings, `''${EXTEN}` in indented strings, or
+# use `config.lib.asterisk.dialplan.var "EXTEN"`. Semicolons are escaped by
+# the generator and must not be escaped by hand.
+{ config, lib, ... }:
+let
+  inherit (lib)
+    attrNames
+    attrValues
+    concatLists
+    concatMapStringsSep
+    concatStringsSep
+    filter
+    filterAttrs
+    hasInfix
+    imap0
+    isString
+    mapAttrs
+    mapAttrsToList
+    mkDefault
+    mkIf
+    mkOption
+    optional
+    sort
+    types
+    unique
+    ;
+
+  cfg = config.services.asterisk-declarative;
+  dcfg = cfg.dialplan;
+  asteriskLib = import ../lib { inherit lib; };
+  inherit (asteriskLib) format;
+
+  stepType =
+    types.either types.str (
+      types.submodule {
+        options = {
+          app = mkOption {
+            type = types.str;
+            example = "Dial";
+            description = "Dialplan application name.";
+          };
+          args = mkOption {
+            type = types.listOf (types.either types.str types.int);
+            default = [ ];
+            example = [
+              "PJSIP/101"
+              30
+            ];
+            description = "Application arguments, joined with commas (not escaped).";
+          };
+          label = mkOption {
+            type = types.nullOr types.str;
+            default = null;
+            example = "voicemail";
+            description = "Priority label, usable as a Goto() target.";
+          };
+        };
+      }
+    )
+    // {
+      description = ''dialplan step ("App(arguments)" or { app, args, label })'';
+    };
+
+  contextType = types.submodule {
+    options = {
+      includes = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        description = "Contexts included in this one (`include =>`), searched in order.";
+      };
+      switches = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        example = [ "Realtime/default@extensions" ];
+        description = "Alternative switches (`switch =>`).";
+      };
+      ignorePatterns = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        example = [ "9" ];
+        description = "Patterns after which dial tone continues (`ignorepat =>`).";
+      };
+      extensions = mkOption {
+        type = types.attrsOf (types.listOf stepType);
+        default = { };
+        example = lib.literalExpression ''
+          {
+            "100" = [ "Answer()" "Playback(hello-world)" "Hangup()" ];
+            "_1XX" = [
+              { app = "Dial"; args = [ "PJSIP/''${EXTEN}" 20 ]; }
+              { app = "VoiceMail"; args = [ "''${EXTEN}@default" ]; label = "unavailable"; }
+            ];
+          }
+        '';
+        description = ''
+          Extensions (patterns such as `_1XX` are allowed) mapped to their
+          steps. The first step gets priority 1, the following ones `n`.
+        '';
+      };
+      hints = mkOption {
+        type = types.attrsOf types.str;
+        default = { };
+        example = {
+          "101" = "PJSIP/101";
+        };
+        description = "Device state hints (`exten => 101,hint,PJSIP/101`) for BLF and presence.";
+      };
+      extraConfig = mkOption {
+        type = types.lines;
+        default = "";
+        example = "exten => 999,1,Playback(tt-monkeys)";
+        description = ''
+          Raw dialplan lines for this context, written verbatim in a second
+          `[context]` block at the end of the file (Asterisk merges both).
+        '';
+      };
+    };
+  };
+
+  argString = arg: if isString arg then arg else toString arg;
+
+  stepString =
+    step: if isString step then step else "${step.app}(${concatMapStringsSep "," argString step.args})";
+
+  priority =
+    index: step:
+    (if index == 0 then "1" else "n")
+    + (if !(isString step) && step.label != null then "(${step.label})" else "");
+
+  extensionLines =
+    context: extension:
+    optional (context.hints ? ${extension}) "${extension},hint,${context.hints.${extension}}"
+    ++ imap0 (i: step: "${extension},${priority i step},${stepString step}") (
+      context.extensions.${extension} or [ ]
+    );
+
+  contextSection = name: context: {
+    inherit name;
+    include = context.includes;
+    switch = context.switches;
+    ignorepat = context.ignorePatterns;
+    exten = concatLists (
+      map (extensionLines context) (
+        sort (a: b: a < b) (unique (attrNames context.extensions ++ attrNames context.hints))
+      )
+    );
+  };
+
+  rawBlocks = concatStringsSep "\n\n" (
+    mapAttrsToList (name: context: "[${name}]\n${context.extraConfig}") (
+      filterAttrs (_: context: context.extraConfig != "") dcfg.contexts
+    )
+  );
+
+  # Validation of `include =>` targets, where all contexts are known.
+  dialplan = cfg.settings."extensions.conf" or { };
+  extra = cfg.extraConfig."extensions.conf" or "";
+  known =
+    (cfg.includes."extensions.conf" or [ ]) == [ ]
+    && !(builtins.any (directive: hasInfix directive extra) [
+      "#include"
+      "#tryinclude"
+      "#exec"
+    ]);
+  contexts =
+    map (s: s.name) (attrValues dialplan)
+    ++ lib.concatMap (
+      line:
+      let
+        m = builtins.match "[[:space:]]*[[]([^]]+)[]].*" line;
+      in
+      if m == null then [ ] else m
+    ) (lib.splitString "\n" extra);
+  toList = v: if builtins.isList v then v else [ v ];
+  danglingIncludes = lib.concatMap (
+    s:
+    map (target: "[${s.name}] include => ${target}") (
+      filter (
+        target: isString target && !(builtins.elem (lib.head (lib.splitString "," target)) contexts)
+      ) (toList (s.include or [ ]))
+    )
+  ) (attrValues dialplan);
+  emptyExtensions = lib.concatLists (
+    mapAttrsToList (
+      name: context:
+      map (ext: "${name}/${ext}") (
+        filter (ext: context.extensions.${ext} == [ ] && !(context.hints ? ${ext})) (
+          attrNames context.extensions
+        )
+      )
+    ) dcfg.contexts
+  );
+  badExtensionNames = lib.concatLists (
+    mapAttrsToList (
+      name: context:
+      map (ext: "${name}/${ext}") (
+        filter (ext: builtins.match "[^,;[:space:]]+" ext == null) (
+          attrNames context.extensions ++ attrNames context.hints
+        )
+      )
+    ) dcfg.contexts
+  );
+in
+{
+  options.services.asterisk-declarative.dialplan = {
+    general = mkOption {
+      type = types.attrsOf format.types.value;
+      default = { };
+      example = {
+        autofallthrough = false;
+      };
+      description = ''
+        Keys of the `[general]` section. The module sets `static`,
+        `writeprotect` (Asterisk must not rewrite the generated dialplan) and
+        `clearglobalvars` (removed globals disappear on reload) to `yes`.
+      '';
+    };
+
+    globals = mkOption {
+      type = types.attrsOf format.types.atom;
+      default = { };
+      example = lib.literalExpression ''
+        {
+          TRUNK = "PJSIP/provider";
+          OPERATOR = "101";
+        }
+      '';
+      description = "Global variables (`[globals]`), readable as `\${NAME}` in the dialplan.";
+    };
+
+    contexts = mkOption {
+      type = types.attrsOf contextType;
+      default = { };
+      example = lib.literalExpression ''
+        {
+          internal = {
+            hints."101" = "PJSIP/101";
+            extensions = {
+              "_1XX" = [ "Dial(PJSIP/''${EXTEN},30)" "Hangup()" ];
+              "*97" = [ "VoiceMailMain(''${CALLERID(num)}@default)" ];
+            };
+          };
+          phones.includes = [ "internal" ];
+        }
+      '';
+      description = "Dialplan contexts.";
+    };
+  };
+
+  config = mkIf cfg.enable {
+    services.asterisk-declarative = {
+      dialplan.general = {
+        static = mkDefault true;
+        writeprotect = mkDefault true;
+        clearglobalvars = mkDefault true;
+      };
+
+      settings."extensions.conf" = {
+        general = {
+          order = 0;
+        }
+        // mapAttrs (_: v: if builtins.isList v then v else mkDefault v) dcfg.general;
+      }
+      // lib.optionalAttrs (dcfg.globals != { }) {
+        globals = {
+          order = 1;
+        }
+        // mapAttrs (_: mkDefault) (filterAttrs (_: v: v != null) dcfg.globals);
+      }
+      // mapAttrs contextSection dcfg.contexts;
+
+      extraConfig."extensions.conf" = mkIf (rawBlocks != "") rawBlocks;
+    };
+
+    assertions = [
+      {
+        assertion = !known || danglingIncludes == [ ];
+        message = ''
+          services.asterisk-declarative: dialplan includes contexts that are not defined:
+            ${concatStringsSep "\n  " danglingIncludes}
+        '';
+      }
+      {
+        assertion = emptyExtensions == [ ];
+        message = "services.asterisk-declarative.dialplan: extensions without steps or hint: ${concatStringsSep ", " emptyExtensions}.";
+      }
+      {
+        assertion = badExtensionNames == [ ];
+        message = "services.asterisk-declarative.dialplan: invalid extension name(s) (no commas, semicolons or spaces): ${concatStringsSep ", " badExtensionNames}.";
+      }
+      {
+        assertion = !(dcfg.contexts ? general || dcfg.contexts ? globals);
+        message = "services.asterisk-declarative.dialplan.contexts: `general` and `globals` are reserved; use dialplan.general and dialplan.globals.";
+      }
+    ];
+  };
+}

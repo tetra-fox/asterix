@@ -81,6 +81,10 @@ rec {
       "type"
       "disallow"
       "allow"
+      "deny"
+      "permit"
+      "contact_deny"
+      "contact_permit"
     ];
     # Render consecutive `exten` lines of one extension as `same =>`.
     compactExtensions = false;
@@ -125,6 +129,7 @@ rec {
         "noload"
       ];
     };
+    "asterisk.conf".arrowSections = [ "directories" ];
     "logger.conf".arrowSections = [ "logfiles" ];
     "queues.conf".arrowKeys = [ "member" ];
     "features.conf".arrowSections = [ "applicationmap" ];

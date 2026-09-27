@@ -48,7 +48,7 @@ let
   cfg = config.services.asterisk-declarative;
   pcfg = cfg.pjsip;
   asteriskLib = import ../lib { inherit lib; };
-  inherit (asteriskLib) format secrets;
+  inherit (asteriskLib) format;
 
   secretOrString = types.either types.str format.types.secret // {
     description = "string or secret reference";

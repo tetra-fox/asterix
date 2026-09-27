@@ -27,7 +27,6 @@ let
     mkOption
     mkPackageOption
     optional
-    optionals
     types
     unique
     ;

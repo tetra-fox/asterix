@@ -16,21 +16,17 @@
 let
   inherit (lib)
     attrNames
-    concatLists
     concatMap
     concatStringsSep
     elem
     filter
     foldl'
-    hasPrefix
-    isAttrs
     isBool
     isFloat
     isInt
     isList
     isString
     isStringLike
-    mapAttrsToList
     mkOption
     optional
     optionalString
@@ -38,7 +34,6 @@ let
     replaceStrings
     sort
     subtractLists
-    types
     ;
 
   secrets = import ./secrets.nix { inherit lib; };

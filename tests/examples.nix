@@ -6,12 +6,18 @@ let
   inherit (import ./eval-lib.nix { inherit pkgs self; }) evalConfig failedAssertions;
 
   examples = {
-    minimal = ../examples/minimal.nix;
-    household-intercom = ../examples/household-intercom.nix;
-    small-office = ../examples/small-office.nix;
+    minimal = [ ../examples/minimal.nix ];
+    household-intercom = [ ../examples/household-intercom.nix ];
+    small-office = [ ../examples/small-office.nix ];
+    # the add-on, with the example it extends
+    household-intercom-provisioning = [
+      self.nixosModules.grandstream-provisioning
+      ../examples/household-intercom.nix
+      ../examples/household-intercom-provisioning.nix
+    ];
   };
 
-  configs = lib.mapAttrs (_: example: evalConfig [ example ]) examples;
+  configs = lib.mapAttrs (_: evalConfig) examples;
 in
 {
   # evaluation of the whole system, without building it

@@ -4,8 +4,9 @@
 let
   format = import ./format.nix { inherit lib; };
   secrets = import ./secrets.nix { inherit lib; };
+  dialplan = import ./dialplan.nix { inherit lib; };
 in
 {
-  inherit format secrets;
+  inherit format secrets dialplan;
   inherit (secrets) secret credential;
 }

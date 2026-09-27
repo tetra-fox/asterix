@@ -1,5 +1,5 @@
-# Core service behaviour: boot, config loading, secret handling, runtime file
-# permissions, CLI wrapper and hardening basics.
+# Core service behaviour with a purely freeform (layer 1) configuration: boot,
+# config loading, secrets, runtime file permissions, CLI wrapper, sandboxing.
 { pkgs, self }:
 pkgs.testers.runNixOSTest {
   name = "asterisk-core";
@@ -7,7 +7,7 @@ pkgs.testers.runNixOSTest {
   nodes.pbx = {
     imports = [
       self.nixosModules.default
-      ../../examples/minimal.nix
+      ./freeform.nix
       ./common.nix
       (import ./secrets.nix {
         # characters that need care in Asterisk config files and in shells
@@ -51,7 +51,7 @@ pkgs.testers.runNixOSTest {
         closure = pbx.succeed(f"nix-store -qR {template} {unit} | grep -v -- '-asterisk-[0-9.]*$'").split()
         pbx.fail(f"grep -rlF {shlex.quote(random)} {' '.join(closure)}")
         pbx.fail(f"grep -rlF 'p;w&d' {' '.join(closure)}")
-        pbx.succeed(f"grep -q '@NIX_ASTERISK_SECRET_' {template}/pjsip.conf")
+        pbx.succeed(f"grep -q '@NIX_ASTERISK_SECRET:' {template}/pjsip.conf")
         pbx.fail(f"journalctl -b | grep -F {shlex.quote(random)}")
         pbx.fail(f"grep -rF {shlex.quote(random)} /var/log/asterisk /var/lib/asterisk")
 
@@ -61,7 +61,7 @@ pkgs.testers.runNixOSTest {
         pbx.succeed("test \"$(stat -c '%U:%G %a' /run/asterisk)\" = 'asterisk:asterisk 750'")
         pbx.succeed(f"grep -qF {shlex.quote(random)} /run/asterisk/config/pjsip.conf")
         pbx.succeed("grep -qF 'password = p\;w&d' /run/asterisk/config/pjsip.conf")
-        pbx.fail("grep -q '@NIX_ASTERISK_SECRET_' /run/asterisk/config/*")
+        pbx.fail("grep -q '@NIX_ASTERISK_SECRET:' /run/asterisk/config/*")
         pbx.fail("su -s /bin/sh nobody -c 'cat /run/asterisk/config/pjsip.conf'")
 
     with subtest("daemon runs unprivileged and sandboxed"):

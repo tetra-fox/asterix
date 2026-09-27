@@ -533,7 +533,7 @@ lib.runTests {
       [
         (p "/a" == p "/a")
         (p "/a" == p "/b")
-        (builtins.match "@NIX_ASTERISK_SECRET_[0-9a-f]{32}@" (p "/a") != null)
+        (p "/a" == "@NIX_ASTERISK_SECRET:file:/a@")
       ];
     expected = [
       true
@@ -559,6 +559,59 @@ lib.runTests {
       false
       false
       false
+    ];
+  };
+
+  testSecretInterpolatesToPlaceholder = {
+    expr = [
+      "${asteriskLib.secret "/run/agenix/vm"},Sales,sales@example.org"
+      "${asteriskLib.credential "pin"}"
+    ];
+    expected = [
+      "@NIX_ASTERISK_SECRET:file:/run/agenix/vm@,Sales,sales@example.org"
+      "@NIX_ASTERISK_SECRET:credential:pin@"
+    ];
+  };
+
+  testSecretsFoundInText = {
+    expr = secrets.fromText ''
+      password = @NIX_ASTERISK_SECRET:file:/run/agenix/a@
+      200 => @NIX_ASTERISK_SECRET:credential:vm-200@,Sales
+      again = @NIX_ASTERISK_SECRET:file:/run/agenix/a@;x
+    '';
+    expected = [
+      { _secret = "/run/agenix/a"; }
+      { _credential = "vm-200"; }
+    ];
+  };
+
+  testUnsafeSecretPathThrows = {
+    expr = map (p: throws (asteriskLib.secret p)) [
+      "relative/path"
+      "/run/with space"
+      "/run/semi;colon"
+      "/run/at@sign"
+      "/run/agenix/ok-path_1.2"
+    ];
+    expected = [
+      true
+      true
+      true
+      true
+      false
+    ];
+  };
+
+  testInvalidCredentialNameThrows = {
+    expr = map (n: throws (asteriskLib.credential n)) [
+      "ok-name_1.x"
+      "bad/name"
+      ".."
+    ];
+    expected = [
+      false
+      true
+      true
     ];
   };
 
@@ -604,6 +657,86 @@ lib.runTests {
       true
       false
     ];
+  };
+
+  # --- dialplan helpers -------------------------------------------------------
+
+  testEscapingConventionsAgree = {
+    expr = [
+      "\${EXTEN}"
+      "\${EXTEN}"
+      (asteriskLib.dialplan.var "EXTEN")
+    ];
+    expected = [
+      "\${EXTEN}"
+      "\${EXTEN}"
+      "\${EXTEN}"
+    ];
+  };
+
+  testVarRendersDollarBrace = {
+    expr =
+      builtins.substring 0 2 (asteriskLib.dialplan.var "EXTEN")
+      + "|"
+      + toString (builtins.stringLength (asteriskLib.dialplan.var "X"));
+    expected = "\${|4";
+  };
+
+  testAppJoinsArguments = {
+    expr = asteriskLib.dialplan.app "Dial" [
+      "PJSIP/101&PJSIP/102"
+      30
+      "tT"
+    ];
+    expected = "Dial(PJSIP/101&PJSIP/102,30,tT)";
+  };
+
+  testAppWithoutArguments = {
+    expr = asteriskLib.dialplan.app "Answer" [ ];
+    expected = "Answer()";
+  };
+
+  testPageDefaults = {
+    expr = asteriskLib.dialplan.page {
+      endpoints = [
+        "kitchen"
+        "office"
+      ];
+    };
+    expected = "Page(PJSIP/kitchen&PJSIP/office,d,20)";
+  };
+
+  testPageWithPredialAndOptions = {
+    expr = asteriskLib.dialplan.page {
+      endpoints = [ "kitchen" ];
+      duplex = false;
+      quiet = true;
+      predial = "page-autoanswer";
+      timeout = 10;
+      extraOptions = "i";
+    };
+    expected = "Page(PJSIP/kitchen,qb(page-autoanswer^s^1)i,10)";
+  };
+
+  testAutoAnswerContext = {
+    expr = asteriskLib.dialplan.autoAnswerContext { };
+    expected = {
+      extensions.s = [
+        "Set(PJSIP_HEADER(add,Call-Info)=<sip:intercom>;answer-after=0)"
+        "Set(PJSIP_HEADER(add,Alert-Info)=info=alert-autoanswer)"
+        "Return()"
+      ];
+    };
+  };
+
+  testAutoAnswerContextWithoutAlertInfo = {
+    expr = asteriskLib.dialplan.autoAnswerContext { alertInfo = null; };
+    expected = {
+      extensions.s = [
+        "Set(PJSIP_HEADER(add,Call-Info)=<sip:intercom>;answer-after=0)"
+        "Return()"
+      ];
+    };
   };
 
   # --- module system integration ----------------------------------------------

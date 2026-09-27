@@ -366,7 +366,19 @@ rec {
       description = "secret reference ({ _secret = path; } or { _credential = name; })";
       descriptionClass = "noun";
       check = secrets.isSecret;
-      merge = lib.options.mergeEqualOption;
+      # references made with `secret` carry a __toString function, which ==
+      # cannot compare; compare the reference itself
+      merge =
+        loc: defs:
+        let
+          refs = map (def: secrets.normalize def.value) defs;
+        in
+        if builtins.all (ref: ref == builtins.head refs) refs then
+          (builtins.head defs).value
+        else
+          throw "The option `${lib.showOption loc}' has conflicting secret references: ${
+            lib.concatMapStringsSep ", " (def: "${secrets.placeholder def.value} in ${def.file}") defs
+          }";
     };
 
     atom =

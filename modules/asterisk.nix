@@ -92,11 +92,9 @@ let
     }) fileNames
   );
 
-  sectionBodies = concatMap (
-    file: map (section: removeAttrs section format.metaAttrs) (attrValues cfg.settings.${file})
-  ) (attrNames cfg.settings);
-
-  secretRefs = secrets.collect sectionBodies;
+  # Every secret placeholder in the generated files, including secrets
+  # interpolated into strings and placeholders written in extraConfig.
+  secretRefs = unique (concatMap (file: secrets.fromText cfg.renderedFiles.${file}) fileNames);
 
   # Keys that hold credentials; a plain string there lands in the store.
   secretKeys = [
@@ -239,9 +237,9 @@ let
         }"
       ) secretRefs}
 
-      if grep -rqF '@NIX_ASTERISK_SECRET_' "$new"; then
+      if grep -rqF '@NIX_ASTERISK_SECRET:' "$new"; then
         echo "asterisk-config: unresolved secret placeholder in:" >&2
-        grep -rlF '@NIX_ASTERISK_SECRET_' "$new" >&2
+        grep -rlF '@NIX_ASTERISK_SECRET:' "$new" >&2
         exit 1
       fi
 
@@ -720,8 +718,12 @@ in
         '';
       }) fileSecrets
       ++ map (ref: {
-        assertion = ref ? _secret || secrets.isValidCredentialName ref._credential;
-        message = "services.asterisk-declarative: invalid systemd credential name `${ref._credential}`.";
+        assertion = secrets.isValidReference ref;
+        message =
+          if ref ? _secret then
+            "services.asterisk-declarative: secret path `${ref._secret}` must be absolute and only contain letters, digits and _.+/=-."
+          else
+            "services.asterisk-declarative: invalid systemd credential name `${ref._credential}`.";
       }) secretRefs
       ++ mapAttrsToList (key: value: {
         assertion = (cfg.settings."asterisk.conf".directories.${key} or value) == value;

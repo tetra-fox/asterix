@@ -3,6 +3,7 @@
   imports = [
     ./ari.nix
     ./asterisk.nix
+    ./cdr.nix
     ./confbridge.nix
     ./dialplan.nix
     ./features.nix

@@ -683,6 +683,19 @@ lib.runTests {
     expected = true;
   };
 
+  testCdrSqliteUsesArrows = {
+    expr = builtins.head (
+      builtins.filter (lib.hasPrefix "table") (
+        lib.splitString "\n"
+          (rendered [
+            phone
+            { services.asterisk-declarative.cdr.sqlite.enable = true; }
+          ])."cdr_sqlite3_custom.conf"
+      )
+    );
+    expected = "table => cdr";
+  };
+
   testMusicOnHoldDirectoryFromStore = {
     expr =
       lib.hasInfix "directory = ${builtins.storeDir}/"

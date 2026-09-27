@@ -22,6 +22,8 @@ let
         touch $out
       '';
 
+  examples = import ./examples.nix { inherit pkgs self; };
+
   nixSources = lib.fileset.toSource {
     root = ../.;
     fileset = lib.fileset.fileFilter (file: file.hasExt "nix") ../.;
@@ -40,6 +42,12 @@ in
   assertions = reportFailures "asterisk-assertion-tests" (
     import ./assertions.nix { inherit pkgs self; }
   );
+
+  examples = reportFailures "asterisk-examples-eval" examples.problems;
+
+  examples-config-minimal = examples.derivations.minimal;
+  examples-config-household-intercom = examples.derivations.household-intercom;
+  examples-config-small-office = examples.derivations.small-office;
 
   vm-core = import ./vm/core.nix { inherit pkgs self; };
 

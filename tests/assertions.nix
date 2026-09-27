@@ -265,6 +265,11 @@ let
       warning = "voicemail.mailboxes.\"101@default\".pin is a plain string";
     };
 
+    musicOnHoldFilesWithoutDirectory = {
+      module.services.asterisk-declarative.musicOnHold.classes.office.sort = "alpha";
+      assertion = "musicOnHold.classes.office: mode `files` needs a directory";
+    };
+
     plainPasswordWarns = {
       module.services.asterisk-declarative.pjsip.endpoints."101".auth.password = lib.mkForce "hunter2";
       assertions = [ ];

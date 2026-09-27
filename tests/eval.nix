@@ -553,6 +553,31 @@ lib.runTests {
     ];
   };
 
+  testMusicOnHoldDirectoryFromStore = {
+    expr =
+      lib.hasInfix "directory = ${builtins.storeDir}/"
+        (rendered [
+          phone
+          (
+            { pkgs, ... }:
+            {
+              services.asterisk-declarative.musicOnHold.classes.office.directory = pkgs.linkFarm "moh" [ ];
+            }
+          )
+        ])."musiconhold.conf";
+    expected = true;
+  };
+
+  testTypedMusicOnHoldOverridesBuiltinDefault = {
+    expr =
+      lib.hasInfix "directory = custom"
+        (rendered [
+          phone
+          { services.asterisk-declarative.musicOnHold.classes.default.directory = "custom"; }
+        ])."musiconhold.conf";
+    expected = true;
+  };
+
   testChanSipAlwaysNoloaded = {
     expr = lib.hasInfix "noload => chan_sip.so" (rendered [ phone ])."modules.conf";
     expected = true;

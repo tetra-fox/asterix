@@ -35,6 +35,12 @@ in
     }
   );
 
+  eval = reportFailures "asterisk-eval-tests" (import ./eval.nix { inherit pkgs self; });
+
+  assertions = reportFailures "asterisk-assertion-tests" (
+    import ./assertions.nix { inherit pkgs self; }
+  );
+
   vm-core = import ./vm/core.nix { inherit pkgs self; };
 
   formatting = pkgs.runCommand "asterisk-nixfmt-check" { nativeBuildInputs = [ pkgs.nixfmt ]; } ''

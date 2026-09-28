@@ -18,7 +18,7 @@
   };
 
   # link declarations to the repository instead of the store
-  repository = "https://github.com/tetra-fox/nix-asterisk/blob/asterisk-module";
+  repository = "https://github.com/tetra-fox/asterix/blob/main";
   prefix = toString self;
 
   optionsDoc = pkgs.nixosOptionsDoc {
@@ -41,12 +41,12 @@
       };
   };
 in
-  pkgs.runCommand "nix-asterisk-docs" {nativeBuildInputs = [pkgs.cmark];} ''
+  pkgs.runCommand "asterix-docs" {nativeBuildInputs = [pkgs.cmark];} ''
     mkdir -p $out
     cp ${optionsDoc.optionsCommonMark} $out/options.md
     cp ${optionsDoc.optionsJSON}/share/doc/nixos/options.json $out/options.json
     {
-      echo '<!DOCTYPE html><html><head><meta charset="utf-8"><title>nix-asterisk options</title></head><body>'
+      echo '<!DOCTYPE html><html><head><meta charset="utf-8"><title>asterix options</title></head><body>'
       cmark --unsafe $out/options.md
       echo '</body></html>'
     } > $out/options.html

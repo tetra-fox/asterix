@@ -338,6 +338,16 @@ let
             default = null;
             description = "User part of the registered Contact, i.e. the extension inbound calls arrive at.";
           };
+          line = mkOption {
+            type = types.bool;
+            default = true;
+            description = ''
+              Add a `line` parameter to the registered Contact and identify
+              inbound requests that carry it as this trunk (`line` and
+              `endpoint` of the registration), whatever address they come
+              from. Requests without it are still identified by `identify`.
+            '';
+          };
           settings = settingsOption "registration";
         };
         qualifyFrequency = mkOption {
@@ -672,7 +682,9 @@ let
           contact_user = t.registration.contactUser;
           retry_interval = t.registration.retryInterval;
           expiration = t.registration.expiration;
-          endpoint = name;
+          # Asterisk only accepts `endpoint` together with `line`
+          inherit (t.registration) line;
+          endpoint = if t.registration.line then name else null;
         };
         extra = t.registration.settings;
       };
@@ -740,6 +752,24 @@ let
       keys = map (s: "${s.type or "?"} ${s.name}") (filter (s: s ? type) objects);
     in
     unique (filter (k: lib.count (x: x == k) keys > 1) keys);
+
+  # Asterisk refuses to load a registration with `endpoint` but no `line`
+  registrationsWithoutLine = map (s: s.name) (
+    filter (
+      s:
+      (s.type or null) == "registration"
+      && (s.endpoint or null) != null
+      && !(builtins.elem (s.line or false) [
+        true
+        "yes"
+        "true"
+        "on"
+        "y"
+        "t"
+        "1"
+      ])
+    ) objects
+  );
 
   tlsWithoutKeys = map (s: s.name) (
     filter (
@@ -912,6 +942,10 @@ in
           services.asterisk-declarative: pjsip.conf defines these objects more than once (same type and name):
             ${concatStringsSep "\n  " duplicateObjects}
         '';
+      }
+      {
+        assertion = registrationsWithoutLine == [ ];
+        message = "services.asterisk-declarative: pjsip.conf registration(s) ${concatStringsSep ", " registrationsWithoutLine} set `endpoint` without `line = yes`; Asterisk would not load them.";
       }
       {
         assertion = tlsWithoutKeys == [ ];

@@ -123,6 +123,7 @@ lib.runTests {
       contact_user = 5551000
       endpoint = provider
       expiration = 3600
+      line = yes
       outbound_auth = provider-outbound
       retry_interval = 60
       server_uri = sip:sip.provider.example:5070

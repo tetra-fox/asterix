@@ -67,6 +67,31 @@ let
       assertion = "outbound_auth = missing: no auth named `missing`";
     };
 
+    registrationEndpointWithoutLine = {
+      module.services.asterisk-declarative.settings."pjsip.conf".reg = {
+        type = "registration";
+        server_uri = "sip:sip.example";
+        client_uri = "sip:1@sip.example";
+        endpoint = "101";
+      };
+      assertion = "registration(s) reg set `endpoint` without `line = yes`";
+    };
+
+    trunkWithoutLineIsValid = {
+      module =
+        { config, ... }:
+        {
+          services.asterisk-declarative.pjsip.trunks.provider = {
+            host = "sip.example";
+            username = "u";
+            password = config.lib.asterisk.secret "/run/agenix/trunk";
+            context = "internal";
+            registration.line = false;
+          };
+        };
+      assertions = [ ];
+    };
+
     duplicateObject = {
       module.services.asterisk-declarative.settings."pjsip.conf".again = {
         name = "101";

@@ -115,7 +115,8 @@ pkgs.testers.runNixOSTest {
         paths = [p for p in pbx.succeed(f"nix-store -qR {template}").split() if "grandstream" in p or "-cfg" in p]
         assert any(p.endswith("-cfg000b82000101.xml") for p in paths), paths
         # exit status 1: searched everything, no match
-        pbx.succeed(f"grep -rl desk-101-pw {' '.join(paths)}; test $? -eq 1")
+        status, output = pbx.execute(f"grep -rl desk-101-pw {' '.join(paths)} 2>&1")
+        assert status == 1, f"grep exited with {status}: {output}"
         pbx.succeed("test \"$(stat -c '%U %a' /run/grandstream-provisioning/cfg000b82000101.xml)\" = 'nginx 400'")
 
     with subtest("files are restricted to the phone's address and unknown paths"):

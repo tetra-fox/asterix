@@ -715,49 +715,6 @@ in
       expected = "Answer()";
     };
 
-    testPageDefaults = {
-      expr = asteriskLib.dialplan.page {
-        endpoints = [
-          "kitchen"
-          "office"
-        ];
-      };
-      expected = "Page(PJSIP/kitchen&PJSIP/office,d,20)";
-    };
-
-    testPageWithPredialAndOptions = {
-      expr = asteriskLib.dialplan.page {
-        endpoints = ["kitchen"];
-        duplex = false;
-        quiet = true;
-        predial = "page-autoanswer";
-        timeout = 10;
-        extraOptions = "i";
-      };
-      expected = "Page(PJSIP/kitchen,qb(page-autoanswer^s^1)i,10)";
-    };
-
-    testAutoAnswerContext = {
-      expr = asteriskLib.dialplan.autoAnswerContext {};
-      expected = {
-        extensions.s = [
-          "Set(PJSIP_HEADER(add,Call-Info)=<sip:intercom>;answer-after=0)"
-          "Set(PJSIP_HEADER(add,Alert-Info)=info=alert-autoanswer)"
-          "Return()"
-        ];
-      };
-    };
-
-    testAutoAnswerContextWithoutAlertInfo = {
-      expr = asteriskLib.dialplan.autoAnswerContext {alertInfo = null;};
-      expected = {
-        extensions.s = [
-          "Set(PJSIP_HEADER(add,Call-Info)=<sip:intercom>;answer-after=0)"
-          "Return()"
-        ];
-      };
-    };
-
     # --- module system integration ----------------------------------------------
 
     testModuleMergingAndPriorities = {

@@ -117,13 +117,14 @@
     danglingPredialSubroutine = {
       module = {config, ...}: {
         services.asterisk.dialplan.contexts.internal.extensions."100" = [
-          (config.lib.asterisk.dialplan.page {
-            endpoints = ["101"];
-            predial = "page-autoanswer";
-          })
+          (config.lib.asterisk.dialplan.app "Dial" [
+            "PJSIP/101"
+            20
+            "b(announce^s^1)"
+          ])
         ];
       };
-      assertion = "pre-dial subroutines refer to contexts that are not defined:\n  [internal] page-autoanswer";
+      assertion = "pre-dial subroutines refer to contexts that are not defined:\n  [internal] announce";
     };
 
     includeWithTimeSpecIsResolved = {

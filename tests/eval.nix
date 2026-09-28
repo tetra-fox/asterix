@@ -147,7 +147,7 @@ in
                   globals.OPERATOR = "101";
                   contexts = {
                     internal = {
-                      includes = ["paging"];
+                      includes = ["conference"];
                       hints."101" = "PJSIP/101";
                       extensions = {
                         "101" = [
@@ -165,16 +165,10 @@ in
                         "_1XX" = ["Dial(PJSIP/${dp.var "EXTEN"})"];
                       };
                     };
-                    paging.extensions."100" = [
-                      (dp.page {
-                        endpoints = [
-                          "101"
-                          "102"
-                        ];
-                        predial = "autoanswer";
-                      })
+                    conference.extensions."800" = [
+                      "Answer()"
+                      "ConfBridge(800)"
                     ];
-                    autoanswer = dp.autoAnswerContext {};
                     legacy.extraConfig = "exten => 999,1,Playback(tt-monkeys)";
                   };
                 };
@@ -193,13 +187,12 @@ in
           [globals]
           OPERATOR = 101
 
-          [autoanswer]
-          exten => s,1,Set(PJSIP_HEADER(add,Call-Info)=<sip:intercom>\;answer-after=0)
-           same => n,Set(PJSIP_HEADER(add,Alert-Info)=info=alert-autoanswer)
-           same => n,Return()
+          [conference]
+          exten => 800,1,Answer()
+           same => n,ConfBridge(800)
 
           [internal]
-          include => paging
+          include => conference
           exten => 101,hint,PJSIP/101
           exten => 101,1,Dial(PJSIP/101,20)
            same => n(vm),VoiceMail(101@default,u)
@@ -207,9 +200,6 @@ in
           exten => _1XX,1,Dial(PJSIP/''${EXTEN})
 
           [legacy]
-
-          [paging]
-          exten => 100,1,Page(PJSIP/101&PJSIP/102,db(autoanswer^s^1),20)
 
           [legacy]
           exten => 999,1,Playback(tt-monkeys)
@@ -778,18 +768,13 @@ in
                           }
                           "Hangup()"
                         ];
-                        "100" = [
-                          (dp.page {
-                            endpoints = [
-                              "101"
-                              "102"
-                            ];
-                            predial = "autoanswer";
-                          })
+                        # everyone who dials 800 joins the same conference
+                        "800" = [
+                          "Answer()"
+                          (dp.app "ConfBridge" ["800"])
                         ];
                       };
                     };
-                    autoanswer = dp.autoAnswerContext {};
                     outbound.extensions."_9X." = ["Dial(\${TRUNK}/\${EXTEN:1})"];
                   };
                 };
@@ -801,11 +786,12 @@ in
       expected = ''
         [internal]
         include => outbound
-        exten => 100,1,Page(PJSIP/101&PJSIP/102,db(autoanswer^s^1),20)
         exten => 101,hint,PJSIP/101
         exten => 101,1,Dial(PJSIP/101,20)
          same => n(vm),VoiceMail(101@default,u)
-         same => n,Hangup()'';
+         same => n,Hangup()
+        exten => 800,1,Answer()
+         same => n,ConfBridge(800)'';
     };
 
     # Asterisk ignores -p unless it starts as root: systemd sets the policy

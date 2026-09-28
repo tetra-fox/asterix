@@ -60,7 +60,9 @@ in
         ];
         # inbound calls arrive for the number we register
         registration.contactUser = "5551000";
+        # the provider's servers; this network contains sip.provider.example
         identify.match = [ "203.0.113.0/24" ];
+        matchProviderHost = false;
       };
 
       endpoints = builtins.mapAttrs (extension: name: {

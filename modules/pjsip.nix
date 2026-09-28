@@ -360,7 +360,10 @@ let
           default = true;
           description = ''
             Identify inbound requests coming from `host` as this trunk, in
-            addition to `identify.match`.
+            addition to `identify.match`. When a network in `identify.match`
+            already contains the host's address, Asterisk skips it and logs a
+            misleading "did not resolve to any address" warning; turn this
+            off then.
           '';
         };
         aorSettings = settingsOption "aor";

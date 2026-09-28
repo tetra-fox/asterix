@@ -1,5 +1,5 @@
 # Options reference: `nix build .#docs` produces options.md, options.html and
-# options.json for services.asterisk.
+# options.json for services.asterisk, including services.asterisk.ht801.
 {
   pkgs,
   self,
@@ -10,6 +10,7 @@
     inherit (pkgs.stdenv.hostPlatform) system;
     modules = [
       self.nixosModules.default
+      self.nixosModules.ht801
       {
         boot.isContainer = true;
         system.stateVersion = "26.05";

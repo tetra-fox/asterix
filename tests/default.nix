@@ -66,6 +66,8 @@ in {
 
   vm-tls-realtime = import ./vm/tls-realtime.nix {inherit pkgs self;};
 
+  vm-ht801 = import ./vm/ht801.nix {inherit pkgs self sopsSecrets;};
+
   # every option has a description and the reference builds
   docs = import ../docs {inherit pkgs self;};
 

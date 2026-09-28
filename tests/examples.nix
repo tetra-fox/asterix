@@ -12,6 +12,12 @@
     minimal = [../examples/minimal.nix];
     household-intercom = [../examples/household-intercom.nix];
     small-office = [../examples/small-office.nix];
+    # the add-on, with the example it extends
+    household-intercom-ht801 = [
+      self.nixosModules.ht801
+      ../examples/household-intercom.nix
+      ../examples/household-intercom-ht801.nix
+    ];
   };
 
   # the examples take their secrets from sops-nix; nothing is decrypted here

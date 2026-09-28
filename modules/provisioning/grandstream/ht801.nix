@@ -28,10 +28,10 @@
     types
     ;
 
-  cfg = config.services.asterisk.provisioning.ht801;
+  cfg = config.services.asterisk.provisioning.grandstream.ht801;
   pcfg = config.services.asterisk.provisioning;
   acfg = config.services.asterisk;
-  asteriskLib = import ../lib {inherit lib;};
+  asteriskLib = import ../../../lib {inherit lib;};
   inherit (asteriskLib) format secrets;
 
   valueType =
@@ -143,7 +143,7 @@
     </gs_provision>
   '';
 in {
-  options.services.asterisk.provisioning.ht801 = {
+  options.services.asterisk.provisioning.grandstream.ht801 = {
     enable = mkEnableOption "provisioning of Grandstream HT801 adapters over HTTP";
 
     sipServer = mkOption {
@@ -205,18 +205,18 @@ in {
       [
         {
           assertion = lib.allUnique (map (device: normalizeMac device.mac) (attrValues cfg.devices));
-          message = "services.asterisk.provisioning.ht801.devices: MAC addresses must be unique.";
+          message = "services.asterisk.provisioning.grandstream.ht801.devices: MAC addresses must be unique.";
         }
         {
           assertion = builtins.all (p: builtins.match "P[0-9]+" p != null) (
             attrNames cfg.settings ++ lib.concatMap (device: attrNames device.settings) (attrValues cfg.devices)
           );
-          message = "services.asterisk.provisioning.ht801: settings keys must be P-values such as P1362.";
+          message = "services.asterisk.provisioning.grandstream.ht801: settings keys must be P-values such as P1362.";
         }
       ]
       ++ mapAttrsToList (name: device: {
         assertion = endpointOf device != null && (endpointOf device).auth != null;
-        message = "services.asterisk.provisioning.ht801.devices.${name}: endpoint `${device.endpoint}` must exist in pjsip.endpoints and have `auth` set.";
+        message = "services.asterisk.provisioning.grandstream.ht801.devices.${name}: endpoint `${device.endpoint}` must exist in pjsip.endpoints and have `auth` set.";
       })
       cfg.devices;
 

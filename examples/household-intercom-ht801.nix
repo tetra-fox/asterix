@@ -19,7 +19,7 @@
     openFirewall = true;
     firewallInterfaces = ["voip"];
 
-    ht801 = {
+    grandstream.ht801 = {
       enable = true;
       timeZone = "CET-1CEST-2,M3.5.0/02:00:00,M10.5.0/03:00:00";
       adminPassword = config.lib.asterisk.secret config.sops.secrets.ht801-admin.path;

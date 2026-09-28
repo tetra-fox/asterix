@@ -1,7 +1,7 @@
 # Provisioning files for phones and adapters, served over HTTP by
 # pkgs/provisioning-server from a systemd socket.
 #
-# Vendor modules (see ht801.nix) and users write `files`; their text may
+# Vendor modules (see grandstream/) and users write `files`; their text may
 # contain secret references, which are substituted at service start into a
 # tmpfs like Asterisk's own configuration, so the store only holds
 # placeholders. Secrets given as systemd credentials (`credential "name"`) must
@@ -30,12 +30,12 @@
     ;
 
   cfg = config.services.asterisk.provisioning;
-  asteriskLib = import ../lib {inherit lib;};
+  asteriskLib = import ../../lib {inherit lib;};
   inherit (asteriskLib) secrets;
 
   runtimeDir = "/run/asterisk-provisioning";
 
-  server = pkgs.callPackage ../pkgs/provisioning-server/package.nix {};
+  server = pkgs.callPackage ../../pkgs/provisioning-server/package.nix {};
 
   # one line per file: `NAME`, or `NAME ADDRESS` for a file only ADDRESS may fetch
   manifest = pkgs.writeText "asterisk-provisioning-manifest" (
@@ -157,6 +157,8 @@
     '';
   };
 in {
+  imports = [./grandstream/ht801.nix];
+
   options.services.asterisk.provisioning = {
     enable = mkEnableOption "serving provisioning files for phones over HTTP";
 

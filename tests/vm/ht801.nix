@@ -42,7 +42,7 @@ in
         };
         services.asterisk.provisioning = {
           # adapter 101 has a static lease
-          ht801.devices."101".allowedAddress = "10.0.20.21";
+          grandstream.ht801.devices."101".allowedAddress = "10.0.20.21";
           # a hand-written file with the admin password, which is not escaped here
           files."notes.txt".text = "admin=${config.lib.asterisk.secret config.sops.secrets.ht801-admin.path}";
         };

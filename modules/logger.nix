@@ -1,5 +1,3 @@
-# logger.conf: log channels.
-#
 # Asterisk runs in the foreground under systemd, so the `console` channel is
 # its standard output and ends up in the journal (`journalctl -u asterisk`).
 {

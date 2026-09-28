@@ -1,4 +1,3 @@
-# rtp.conf: media port range and NAT traversal (ICE, STUN, TURN).
 {
   config,
   lib,

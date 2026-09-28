@@ -1,6 +1,5 @@
-# The smallest useful configuration: two SIP phones that call each other by
-# dialing 101 and 102. Passwords come from sops-nix (set sops.defaultSopsFile
-# in the host's configuration) and never enter the Nix store.
+# Two SIP phones that call each other by dialing 101 and 102. Passwords come
+# from sops-nix (set sops.defaultSopsFile in the host's configuration).
 {
   config,
   lib,

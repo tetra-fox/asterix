@@ -16,8 +16,8 @@
 #   110      page downstairs
 #   120      page upstairs
 #
-# Everything here uses the generic module; the paging helpers come from
-# `config.lib.asterisk.dialplan`. Passwords come from sops-nix (set
+# The paging helpers come from `config.lib.asterisk.dialplan`. Passwords come
+# from sops-nix (set
 # sops.defaultSopsFile in the host's configuration). Adapt the `site` block to
 # your network.
 {

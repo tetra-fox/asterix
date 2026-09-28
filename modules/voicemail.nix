@@ -1,5 +1,3 @@
-# Typed voicemail options (voicemail.conf).
-#
 # Mailboxes render as `mailbox => PIN,full name,email,pager email,options`
 # lines in their context section, with the PIN as a secret placeholder.
 # Mailboxes are declarative: a PIN changed from the phone (VoiceMailMain) is

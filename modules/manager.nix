@@ -1,6 +1,4 @@
-# Typed Asterisk Manager Interface options (manager.conf).
-#
-# Off by default. When enabled it listens on the loopback address; users are
+# AMI is off by default. When enabled it listens on the loopback address; users are
 # restricted to the loopback network unless `permit` says otherwise, and the
 # firewall is only opened when `openFirewall` is set.
 {

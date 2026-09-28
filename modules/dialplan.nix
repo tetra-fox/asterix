@@ -1,5 +1,3 @@
-# Typed dialplan options (extensions.conf).
-#
 # Each context is rendered into `settings."extensions.conf".<context>`, so
 # extensions can be added there too. Every extension is written as one
 # contiguous block: optional hint, then `exten => ext,1,...` followed by

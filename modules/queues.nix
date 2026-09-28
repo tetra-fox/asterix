@@ -1,5 +1,5 @@
-# Typed call queue options (queues.conf). Each queue renders into
-# `settings."queues.conf".<queue>`; static members are `member =>` lines.
+# Each queue renders into `settings."queues.conf".<queue>`; static members are
+# `member =>` lines.
 {
   config,
   lib,

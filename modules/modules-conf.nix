@@ -1,9 +1,5 @@
-# modules.conf: which Asterisk modules are loaded.
-#
-# By default autoload is off and an explicit, lean module list is loaded:
-# what a SIP PBX needs (PJSIP, RTP, bridging, common codecs, the dialplan and
-# its common applications and functions). Typed options add the modules they
-# need (voicemail adds app_voicemail.so, ...). Asterisk does not load a
+# Autoload is off and an explicit module list is loaded. Typed options add
+# the modules they need (voicemail adds app_voicemail.so, ...). Asterisk does not load a
 # module's dependencies by itself, so this list includes them.
 {
   config,

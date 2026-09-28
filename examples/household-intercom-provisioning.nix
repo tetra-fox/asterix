@@ -10,9 +10,7 @@
 #   ];
 #
 # Point the phones at http://10.0.20.10 once (DHCP option 66 or their web
-# interface); they then register with the credentials of their endpoint, sync
-# time from this host, auto-answer pages and never contact Grandstream's
-# cloud or firmware servers.
+# interface).
 {config, ...}: {
   # the phones' files are rendered again when the password changes
   sops.secrets.phone-admin.restartUnits = ["grandstream-provisioning.service"];

@@ -1,5 +1,3 @@
-# Typed PJSIP options (pjsip.conf).
-#
 # Every typed object is rendered as explicit pjsip.conf sections (not the
 # pjsip wizard) with the layer-1 ids documented below, so everything can be
 # extended or overridden through `settings."pjsip.conf"`:

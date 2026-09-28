@@ -1,6 +1,3 @@
-# Core of services.asterisk: layer-1 freeform settings for every
-# configuration file, runtime rendering of secrets, the systemd service with
-# its hardening, state directories, the CLI wrapper and the firewall.
 {
   config,
   lib,

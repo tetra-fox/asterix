@@ -1,6 +1,6 @@
 # The sandbox does not break TLS, SRTP or realtime scheduling: a TLS
 # transport whose certificate and key are root-only files, SRTP (SDES) media,
-# Asterisk running with SCHED_RR, and a call over all of it.
+# Asterisk running with SCHED_RR, and a call over them.
 {
   pkgs,
   self,

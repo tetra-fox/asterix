@@ -1,5 +1,5 @@
 {
-  description = "Declarative Asterisk PBX for NixOS: freeform settings for every config file, typed options for common subsystems, runtime-rendered secrets";
+  description = "Asterisk PBX for NixOS";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";

@@ -1,7 +1,5 @@
-# Call detail records (cdr.conf) and channel event logging (cel.conf) with
-# the CSV and SQLite backends built into the nixpkgs package. Records are
-# written below /var/log/asterisk. (ODBC backends are not built in nixpkgs'
-# Asterisk; other backends can be configured through `settings`.)
+# nixpkgs' Asterisk is built without ODBC, so only the CSV and SQLite backends
+# have typed options. Records are written below /var/log/asterisk.
 {
   config,
   lib,

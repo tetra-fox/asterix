@@ -1,5 +1,3 @@
-# Typed call features (features.conf): in-call DTMF feature codes and
-# custom application features.
 {
   config,
   lib,

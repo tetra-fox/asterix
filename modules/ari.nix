@@ -1,5 +1,4 @@
-# Typed options for Asterisk's HTTP server (http.conf) and the Asterisk REST
-# Interface (ari.conf). The HTTP server is also what WebSocket SIP transports
+# http.conf and ari.conf. The HTTP server is also what WebSocket SIP transports
 # (`ws`, `wss`) run on.
 {
   config,

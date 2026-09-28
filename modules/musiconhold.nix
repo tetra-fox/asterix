@@ -1,5 +1,3 @@
-# Typed music on hold classes (musiconhold.conf).
-#
 # A class plays the files of a directory, which can be a Nix path or package
 # (copied to the store) or a directory relative to Asterisk's data directory
 # (`moh` holds the package's default music).

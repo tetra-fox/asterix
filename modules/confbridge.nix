@@ -1,5 +1,4 @@
-# Typed ConfBridge options (confbridge.conf): bridge profiles, user profiles
-# and DTMF menus. Layer-1 ids: "bridge:<name>", "user:<name>", "menu:<name>".
+# Layer-1 ids in confbridge.conf: "bridge:<name>", "user:<name>", "menu:<name>".
 {
   config,
   lib,

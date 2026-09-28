@@ -81,7 +81,6 @@ in
     testScript = ''
       start_all()
       pbx.wait_for_unit("asterisk-provisioning.service")
-      pbx.wait_for_unit("nginx.service")
       # nothing on the adapters node waits for network-online.target: wait for its addresses
       adapters.wait_until_succeeds("ip -o address show to 10.0.20.22 -tentative | grep -q .")
       adapters.wait_until_succeeds("ip -o address show to 10.0.20.21 -tentative | grep -q .")
@@ -118,7 +117,7 @@ in
           # exit status 1: searched everything, no match
           status, output = pbx.execute(f"grep -rl ata-101-pw {' '.join(paths)} 2>&1")
           assert status == 1, f"grep exited with {status}: {output}"
-          pbx.succeed("test \"$(stat -c '%U %a' /run/asterisk-provisioning/cfgc074ad000101.xml)\" = 'nginx 400'")
+          pbx.succeed("test \"$(stat -c '%U %a' /run/asterisk-provisioning/cfgc074ad000101.xml)\" = 'asterisk-provisioning 400'")
 
       with subtest("a hand-written file gets the same secret unescaped"):
           assert fetch("notes.txt") == "200"
@@ -130,8 +129,19 @@ in
           assert fetch("cfgc074ad000102.xml", source="10.0.20.22") == "200"
           assert fetch("cfgc074ad999999.xml") == "404"
           assert fetch("") == "404"
+          journal = pbx.succeed("journalctl -u asterisk-provisioning.service")
+          assert "10.0.20.22 GET /cfgc074ad000101.xml 403" in journal, journal
 
       with subtest("nothing is served on the trusted LAN address"):
           softphone.fail("curl -s --max-time 5 http://10.0.10.10/cfgc074ad000102.xml")
+
+      with subtest("the kernel drops connections from outside allowedNetworks"):
+          # from the pbx itself: a source address inside 10.0.20.0/24 is let through,
+          # 127.0.0.1 never gets a connection until the socket allows it
+          url = "http://10.0.20.10/cfgc074ad000102.xml"
+          pbx.succeed(f"curl -sf --max-time 5 --interface 10.0.20.10 -o /dev/null {url}")
+          pbx.fail(f"curl -s --max-time 5 --interface 127.0.0.1 -o /dev/null {url}")
+          pbx.succeed("systemctl set-property --runtime asterisk-provisioning.socket IPAddressAllow=127.0.0.1")
+          pbx.succeed(f"curl -sf --max-time 5 --interface 127.0.0.1 -o /dev/null {url}")
     '';
   }

@@ -1,4 +1,5 @@
-# Provisioning files for phones and adapters, served over HTTP by nginx.
+# Provisioning files for phones and adapters, served over HTTP by
+# pkgs/provisioning-server from a systemd socket.
 #
 # Vendor modules (see ht801.nix) and users write `files`; their text may
 # contain secret references, which are substituted at service start into a
@@ -16,14 +17,14 @@
     attrNames
     attrValues
     concatMapStringsSep
+    concatStrings
     filterAttrs
     literalExpression
-    mapAttrs'
     mapAttrsToList
     mkEnableOption
     mkIf
     mkOption
-    nameValuePair
+    optionalString
     types
     unique
     ;
@@ -33,6 +34,18 @@
   inherit (asteriskLib) secrets;
 
   runtimeDir = "/run/asterisk-provisioning";
+
+  server = pkgs.callPackage ../pkgs/provisioning-server/package.nix {};
+
+  # one line per file: `NAME`, or `NAME ADDRESS` for a file only ADDRESS may fetch
+  manifest = pkgs.writeText "asterisk-provisioning-manifest" (
+    concatStrings (mapAttrsToList (name: file: "${name}${optionalString (file.allowedAddress != null) " ${file.allowedAddress}"}\n") cfg.files)
+  );
+
+  listenStream =
+    if lib.hasInfix ":" cfg.listenAddress
+    then "[${cfg.listenAddress}]:${toString cfg.port}"
+    else "${cfg.listenAddress}:${toString cfg.port}";
 
   fileType = types.submodule {
     options = {
@@ -56,8 +69,9 @@
         default = null;
         example = "10.0.20.21";
         description = ''
-          Only this address may download the file. Use it for files that contain
-          one device's password, together with a static DHCP lease.
+          Only this address may download the file (others get 403). Use it for
+          files that contain one device's password, together with a static DHCP
+          lease.
         '';
       };
     };
@@ -80,24 +94,6 @@
   secretRefs = unique (refsFor "none" ++ refsFor "xml");
 
   filesFor = escape: attrNames (filterAttrs (_: file: file.escape == escape) cfg.files);
-
-  # nginx binds `listenAddress` and fails if it is not configured yet: the
-  # static address of an interface other than the default gateway's is not
-  # ordered before network-online.target. nginx starts after this unit.
-  waitForAddress = pkgs.writeShellScript "asterisk-provisioning-wait" ''
-    waited=0
-    until [ -n "$(${pkgs.iproute2}/bin/ip -o address show to ${lib.escapeShellArg cfg.listenAddress} -tentative)" ]; do
-      if [ "$waited" -eq 0 ]; then
-        echo "asterisk-provisioning: waiting for address ${cfg.listenAddress}"
-      elif [ "$waited" -ge 90 ]; then
-        echo "asterisk-provisioning: address ${cfg.listenAddress} is not configured on this host" >&2
-        exit 1
-      fi
-      ${pkgs.coreutils}/bin/sleep 1
-      waited=$((waited + 1))
-    done
-  '';
-  waitsForAddress = !(builtins.elem cfg.listenAddress ["0.0.0.0" "::"]);
 
   substituteCalls = escape:
     concatMapStringsSep "\n" (
@@ -123,9 +119,9 @@
       umask 0077
       amp='&amp;' lt='&lt;' gt='&gt;' quot='&quot;' apos='&apos;'
 
-      new=$(mktemp -d "${runtimeDir}/.new.XXXXXXXX")
+      # the runtime directory is new on every start of the unit
       for template in ${templates}/*; do
-        cp -L --no-preserve=mode,ownership "$template" "$new"/
+        cp -L --no-preserve=mode,ownership "$template" ${runtimeDir}/
       done
 
       # substitute ESCAPE PLACEHOLDER CREDENTIAL FILE...
@@ -142,25 +138,22 @@
           value=''${value//\'/"$apos"}
         fi
         for file in "$@"; do
-          content=$(< "$new/$file")
-          printf '%s\n' "''${content//"$placeholder"/"$value"}" > "$new/$file"
+          content=$(< "${runtimeDir}/$file")
+          printf '%s\n' "''${content//"$placeholder"/"$value"}" > "${runtimeDir}/$file"
         done
       }
 
       ${substituteCalls "none"}
       ${substituteCalls "xml"}
 
-      if grep -rqF '@NIX_ASTERISK_SECRET:' "$new"; then
+      if grep -rqF '@NIX_ASTERISK_SECRET:' ${runtimeDir}; then
         echo "asterisk-provisioning: unresolved secret placeholder" >&2
         exit 1
       fi
 
-      find ${runtimeDir} -maxdepth 1 -type f -delete
-      for file in "$new"/*; do
+      for file in ${runtimeDir}/*; do
         chmod 0400 "$file"
-        mv "$file" ${runtimeDir}/
       done
-      rmdir "$new"
     '';
   };
 in {
@@ -171,8 +164,9 @@ in {
       type = types.str;
       example = "10.0.20.10";
       description = ''
-        Address nginx serves the provisioning files on, on the phones'
-        network only: the files usually contain SIP passwords.
+        Address the provisioning files are served on, on the phones' network
+        only: the files usually contain SIP passwords. It may be configured
+        after the socket is set up (`FreeBind=`).
       '';
     };
 
@@ -185,7 +179,10 @@ in {
     allowedNetworks = mkOption {
       type = types.listOf types.str;
       example = ["10.0.20.0/24"];
-      description = "Networks allowed to download provisioning files (nginx `allow`).";
+      description = ''
+        Networks allowed to connect. systemd drops connections from anywhere
+        else (`IPAddressAllow=` on the socket) before the server sees them.
+      '';
     };
 
     openFirewall = mkOption {
@@ -240,76 +237,67 @@ in {
       })
       secretRefs;
 
-    systemd.services.asterisk-provisioning = {
-      description = "Render phone provisioning files";
-      wantedBy = [
-        "multi-user.target"
-        "nginx.service"
-      ];
-      before = ["nginx.service"];
-      restartTriggers = [templates];
-      serviceConfig = {
-        Type = "oneshot";
-        RemainAfterExit = true;
-        ExecStartPre = lib.optional waitsForAddress "${waitForAddress}";
-        ExecStart = "${renderer}/bin/asterisk-provisioning-render";
-        User = config.services.nginx.user;
-        Group = config.services.nginx.group;
-        LoadCredential = map (ref: "${secrets.credentialName ref}:${ref._secret}") (
-          lib.filter (ref: ref ? _secret) secretRefs
-        );
-        # owner only: nginx serves the files, the renderer (same user) writes them
-        RuntimeDirectory = "asterisk-provisioning";
-        RuntimeDirectoryMode = "0700";
-        RuntimeDirectoryPreserve = true;
-        CapabilityBoundingSet = [""];
-        NoNewPrivileges = true;
-        PrivateTmp = true;
-        PrivateDevices = true;
-        # no IP traffic; netlink only to see whether the address is up
+    systemd.sockets.asterisk-provisioning = {
+      description = "Phone provisioning";
+      wantedBy = ["sockets.target"];
+      listenStreams = [listenStream];
+      socketConfig = {
+        FreeBind = true;
         IPAddressDeny = "any";
-        ProtectSystem = "strict";
-        ProtectHome = true;
-        ProtectKernelTunables = true;
-        ProtectKernelModules = true;
-        ProtectControlGroups = true;
-        RestrictAddressFamilies = [
-          "AF_UNIX"
-          "AF_NETLINK"
-        ];
-        SystemCallArchitectures = "native";
-        SystemCallFilter = ["@system-service"];
+        IPAddressAllow = cfg.allowedNetworks;
       };
     };
 
-    services.nginx = {
-      enable = true;
-      virtualHosts.asterisk-provisioning = {
-        listen = [
-          {
-            addr = cfg.listenAddress;
-            inherit (cfg) port;
-          }
+    systemd.services.asterisk-provisioning = {
+      description = "Phone provisioning";
+      # started at boot rather than on the first request, so a missing secret
+      # shows up in the unit's status right away
+      wantedBy = ["multi-user.target"];
+      requires = ["asterisk-provisioning.socket"];
+      after = ["asterisk-provisioning.socket"];
+      serviceConfig = {
+        Type = "exec";
+        ExecStartPre = "${renderer}/bin/asterisk-provisioning-render";
+        ExecStart = "${lib.getExe server} ${runtimeDir} ${manifest}";
+        Restart = "on-failure";
+        DynamicUser = true;
+        LoadCredential = map (ref: "${secrets.credentialName ref}:${ref._secret}") (
+          lib.filter (ref: ref ? _secret) secretRefs
+        );
+        RuntimeDirectory = "asterisk-provisioning";
+        RuntimeDirectoryMode = "0700";
+        UMask = "0077";
+
+        # the socket from the .socket unit is the only network access (the
+        # service's IPAddressDeny does not apply to sockets passed in)
+        PrivateNetwork = true;
+        RestrictAddressFamilies = "none";
+        IPAddressDeny = "any";
+
+        CapabilityBoundingSet = "";
+        NoNewPrivileges = true;
+        PrivateDevices = true;
+        PrivateUsers = true;
+        ProtectSystem = "strict";
+        ProtectHome = true;
+        ProtectClock = true;
+        ProtectHostname = true;
+        ProtectKernelLogs = true;
+        ProtectKernelModules = true;
+        ProtectKernelTunables = true;
+        ProtectControlGroups = true;
+        ProtectProc = "invisible";
+        ProcSubset = "pid";
+        LockPersonality = true;
+        MemoryDenyWriteExecute = true;
+        RestrictNamespaces = true;
+        RestrictRealtime = true;
+        SystemCallArchitectures = "native";
+        SystemCallFilter = [
+          "@system-service"
+          "~@privileged"
+          "~@resources"
         ];
-        root = runtimeDir;
-        extraConfig = ''
-          ${concatMapStringsSep "\n" (net: "allow ${net};") cfg.allowedNetworks}
-          deny all;
-        '';
-        locations =
-          {
-            "/".return = "404";
-          }
-          // mapAttrs' (
-            name: file:
-              nameValuePair "= /${name}" {
-                extraConfig = lib.optionalString (file.allowedAddress != null) ''
-                  allow ${file.allowedAddress};
-                  deny all;
-                '';
-              }
-          )
-          cfg.files;
       };
     };
 

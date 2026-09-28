@@ -82,7 +82,9 @@ pkgs.testers.runNixOSTest {
     start_all()
     pbx.wait_for_unit("grandstream-provisioning.service")
     pbx.wait_for_unit("nginx.service")
-    deskphone.wait_for_unit("network-online.target")
+    # nothing on the phone waits for network-online.target: wait for its addresses
+    deskphone.wait_until_succeeds("ip -o address show to 10.0.20.22 -tentative | grep -q .")
+    deskphone.wait_until_succeeds("ip -o address show to 10.0.20.21 -tentative | grep -q .")
 
     def fetch(name, source="10.0.20.21"):
         output = f"/tmp/{name or 'index'}"

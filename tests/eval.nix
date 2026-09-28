@@ -648,6 +648,8 @@ lib.runTests {
           "res_ari_channels.so"
           "app_stasis.so"
           "res_http_websocket.so"
+          # a dependency of res_ari.so since Asterisk 22.5
+          "res_websocket_client.so"
         ];
         tls =
           lib.hasInfix "tlsprivatekey = /run/credentials/asterisk.service/http-tls-key"
@@ -656,6 +658,7 @@ lib.runTests {
       };
     expected = {
       modules = [
+        true
         true
         true
         true

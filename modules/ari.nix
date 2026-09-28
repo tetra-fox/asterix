@@ -29,8 +29,20 @@ let
 
   credentialPath = kind: "${cfg.paths.credentials}/http-tls-${kind}";
 
+  # res_ari links against res_websocket_client since 20.15.0, 21.10.0 and
+  # 22.5.0. With autoload off Asterisk cannot resolve that on its own: the
+  # dependency is only known after res_ari.so has been loaded.
+  version = cfg.package.version;
+  needsWebsocketClient =
+    lib.versionAtLeast version "22.5"
+    || (lib.versionAtLeast version "21.10" && lib.versionOlder version "22")
+    || (lib.versionAtLeast version "20.15" && lib.versionOlder version "21");
+
   ariModules = [
     "res_http_websocket.so"
+  ]
+  ++ optionals needsWebsocketClient [ "res_websocket_client.so" ]
+  ++ [
     "res_stasis.so"
     "res_stasis_answer.so"
     "res_stasis_device_state.so"

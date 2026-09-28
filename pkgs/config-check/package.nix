@@ -1,11 +1,16 @@
-# asterisk-config-check ASTERISK CONFIG [ADDRESS...]
+# asterisk-config-check [--low-ports] ASTERISK CONFIG [ADDRESS...]
 #
 # Starts ASTERISK with the configuration in CONFIG and fails if Asterisk logs
 # an error or warning while loading it, or if the dialplan uses an application
 # or function that no loaded module provides. CONFIG is prepared by
 # modules/asterisk.nix: `config/` with `@root@` where the files will be and a
-# log channel `check`, and `credentials/`. Secrets become zeros. Asterisk runs
-# in a network namespace of its own that has each ADDRESS.
+# log channel `check`, and `credentials/`. Secrets become zeros.
+#
+# ADDRESS are the addresses Asterisk listens on. IPv4 ones become loopback
+# addresses, which a build can bind without privileges. Asterisk only runs in
+# a user and network namespace of its own, which some machines forbid, to
+# listen on an IPv6 ADDRESS or below port 1024 (--low-ports), or to keep it
+# off the network when the build is not sandboxed.
 {
   lib,
   coreutils,
@@ -32,24 +37,55 @@ in
       util-linux
     ];
     text = ''
+      arguments=("$@")
+      low_ports=
+      if [ "''${1:-}" = --low-ports ]; then
+        low_ports=1
+        shift
+      fi
       asterisk=$1 config=$2
       shift 2
 
-      if [ -z "''${ASTERISK_CONFIG_CHECK_NAMESPACE:-}" ]; then
-        if ! unshare --user --map-root-user --net true; then
-          echo "asterisk-config-check: cannot create a user and network namespace; unprivileged user namespaces may be disabled on this machine" >&2
-          exit 1
-        fi
-        ASTERISK_CONFIG_CHECK_NAMESPACE=1 exec unshare --user --map-root-user --net "$0" "$asterisk" "$config" "$@"
-      fi
-
-      ip link set lo up
+      ipv6=()
+      rewrite=()
+      loopback=0
       for address in "$@"; do
         case $address in
-          *:*) ip -6 address add "$address/128" dev lo nodad ;;
-          *) ip address add "$address/32" dev lo ;;
+          *:*) ipv6+=("$address") ;;
+          *)
+            loopback=$((loopback + 1))
+            rewrite+=(-e "s/^([[:space:]]*(bind|bindaddr|tlsbindaddr)[[:space:]]*=>?[[:space:]]*)''${address//./\\.}(:[0-9]+)?([[:space:]]*)$/\\1127.100.0.$loopback\\3\\4/")
+            ;;
         esac
       done
+
+      if [ -z "''${ASTERISK_CONFIG_CHECK_NAMESPACE:-}" ]; then
+        reasons=()
+        # a sandboxed build has no network interface but lo
+        links=$(ip -o link show)
+        if grep -qv ': lo:' <<< "$links"; then
+          reasons+=("to stay off the network of this unsandboxed build")
+        fi
+        if [ ''${#ipv6[@]} -gt 0 ]; then
+          reasons+=("to listen on ''${ipv6[*]}")
+        fi
+        if [ -n "$low_ports" ]; then
+          reasons+=("to listen below port 1024")
+        fi
+        if [ ''${#reasons[@]} -gt 0 ]; then
+          if ! unshare --user --map-root-user --net true; then
+            printf -v joined '%s, ' "''${reasons[@]}"
+            echo "asterisk-config-check: Asterisk needs a user and network namespace of its own (''${joined%, }), which this machine does not allow" >&2
+            exit 1
+          fi
+          ASTERISK_CONFIG_CHECK_NAMESPACE=1 exec unshare --user --map-root-user --net "$0" "''${arguments[@]}"
+        fi
+      else
+        ip link set lo up
+        for address in "''${ipv6[@]}"; do
+          ip -6 address add "$address/128" dev lo nodad
+        done
+      fi
 
       root=$(mktemp -d)
       cp -rL --no-preserve=mode "$config/." "$root/"
@@ -59,6 +95,7 @@ in
         -e "s|@root@|$root|g" \
         -e 's/(SHA-256|SHA-512-256):${secrets.placeholderPattern}/\1:${zeros 64}/g' \
         -e 's/${secrets.placeholderPattern}/${zeros 32}/g' \
+        "''${rewrite[@]}" \
         {} +
 
       rx() {

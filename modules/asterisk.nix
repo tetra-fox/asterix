@@ -138,6 +138,7 @@
   );
   configCheck = pkgs.runCommand "asterisk-config-check" {} ''
     ${lib.getExe (pkgs.callPackage ../pkgs/config-check/package.nix {})} \
+      ${lib.optionalString (builtins.any lowPort listenPorts) "--low-ports"} \
       ${asteriskBin} ${checkTree} ${lib.escapeShellArgs bindAddresses} || {
       echo "(services.asterisk.checkConfig = false turns this check off)" >&2
       exit 1
@@ -451,19 +452,20 @@
   };
 
   # Ports Asterisk binds itself (not only the ones opened in the firewall);
-  # anything below 1024 needs CAP_NET_BIND_SERVICE.
+  # anything below 1024 needs CAP_NET_BIND_SERVICE. The listen ports are
+  # bound at startup, RTP ports only for calls.
   httpGeneral = cfg.settings."http.conf".general or {};
   managerGeneral = cfg.settings."manager.conf".general or {};
-  boundPorts =
+  listenPorts =
     map (t: t.port) transportPorts
-    ++ [rtpRange.from]
     ++ optional (format.isTrue (httpGeneral.enabled or false)) (toPort (httpGeneral.bindport or 8088))
     ++ optional (format.isTrue (httpGeneral.tlsenable or false)) (
       parseBindPort (toString (httpGeneral.tlsbindaddr or "0.0.0.0")) 8089
     )
     ++ optional (format.isTrue (managerGeneral.enabled or false)) (toPort (managerGeneral.port or 5038))
     ++ cfg.firewall.tcpPorts;
-  needsLowPorts = builtins.any (port: port < 1024) boundPorts;
+  lowPort = port: port < 1024;
+  needsLowPorts = builtins.any lowPort (listenPorts ++ [rtpRange.from]);
 
   # Specific addresses Asterisk binds (not wildcard or loopback). With
   # scripted networking, static addresses of interfaces other than the default
@@ -700,11 +702,13 @@ in {
         Start Asterisk with the generated configuration when the system is
         built, and fail the build if Asterisk logs an error or a warning
         while loading it, or if the dialplan uses an application or function
-        that no loaded module provides. Secrets are replaced by zeros and
-        credentials by a throwaway certificate; Asterisk runs in a network
-        namespace that has the addresses it binds, which needs unprivileged
-        user namespaces on the machine that builds the system. Files outside
-        the Nix store that the configuration names do not exist there.
+        that no loaded module provides. Secrets are replaced by zeros,
+        credentials by a throwaway certificate and IPv4 listen addresses by
+        loopback ones, so a sandboxed build needs no privileges. Listening on
+        IPv6 addresses or ports below 1024, or building without the sandbox,
+        needs unprivileged user namespaces on the build machine, which some
+        systems (Ubuntu 24.04) forbid. Files outside the Nix store that the
+        configuration names do not exist there.
       '';
     };
 

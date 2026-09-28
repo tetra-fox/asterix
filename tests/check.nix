@@ -30,6 +30,19 @@
       ]
     ).system.checks;
 
+  # the check on a machine that forbids unprivileged user namespaces, as
+  # Ubuntu 24.04 does: the build may not create any below its own
+  withoutUserNamespaces = check:
+    check.overrideAttrs (old: {
+      nativeBuildInputs = (old.nativeBuildInputs or []) ++ [pkgs.util-linux];
+      buildCommand = ''
+        unshare --user --map-root-user bash -euo pipefail -c ${lib.escapeShellArg ''
+          echo 0 > /proc/sys/user/max_user_namespaces
+          ${old.buildCommand}
+        ''}
+      '';
+    });
+
   failing = {
     misspelledKey = {
       module.services.asterisk.pjsip.endpoints."101".settings.direct_mdia = false;
@@ -53,6 +66,27 @@
     unclosedParenthesis = {
       module.services.asterisk.dialplan.contexts.internal.extensions."413" = ["Dial(PJSIP/101"];
       expect = ["No closing parenthesis found? 'Dial(PJSIP/101'"];
+    };
+    ipv6AddressWithoutUserNamespaces = {
+      module.services.asterisk.pjsip.transports.udp.address = "2001:db8::10";
+      withoutUserNamespaces = true;
+      expect = ["needs a user and network namespace of its own (to listen on 2001:db8::10)"];
+    };
+    lowPortWithoutUserNamespaces = {
+      module.services.asterisk.pjsip.transports.web = {
+        protocol = "tcp";
+        port = 443;
+      };
+      withoutUserNamespaces = true;
+      expect = ["(to listen below port 1024)"];
+    };
+  };
+
+  # IPv4 addresses become loopback ones, which need no namespace
+  passingWithoutUserNamespaces = {
+    ipv4Addresses.services.asterisk.pjsip.transports = {
+      udp.address = "10.0.10.10";
+      voip.address = "10.0.20.10";
     };
   };
 
@@ -90,6 +124,11 @@
       udp.address = "10.0.20.10";
       v6.address = "2001:db8::10";
     };
+    # root in a namespace of its own may listen below 1024
+    lowPort.services.asterisk.pjsip.transports.web = {
+      protocol = "tcp";
+      port = 443;
+    };
     # a digest after its algorithm must have that algorithm's length
     sha256Digest = {config, ...}: {
       services.asterisk.pjsip.endpoints."101".auth.settings.password_digest = "SHA-256:${
@@ -102,7 +141,11 @@ in
     ${lib.concatStrings (
       lib.mapAttrsToList (
         name: case: let
-          log = "${pkgs.testers.testBuildFailure (checkOf case.module)}/testBuildFailure.log";
+          check =
+            if case.withoutUserNamespaces or false
+            then withoutUserNamespaces (checkOf case.module)
+            else checkOf case.module;
+          log = "${pkgs.testers.testBuildFailure check}/testBuildFailure.log";
         in
           lib.concatMapStrings (line: ''
             if ! grep -qF ${lib.escapeShellArg line} ${log}; then
@@ -117,5 +160,8 @@ in
     )}
     # the passing cases only have to build
     : ${lib.concatMapStringsSep " " (module: "${checkOf module}") (lib.attrValues passing)}
+    : ${lib.concatMapStringsSep " " (module: "${withoutUserNamespaces (checkOf module)}") (
+      lib.attrValues passingWithoutUserNamespaces
+    )}
     touch $out
   ''

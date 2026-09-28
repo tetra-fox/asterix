@@ -655,6 +655,8 @@ lib.runTests {
           lib.hasInfix "tlsprivatekey = /run/credentials/asterisk.service/http-tls-key"
             files."http.conf";
         credentials = builtins.filter (lib.hasPrefix "http-tls") config.systemd.services.asterisk.serviceConfig.LoadCredential;
+        # res_websocket_client logs an error without its file
+        websocketClientConf = files ? "websocket_client.conf";
       };
     expected = {
       modules = [
@@ -669,6 +671,7 @@ lib.runTests {
         "http-tls-cert:/var/lib/acme/pbx/cert.pem"
         "http-tls-key:/var/lib/acme/pbx/key.pem"
       ];
+      websocketClientConf = true;
     };
   };
 

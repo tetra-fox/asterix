@@ -225,6 +225,10 @@ in
       services.asterisk-declarative = {
         modules.load = ariModules;
 
+        # res_websocket_client logs an error when its file is missing; its
+        # connections (outbound WebSockets) go into settings
+        settings."websocket_client.conf" = mkIf needsWebsocketClient { };
+
         settings."ari.conf" = {
           general = mkMerge [
             {

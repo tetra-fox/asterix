@@ -20,8 +20,11 @@
 # `config.lib.asterisk.dialplan`. Passwords come from sops-nix (set
 # sops.defaultSopsFile in the host's configuration). Adapt the `site` block to
 # your network.
-{ config, lib, ... }:
-let
+{
+  config,
+  lib,
+  ...
+}: let
   inherit (config.lib.asterisk) secret;
   dp = config.lib.asterisk.dialplan;
 
@@ -43,27 +46,27 @@ let
     "101" = {
       name = "Kitchen";
       network = "voip";
-      groups = [ "downstairs" ];
+      groups = ["downstairs"];
     };
     "102" = {
       name = "Living room";
       network = "voip";
-      groups = [ "downstairs" ];
+      groups = ["downstairs"];
     };
     "103" = {
       name = "Office";
       network = "voip";
-      groups = [ "upstairs" ];
+      groups = ["upstairs"];
     };
     "201" = {
       name = "Phone A";
       network = "trusted";
-      groups = [ ];
+      groups = [];
     };
     "202" = {
       name = "Phone B";
       network = "trusted";
-      groups = [ ];
+      groups = [];
     };
   };
 
@@ -74,8 +77,7 @@ let
   };
 
   members = group: lib.attrNames (lib.filterAttrs (_: phone: lib.elem group phone.groups) phones);
-in
-{
+in {
   # Phones on one VLAN must not reach the other VLAN through this host.
   boot.kernel.sysctl = {
     "net.ipv4.conf.all.forwarding" = false;
@@ -84,9 +86,11 @@ in
 
   # root-only files are fine: asterisk.service reads them as credentials, and
   # a reload picks up a changed password
-  sops.secrets = lib.mapAttrs' (
-    extension: _: lib.nameValuePair "sip-${extension}" { reloadUnits = [ "asterisk.service" ]; }
-  ) phones;
+  sops.secrets =
+    lib.mapAttrs' (
+      extension: _: lib.nameValuePair "sip-${extension}" {reloadUnits = ["asterisk.service"];}
+    )
+    phones;
 
   services.asterisk = {
     enable = true;
@@ -116,17 +120,19 @@ in
         ];
       };
 
-      endpoints = lib.mapAttrs (extension: phone: {
-        context = "intercom";
-        transport = phone.network;
-        callerId = ''"${phone.name}" <${extension}>'';
-        auth.password = secret config.sops.secrets."sip-${extension}".path;
-        # Only accept registrations from the phone's own network.
-        settings = {
-          contact_deny = "0.0.0.0/0.0.0.0";
-          contact_permit = site.${phone.network}.subnet;
-        };
-      }) phones;
+      endpoints =
+        lib.mapAttrs (extension: phone: {
+          context = "intercom";
+          transport = phone.network;
+          callerId = ''"${phone.name}" <${extension}>'';
+          auth.password = secret config.sops.secrets."sip-${extension}".path;
+          # Only accept registrations from the phone's own network.
+          settings = {
+            contact_deny = "0.0.0.0/0.0.0.0";
+            contact_permit = site.${phone.network}.subnet;
+          };
+        })
+        phones;
     };
 
     dialplan.contexts = {
@@ -138,7 +144,8 @@ in
           lib.mapAttrs (extension: _: [
             "Dial(PJSIP/${extension},30)"
             "Hangup()"
-          ]) phones
+          ])
+          phones
           // lib.mapAttrs (_: endpoints: [
             (dp.page {
               inherit endpoints;
@@ -147,11 +154,12 @@ in
               extraOptions = "s";
             })
             "Hangup()"
-          ]) pageGroups;
+          ])
+          pageGroups;
       };
 
       # Runs on each paged phone's channel before it is called.
-      page-autoanswer = dp.autoAnswerContext { };
+      page-autoanswer = dp.autoAnswerContext {};
     };
   };
 }

@@ -15,8 +15,11 @@
 # typed objects or through `services.asterisk.settings`.
 # Passwords and PINs come from sops-nix (set sops.defaultSopsFile in the host's
 # configuration).
-{ config, lib, ... }:
-let
+{
+  config,
+  lib,
+  ...
+}: let
   phones = {
     "201" = "Reception";
     "202" = "Sales";
@@ -24,25 +27,24 @@ let
   };
 
   sopsSecret = name: config.lib.asterisk.secret config.sops.secrets.${name}.path;
-in
-{
+in {
   # root-only files are fine: asterisk.service reads them as credentials, and
   # a reload picks up a changed password
   sops.secrets =
     lib.genAttrs
-      (
-        [
-          "sip-trunk"
-          "vm-200"
-        ]
-        ++ lib.concatMap (extension: [
-          "sip-${extension}"
-          "vm-${extension}"
-        ]) (lib.attrNames phones)
-      )
-      (_: {
-        reloadUnits = [ "asterisk.service" ];
-      });
+    (
+      [
+        "sip-trunk"
+        "vm-200"
+      ]
+      ++ lib.concatMap (extension: [
+        "sip-${extension}"
+        "vm-${extension}"
+      ]) (lib.attrNames phones)
+    )
+    (_: {
+      reloadUnits = ["asterisk.service"];
+    });
 
   services.asterisk = {
     enable = true;
@@ -54,7 +56,7 @@ in
     ];
 
     pjsip = {
-      transports.udp = { };
+      transports.udp = {};
 
       acls.office = {
         deny = [
@@ -81,16 +83,18 @@ in
         # inbound calls arrive for the number we register
         registration.contactUser = "5551000";
         # the provider's servers; this network contains sip.provider.example
-        identify.match = [ "203.0.113.0/24" ];
+        identify.match = ["203.0.113.0/24"];
         matchProviderHost = false;
       };
 
-      endpoints = builtins.mapAttrs (extension: name: {
-        context = "office";
-        callerId = ''"${name}" <${extension}>'';
-        auth.password = sopsSecret "sip-${extension}";
-        mailboxes = [ "${extension}@default" ];
-      }) phones;
+      endpoints =
+        builtins.mapAttrs (extension: name: {
+          context = "office";
+          callerId = ''"${name}" <${extension}>'';
+          auth.password = sopsSecret "sip-${extension}";
+          mailboxes = ["${extension}@default"];
+        })
+        phones;
     };
 
     dialplan = {
@@ -101,7 +105,7 @@ in
 
       contexts = {
         office = {
-          includes = [ "outbound" ];
+          includes = ["outbound"];
           hints = builtins.mapAttrs (extension: _: "PJSIP/${extension}") phones;
           extensions = {
             "_20X" = [
@@ -143,16 +147,18 @@ in
     };
 
     voicemail = {
-      mailboxes = {
-        "200" = {
-          fullName = "Sales team";
-          pin = sopsSecret "vm-200";
-        };
-      }
-      // builtins.mapAttrs (extension: name: {
-        fullName = name;
-        pin = sopsSecret "vm-${extension}";
-      }) phones;
+      mailboxes =
+        {
+          "200" = {
+            fullName = "Sales team";
+            pin = sopsSecret "vm-200";
+          };
+        }
+        // builtins.mapAttrs (extension: name: {
+          fullName = name;
+          pin = sopsSecret "vm-${extension}";
+        })
+        phones;
       maxMessages = 100;
       maxSeconds = 300;
     };

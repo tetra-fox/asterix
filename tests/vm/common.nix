@@ -1,6 +1,5 @@
 # Settings shared by all VM test nodes: small, quick to boot under TCG.
-{ lib, ... }:
-{
+{lib, ...}: {
   documentation.enable = false;
   virtualisation = {
     memorySize = lib.mkDefault 1024;

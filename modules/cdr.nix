@@ -2,9 +2,13 @@
 # the CSV and SQLite backends built into the nixpkgs package. Records are
 # written below /var/log/asterisk. (ODBC backends are not built in nixpkgs'
 # Asterisk; other backends can be configured through `settings`.)
-{ config, lib, ... }:
-let
-  inherit (lib)
+{
+  config,
+  lib,
+  ...
+}: let
+  inherit
+    (lib)
     concatStringsSep
     mkDefault
     mkIf
@@ -17,7 +21,7 @@ let
   cfg = config.services.asterisk;
   ccfg = cfg.cdr;
   ecfg = cfg.cel;
-  asteriskLib = import ../lib { inherit lib; };
+  asteriskLib = import ../lib {inherit lib;};
   inherit (asteriskLib) format;
   inherit (asteriskLib.dialplan) var;
 
@@ -70,8 +74,7 @@ let
       description = "Table name. The database is {file}`/var/log/asterisk/master.db`.";
     };
   };
-in
-{
+in {
   options.services.asterisk = {
     cdr = {
       enable = mkOption {
@@ -90,7 +93,7 @@ in
         enable = lib.mkEnableOption "CDRs as CSV in {file}`/var/log/asterisk/cdr-csv/Master.csv`";
         settings = mkOption {
           type = types.attrsOf format.types.value;
-          default = { };
+          default = {};
           example = {
             usegmtime = true;
             loguniqueid = true;
@@ -103,7 +106,7 @@ in
 
       settings = mkOption {
         type = types.attrsOf format.types.value;
-        default = { };
+        default = {};
         example = {
           batch = true;
           size = 100;
@@ -117,7 +120,7 @@ in
 
       events = mkOption {
         type = types.listOf types.str;
-        default = [ "ALL" ];
+        default = ["ALL"];
         example = [
           "CHAN_START"
           "CHAN_END"
@@ -146,25 +149,26 @@ in
           events = mkIf ecfg.enable (mkDefault (concatStringsSep "," ecfg.events));
         };
         modules.load =
-          optionals ccfg.csv.enable [ "cdr_csv.so" ]
-          ++ optionals ccfg.sqlite.enable [ "cdr_sqlite3_custom.so" ]
-          ++ optionals ecfg.sqlite.enable [ "cel_sqlite3_custom.so" ];
+          optionals ccfg.csv.enable ["cdr_csv.so"]
+          ++ optionals ccfg.sqlite.enable ["cdr_sqlite3_custom.so"]
+          ++ optionals ecfg.sqlite.enable ["cel_sqlite3_custom.so"];
       };
     }
 
     (mkIf ccfg.csv.enable {
       # cdr_csv writes to <astlogdir>/cdr-csv but does not create it
-      systemd.services.asterisk.serviceConfig.LogsDirectory = [ "asterisk/cdr-csv" ];
+      systemd.services.asterisk.serviceConfig.LogsDirectory = ["asterisk/cdr-csv"];
 
       # cdr_csv declines to load when [csv] has no keys: write its defaults
-      services.asterisk.settings."cdr.conf".csv = {
-        accountlogs = mkDefault true;
-        usegmtime = mkDefault false;
-        loguniqueid = mkDefault false;
-        loguserfield = mkDefault false;
-        newcdrcolumns = mkDefault false;
-      }
-      // ccfg.csv.settings;
+      services.asterisk.settings."cdr.conf".csv =
+        {
+          accountlogs = mkDefault true;
+          usegmtime = mkDefault false;
+          loguniqueid = mkDefault false;
+          loguserfield = mkDefault false;
+          newcdrcolumns = mkDefault false;
+        }
+        // ccfg.csv.settings;
     })
 
     (mkIf ccfg.sqlite.enable {
@@ -181,13 +185,13 @@ in
       # cdr_sqlite3_custom.conf and cel_sqlite3_custom.conf use `key => value`
       services.asterisk.syntax =
         lib.genAttrs
-          [
-            "cdr_sqlite3_custom.conf"
-            "cel_sqlite3_custom.conf"
-          ]
-          (_: {
-            arrowSections = [ "master" ];
-          });
+        [
+          "cdr_sqlite3_custom.conf"
+          "cel_sqlite3_custom.conf"
+        ]
+        (_: {
+          arrowSections = ["master"];
+        });
     }
   ]);
 }

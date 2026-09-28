@@ -1,6 +1,9 @@
 # Core service behaviour with a purely freeform (layer 1) configuration: boot,
 # config loading, secrets, runtime file permissions, CLI wrapper, sandboxing.
-{ pkgs, self }:
+{
+  pkgs,
+  self,
+}:
 pkgs.testers.runNixOSTest {
   name = "asterisk-core";
 
@@ -12,7 +15,7 @@ pkgs.testers.runNixOSTest {
       (import ./secrets.nix {
         # characters that need care in Asterisk config files and in shells
         fixed.sip-102 = ''p;w&d\x"$HOME'';
-        random = [ "sip-101" ];
+        random = ["sip-101"];
       })
     ];
   };

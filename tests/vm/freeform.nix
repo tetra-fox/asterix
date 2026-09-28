@@ -1,7 +1,6 @@
 # The minimal example written purely with layer-1 settings: every file and
 # section spelled out by hand, no typed options.
-{ config, ... }:
-let
+{config, ...}: let
   inherit (config.lib.asterisk) secret;
 
   phone = extension: {
@@ -33,8 +32,7 @@ let
   };
   alice = phone "101";
   bob = phone "102";
-in
-{
+in {
   services.asterisk = {
     enable = true;
     openFirewall = true;

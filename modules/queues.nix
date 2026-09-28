@@ -1,8 +1,12 @@
 # Typed call queue options (queues.conf). Each queue renders into
 # `settings."queues.conf".<queue>`; static members are `member =>` lines.
-{ config, lib, ... }:
-let
-  inherit (lib)
+{
+  config,
+  lib,
+  ...
+}: let
+  inherit
+    (lib)
     concatStringsSep
     filterAttrs
     isList
@@ -16,7 +20,7 @@ let
 
   cfg = config.services.asterisk;
   qcfg = cfg.queues;
-  asteriskLib = import ../lib { inherit lib; };
+  asteriskLib = import ../lib {inherit lib;};
   inherit (asteriskLib) format;
 
   memberType = types.submodule {
@@ -86,8 +90,8 @@ let
         description = "Music on hold class for waiting callers (`musicclass`).";
       };
       members = mkOption {
-        type = types.listOf (types.coercedTo types.str (interface: { inherit interface; }) memberType);
-        default = [ ];
+        type = types.listOf (types.coercedTo types.str (interface: {inherit interface;}) memberType);
+        default = [];
         example = [
           "PJSIP/201"
           {
@@ -100,7 +104,7 @@ let
       };
       settings = mkOption {
         type = types.attrsOf format.types.value;
-        default = { };
+        default = {};
         example = {
           announce-frequency = 60;
           joinempty = "paused,invalid";
@@ -110,20 +114,32 @@ let
     };
   };
 
-  memberValue =
-    m:
-    let
-      fields = [
-        m.interface
-        (if m.penalty == null then "" else toString m.penalty)
-        (if m.name == null then "" else m.name)
-        (if m.stateInterface == null then "" else m.stateInterface)
-      ];
-      trim = list: if list != [ ] && lib.last list == "" then trim (lib.init list) else list;
-    in
+  memberValue = m: let
+    fields = [
+      m.interface
+      (
+        if m.penalty == null
+        then ""
+        else toString m.penalty
+      )
+      (
+        if m.name == null
+        then ""
+        else m.name
+      )
+      (
+        if m.stateInterface == null
+        then ""
+        else m.stateInterface
+      )
+    ];
+    trim = list:
+      if list != [] && lib.last list == ""
+      then trim (lib.init list)
+      else list;
+  in
     concatStringsSep "," (trim fields);
-in
-{
+in {
   options.services.asterisk.queues = {
     persistentMembers = mkOption {
       type = types.bool;
@@ -136,7 +152,7 @@ in
 
     queues = mkOption {
       type = types.attrsOf queueType;
-      default = { };
+      default = {};
       example = lib.literalExpression ''
         {
           support = {
@@ -150,28 +166,33 @@ in
     };
   };
 
-  config = mkIf (cfg.enable && qcfg.queues != { }) {
+  config = mkIf (cfg.enable && qcfg.queues != {}) {
     services.asterisk = {
-      modules.load = [ "app_queue.so" ];
+      modules.load = ["app_queue.so"];
 
-      settings."queues.conf" = {
-        general.persistentmembers = mkDefault qcfg.persistentMembers;
-      }
-      // mapAttrs (
-        _: q:
-        mkMerge [
-          (mapAttrs (_: v: if isList v then v else mkDefault v) (
-            filterAttrs (_: v: v != null) {
-              inherit (q) strategy timeout retry;
-              wrapuptime = q.wrapupTime;
-              maxlen = q.maxLength;
-              musicclass = q.musicOnHoldClass;
-              member = map memberValue q.members;
-            }
-          ))
-          q.settings
-        ]
-      ) qcfg.queues;
+      settings."queues.conf" =
+        {
+          general.persistentmembers = mkDefault qcfg.persistentMembers;
+        }
+        // mapAttrs (
+          _: q:
+            mkMerge [
+              (mapAttrs (_: v:
+                if isList v
+                then v
+                else mkDefault v) (
+                filterAttrs (_: v: v != null) {
+                  inherit (q) strategy timeout retry;
+                  wrapuptime = q.wrapupTime;
+                  maxlen = q.maxLength;
+                  musicclass = q.musicOnHoldClass;
+                  member = map memberValue q.members;
+                }
+              ))
+              q.settings
+            ]
+        )
+        qcfg.queues;
     };
 
     assertions = [

@@ -11,36 +11,33 @@
     };
   };
 
-  outputs =
-    {
-      self,
-      nixpkgs,
-      sops-nix,
-    }:
-    let
-      inherit (nixpkgs) lib;
-      systems = [
-        "x86_64-linux"
-        "aarch64-linux"
-      ];
-      forAllSystems = f: lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
-    in
-    {
-      lib = import ./lib { inherit lib; };
+  outputs = {
+    self,
+    nixpkgs,
+    sops-nix,
+  }: let
+    inherit (nixpkgs) lib;
+    systems = [
+      "x86_64-linux"
+      "aarch64-linux"
+    ];
+    forAllSystems = f: lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
+  in {
+    lib = import ./lib {inherit lib;};
 
-      nixosModules = {
-        default = self.nixosModules.asterisk;
-        asterisk = ./modules;
-        # optional: provisioning for Grandstream phones
-        grandstream-provisioning = ./modules/provisioning/grandstream.nix;
-      };
-
-      checks = forAllSystems (pkgs: import ./tests { inherit pkgs self sops-nix; });
-
-      packages = forAllSystems (pkgs: {
-        docs = import ./docs { inherit pkgs self; };
-      });
-
-      formatter = forAllSystems (pkgs: pkgs.nixfmt-tree);
+    nixosModules = {
+      default = self.nixosModules.asterisk;
+      asterisk = ./modules;
+      # optional: provisioning for Grandstream phones
+      grandstream-provisioning = ./modules/provisioning/grandstream.nix;
     };
+
+    checks = forAllSystems (pkgs: import ./tests {inherit pkgs self sops-nix;});
+
+    packages = forAllSystems (pkgs: {
+      docs = import ./docs {inherit pkgs self;};
+    });
+
+    formatter = forAllSystems (pkgs: pkgs.alejandra);
+  };
 }

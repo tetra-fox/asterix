@@ -8,17 +8,18 @@
 # The phone answers every call, loops received audio back and sends audio
 # continuously (no VAD), so RTP flows in both directions. Full SIP traces are
 # logged to /tmp/sip-phone-NAME.log.
-{ pkgs, ... }:
-let
+{pkgs, ...}: let
   # pjsua never flushes its log file (upstream comments the call out for
   # speed), so a line a test waits for could stay in the stdio buffer
   # indefinitely. Flush after every message.
   pjsip = pkgs.pjsip.overrideAttrs (old: {
-    postPatch = (old.postPatch or "") + ''
-      substituteInPlace pjsip/src/pjsua-lib/pjsua_core.c --replace-fail \
-        'pj_file_write(pjsua_var.log_file, buffer, &size);' \
-        'pj_file_write(pjsua_var.log_file, buffer, &size); pj_file_flush(pjsua_var.log_file);'
-    '';
+    postPatch =
+      (old.postPatch or "")
+      + ''
+        substituteInPlace pjsip/src/pjsua-lib/pjsua_core.c --replace-fail \
+          'pj_file_write(pjsua_var.log_file, buffer, &size);' \
+          'pj_file_write(pjsua_var.log_file, buffer, &size); pj_file_flush(pjsua_var.log_file);'
+      '';
   });
 
   sipPhone = pkgs.writeShellApplication {
@@ -70,7 +71,6 @@ let
       esac
     '';
   };
-in
-{
-  environment.systemPackages = [ sipPhone ];
+in {
+  environment.systemPackages = [sipPhone];
 }

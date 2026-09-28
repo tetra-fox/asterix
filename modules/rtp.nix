@@ -1,7 +1,11 @@
 # rtp.conf: media port range and NAT traversal (ICE, STUN, TURN).
-{ config, lib, ... }:
-let
-  inherit (lib)
+{
+  config,
+  lib,
+  ...
+}: let
+  inherit
+    (lib)
     filterAttrs
     mapAttrs
     mkDefault
@@ -12,10 +16,9 @@ let
 
   cfg = config.services.asterisk;
   rcfg = cfg.rtp;
-  asteriskLib = import ../lib { inherit lib; };
+  asteriskLib = import ../lib {inherit lib;};
   inherit (asteriskLib) format;
-in
-{
+in {
   options.services.asterisk.rtp = {
     portRange = {
       from = mkOption {
@@ -76,7 +79,7 @@ in
 
     settings = mkOption {
       type = types.attrsOf format.types.value;
-      default = { };
+      default = {};
       example = {
         rtcpinterval = 5000;
       };

@@ -17,9 +17,13 @@
 # Single values generated here are defaults (mkDefault), so a value in
 # `settings` replaces them; list values (allow, match, permit, ...) are
 # extended by further definitions.
-{ config, lib, ... }:
-let
-  inherit (lib)
+{
+  config,
+  lib,
+  ...
+}: let
+  inherit
+    (lib)
     attrNames
     attrValues
     concatLists
@@ -47,18 +51,19 @@ let
 
   cfg = config.services.asterisk;
   pcfg = cfg.pjsip;
-  asteriskLib = import ../lib { inherit lib; };
+  asteriskLib = import ../lib {inherit lib;};
   inherit (asteriskLib) format;
 
-  secretOrString = types.either types.str format.types.secret // {
-    description = "string or secret reference";
-  };
+  secretOrString =
+    types.either types.str format.types.secret
+    // {
+      description = "string or secret reference";
+    };
 
-  settingsOption =
-    what:
+  settingsOption = what:
     mkOption {
       type = types.attrsOf format.types.value;
-      default = { };
+      default = {};
       description = ''
         Additional keys for the generated ${what} section. They take
         precedence over single values generated from the typed options and
@@ -67,17 +72,19 @@ let
     };
 
   # Scalars become defaults, lists stay regular definitions, nulls are dropped.
-  toSection =
-    attrs: mapAttrs (_: v: if isList v then v else mkDefault v) (filterAttrs (_: v: v != null) attrs);
+  toSection = attrs:
+    mapAttrs (_: v:
+      if isList v
+      then v
+      else mkDefault v) (filterAttrs (_: v: v != null) attrs);
 
-  section =
-    {
-      name,
-      type,
-      order ? 1000,
-      values,
-      extra ? { },
-    }:
+  section = {
+    name,
+    type,
+    order ? 1000,
+    values,
+    extra ? {},
+  }:
     mkMerge [
       (
         {
@@ -88,58 +95,56 @@ let
       extra
     ];
 
-  hostPort =
-    host: port:
-    (if hasInfix ":" host then "[${host}]" else host)
+  hostPort = host: port:
+    (
+      if hasInfix ":" host
+      then "[${host}]"
+      else host
+    )
     + optionalString (port != null) ":${toString port}";
 
   # --- submodule types ----------------------------------------------------
 
-  authOptions =
-    { defaultName }:
-    {
-      options = {
-        name = mkOption {
-          type = types.str;
-          default = defaultName;
-          description = "Name of the auth section.";
-        };
-        username = mkOption {
-          type = types.str;
-          description = "User name used for digest authentication.";
-        };
-        password = mkOption {
-          type = secretOrString;
-          description = ''
-            Password, normally a secret reference such as
-            `config.lib.asterisk.secret config.sops.secrets.alice.path`. A plain string
-            ends up in the world-readable Nix store and triggers a warning.
-          '';
-        };
-        realm = mkOption {
-          type = types.nullOr types.str;
-          default = null;
-          description = "Authentication realm; Asterisk's default is `asterisk`.";
-        };
-        settings = settingsOption "auth";
+  authOptions = {defaultName}: {
+    options = {
+      name = mkOption {
+        type = types.str;
+        default = defaultName;
+        description = "Name of the auth section.";
       };
+      username = mkOption {
+        type = types.str;
+        description = "User name used for digest authentication.";
+      };
+      password = mkOption {
+        type = secretOrString;
+        description = ''
+          Password, normally a secret reference such as
+          `config.lib.asterisk.secret config.sops.secrets.alice.path`. A plain string
+          ends up in the world-readable Nix store and triggers a warning.
+        '';
+      };
+      realm = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = "Authentication realm; Asterisk's default is `asterisk`.";
+      };
+      settings = settingsOption "auth";
     };
+  };
 
-  inboundAuthType =
-    name:
+  inboundAuthType = name:
     types.submodule [
-      (authOptions { defaultName = name; })
-      { config.username = mkDefault name; }
+      (authOptions {defaultName = name;})
+      {config.username = mkDefault name;}
     ];
 
-  outboundAuthType =
-    name:
+  outboundAuthType = name:
     types.submodule (authOptions {
       defaultName = "${name}-outbound";
     });
 
-  aorType =
-    name:
+  aorType = name:
     types.submodule {
       options = {
         name = mkOption {
@@ -164,16 +169,15 @@ let
         };
         contacts = mkOption {
           type = types.listOf types.str;
-          default = [ ];
-          example = [ "sip:10.0.2.21:5060" ];
+          default = [];
+          example = ["sip:10.0.2.21:5060"];
           description = "Static contacts, for devices that do not register.";
         };
         settings = settingsOption "aor";
       };
     };
 
-  identifyType =
-    name:
+  identifyType = name:
     types.submodule {
       options = {
         name = mkOption {
@@ -259,122 +263,131 @@ let
   };
 
   endpointType = types.submodule (
-    { name, ... }:
-    {
-      options = commonEndpointOptions name // {
-        auth = mkOption {
-          type = types.nullOr (inboundAuthType name);
-          default = null;
-          description = ''
-            Credentials the device must present (an auth section named like
-            the endpoint). The user name defaults to the endpoint name.
-          '';
+    {name, ...}: {
+      options =
+        commonEndpointOptions name
+        // {
+          auth = mkOption {
+            type = types.nullOr (inboundAuthType name);
+            default = null;
+            description = ''
+              Credentials the device must present (an auth section named like
+              the endpoint). The user name defaults to the endpoint name.
+            '';
+          };
+          aor = mkOption {
+            type = types.nullOr (aorType name);
+            default = {};
+            defaultText = lib.literalExpression "{ }";
+            description = ''
+              Address of record (where to reach the endpoint): registrations or
+              static contacts. Set to `null` for endpoints that are never called.
+            '';
+          };
+          mailboxes = mkOption {
+            type = types.listOf types.str;
+            default = [];
+            example = ["101@default"];
+            description = "Voicemail boxes whose message-waiting state is sent to the device.";
+          };
         };
-        aor = mkOption {
-          type = types.nullOr (aorType name);
-          default = { };
-          defaultText = lib.literalExpression "{ }";
-          description = ''
-            Address of record (where to reach the endpoint): registrations or
-            static contacts. Set to `null` for endpoints that are never called.
-          '';
-        };
-        mailboxes = mkOption {
-          type = types.listOf types.str;
-          default = [ ];
-          example = [ "101@default" ];
-          description = "Voicemail boxes whose message-waiting state is sent to the device.";
-        };
-      };
     }
   );
 
   trunkType = types.submodule (
-    { name, config, ... }:
     {
-      options = commonEndpointOptions name // {
-        host = mkOption {
-          type = types.str;
-          example = "sip.provider.example";
-          description = "Provider SIP server (host name or address).";
-        };
-        port = mkOption {
-          type = types.nullOr types.port;
-          default = null;
-          description = "Provider SIP port; defaults to the transport's standard port.";
-        };
-        username = mkOption {
-          type = types.str;
-          description = "Account user name, used for authentication, registration and the From header.";
-        };
-        password = mkOption {
-          type = secretOrString;
-          description = "Account password, normally a secret reference.";
-        };
-        fromDomain = mkOption {
-          type = types.nullOr types.str;
-          default = config.host;
-          defaultText = lib.literalExpression "host";
-          description = "Domain of the From header of outgoing calls.";
-        };
-        register = mkOption {
-          type = types.bool;
-          default = true;
-          description = "Register to the provider (outbound registration).";
-        };
-        registration = {
-          expiration = mkOption {
-            type = types.ints.positive;
-            default = 3600;
-            description = "Requested registration lifetime in seconds.";
+      name,
+      config,
+      ...
+    }: {
+      options =
+        commonEndpointOptions name
+        // {
+          host = mkOption {
+            type = types.str;
+            example = "sip.provider.example";
+            description = "Provider SIP server (host name or address).";
           };
-          retryInterval = mkOption {
-            type = types.ints.positive;
-            default = 60;
-            description = "Seconds between registration attempts after a failure.";
-          };
-          contactUser = mkOption {
-            type = types.nullOr types.str;
+          port = mkOption {
+            type = types.nullOr types.port;
             default = null;
-            description = "User part of the registered Contact, i.e. the extension inbound calls arrive at.";
+            description = "Provider SIP port; defaults to the transport's standard port.";
           };
-          line = mkOption {
+          username = mkOption {
+            type = types.str;
+            description = "Account user name, used for authentication, registration and the From header.";
+          };
+          password = mkOption {
+            type = secretOrString;
+            description = "Account password, normally a secret reference.";
+          };
+          fromDomain = mkOption {
+            type = types.nullOr types.str;
+            default = config.host;
+            defaultText = lib.literalExpression "host";
+            description = "Domain of the From header of outgoing calls.";
+          };
+          register = mkOption {
+            type = types.bool;
+            default = true;
+            description = "Register to the provider (outbound registration).";
+          };
+          registration = {
+            expiration = mkOption {
+              type = types.ints.positive;
+              default = 3600;
+              description = "Requested registration lifetime in seconds.";
+            };
+            retryInterval = mkOption {
+              type = types.ints.positive;
+              default = 60;
+              description = "Seconds between registration attempts after a failure.";
+            };
+            contactUser = mkOption {
+              type = types.nullOr types.str;
+              default = null;
+              description = "User part of the registered Contact, i.e. the extension inbound calls arrive at.";
+            };
+            line = mkOption {
+              type = types.bool;
+              default = true;
+              description = ''
+                Add a `line` parameter to the registered Contact and identify
+                inbound requests that carry it as this trunk (`line` and
+                `endpoint` of the registration), whatever address they come
+                from. Requests without it are still identified by `identify`.
+              '';
+            };
+            settings = settingsOption "registration";
+          };
+          qualifyFrequency = mkOption {
+            type = types.ints.unsigned;
+            default = 60;
+            description = "Interval in seconds for OPTIONS keepalives to the provider (0 disables them).";
+          };
+          matchProviderHost = mkOption {
             type = types.bool;
             default = true;
             description = ''
-              Add a `line` parameter to the registered Contact and identify
-              inbound requests that carry it as this trunk (`line` and
-              `endpoint` of the registration), whatever address they come
-              from. Requests without it are still identified by `identify`.
+              Identify inbound requests coming from `host` as this trunk, in
+              addition to `identify.match`. When a network in `identify.match`
+              already contains the host's address, Asterisk skips it and logs a
+              misleading "did not resolve to any address" warning; turn this
+              off then.
             '';
           };
-          settings = settingsOption "registration";
+          aorSettings = settingsOption "aor";
         };
-        qualifyFrequency = mkOption {
-          type = types.ints.unsigned;
-          default = 60;
-          description = "Interval in seconds for OPTIONS keepalives to the provider (0 disables them).";
-        };
-        matchProviderHost = mkOption {
-          type = types.bool;
-          default = true;
-          description = ''
-            Identify inbound requests coming from `host` as this trunk, in
-            addition to `identify.match`. When a network in `identify.match`
-            already contains the host's address, Asterisk skips it and logs a
-            misleading "did not resolve to any address" warning; turn this
-            off then.
-          '';
-        };
-        aorSettings = settingsOption "aor";
-      };
-      config.identify.match = mkIf config.matchProviderHost [ config.host ];
+      config.identify.match = mkIf config.matchProviderHost [config.host];
     }
   );
 
   transportType = types.submodule (
-    { name, config, ... }:
     {
+      name,
+      config,
+      ...
+    }: {
       options = {
         protocol = mkOption {
           type = types.enum [
@@ -398,7 +411,10 @@ let
         };
         port = mkOption {
           type = types.port;
-          default = if config.protocol == "tls" then 5061 else 5060;
+          default =
+            if config.protocol == "tls"
+            then 5061
+            else 5060;
           defaultText = lib.literalExpression "5061 for tls, else 5060";
           description = "Local port to bind.";
         };
@@ -419,8 +435,8 @@ let
         };
         localNet = mkOption {
           type = types.listOf types.str;
-          default = [ ];
-          example = [ "10.0.0.0/8" ];
+          default = [];
+          example = ["10.0.0.0/8"];
           description = "Networks considered local, where no external address is substituted.";
         };
         tls = {
@@ -493,7 +509,7 @@ let
     options = {
       deny = mkOption {
         type = types.listOf types.str;
-        default = [ ];
+        default = [];
         example = [
           "0.0.0.0/0.0.0.0"
           "::/0"
@@ -502,18 +518,18 @@ let
       };
       permit = mkOption {
         type = types.listOf types.str;
-        default = [ ];
-        example = [ "10.0.1.0/24" ];
+        default = [];
+        example = ["10.0.1.0/24"];
         description = "Networks to permit, overriding earlier `deny` rules.";
       };
       contactDeny = mkOption {
         type = types.listOf types.str;
-        default = [ ];
+        default = [];
         description = "Networks registered contacts must not be in.";
       };
       contactPermit = mkOption {
         type = types.listOf types.str;
-        default = [ ];
+        default = [];
         description = "Networks registered contacts may be in, overriding `contactDeny`.";
       };
       settings = settingsOption "acl";
@@ -525,92 +541,134 @@ let
   credentialName = transport: kind: "pjsip-${transport}-${kind}";
   credentialPath = transport: kind: "${cfg.paths.credentials}/${credentialName transport kind}";
 
-  transportSections = mapAttrs' (
-    name: t:
-    nameValuePair "transport:${name}" (section {
-      inherit name;
-      type = "transport";
-      order = 100;
-      values = {
-        inherit (t) protocol;
-        bind = hostPort t.address t.port;
-        external_media_address = t.externalMediaAddress;
-        external_signaling_address = t.externalSignalingAddress;
-        external_signaling_port = t.externalSignalingPort;
-        local_net = t.localNet;
-        cert_file = if t.tls.certFile != null then credentialPath name "cert" else null;
-        priv_key_file = if t.tls.keyFile != null then credentialPath name "key" else null;
-        # without a CA list, pjproject logs an error for every TLS connection
-        # it accepts
-        ca_list_file =
-          if t.tls.caListFile != null then
-            credentialPath name "ca"
-          else if t.protocol == "tls" then
-            config.security.pki.caBundle
-          else
-            null;
-        method = if t.protocol == "tls" then t.tls.method else null;
-        verify_client = if t.protocol == "tls" then t.tls.verifyClient else null;
-        verify_server = if t.protocol == "tls" then t.tls.verifyServer else null;
-        allow_reload = if t.allowReload then true else null;
-      };
-      extra = t.settings;
-    })
-  ) pcfg.transports;
+  transportSections =
+    mapAttrs' (
+      name: t:
+        nameValuePair "transport:${name}" (section {
+          inherit name;
+          type = "transport";
+          order = 100;
+          values = {
+            inherit (t) protocol;
+            bind = hostPort t.address t.port;
+            external_media_address = t.externalMediaAddress;
+            external_signaling_address = t.externalSignalingAddress;
+            external_signaling_port = t.externalSignalingPort;
+            local_net = t.localNet;
+            cert_file =
+              if t.tls.certFile != null
+              then credentialPath name "cert"
+              else null;
+            priv_key_file =
+              if t.tls.keyFile != null
+              then credentialPath name "key"
+              else null;
+            # without a CA list, pjproject logs an error for every TLS connection
+            # it accepts
+            ca_list_file =
+              if t.tls.caListFile != null
+              then credentialPath name "ca"
+              else if t.protocol == "tls"
+              then config.security.pki.caBundle
+              else null;
+            method =
+              if t.protocol == "tls"
+              then t.tls.method
+              else null;
+            verify_client =
+              if t.protocol == "tls"
+              then t.tls.verifyClient
+              else null;
+            verify_server =
+              if t.protocol == "tls"
+              then t.tls.verifyServer
+              else null;
+            allow_reload =
+              if t.allowReload
+              then true
+              else null;
+          };
+          extra = t.settings;
+        })
+    )
+    pcfg.transports;
 
   transportCredentials = concatLists (
     mapAttrsToList (
       name: t:
-      optional (t.tls.certFile != null) (nameValuePair (credentialName name "cert") t.tls.certFile)
-      ++ optional (t.tls.keyFile != null) (nameValuePair (credentialName name "key") t.tls.keyFile)
-      ++ optional (t.tls.caListFile != null) (nameValuePair (credentialName name "ca") t.tls.caListFile)
-    ) pcfg.transports
+        optional (t.tls.certFile != null) (nameValuePair (credentialName name "cert") t.tls.certFile)
+        ++ optional (t.tls.keyFile != null) (nameValuePair (credentialName name "key") t.tls.keyFile)
+        ++ optional (t.tls.caListFile != null) (nameValuePair (credentialName name "ca") t.tls.caListFile)
+    )
+    pcfg.transports
   );
 
-  aclSections = mapAttrs' (
-    name: a:
-    nameValuePair "acl:${name}" (section {
-      inherit name;
-      type = "acl";
-      order = 200;
-      values = {
-        inherit (a) deny permit;
-        contact_deny = a.contactDeny;
-        contact_permit = a.contactPermit;
-      };
-      extra = a.settings;
-    })
-  ) pcfg.acls;
+  aclSections =
+    mapAttrs' (
+      name: a:
+        nameValuePair "acl:${name}" (section {
+          inherit name;
+          type = "acl";
+          order = 200;
+          values = {
+            inherit (a) deny permit;
+            contact_deny = a.contactDeny;
+            contact_permit = a.contactPermit;
+          };
+          extra = a.settings;
+        })
+    )
+    pcfg.acls;
 
   # Sections shared by endpoints and trunks. `e` is the endpoint-like
   # attrset; `aor` and `auth` are normalized by the callers.
-  endpointSections =
-    name: e:
-    {
-      aor,
-      auth,
-      mailboxes ? [ ],
-      extraValues ? { },
-    }:
+  endpointSections = name: e: {
+    aor,
+    auth,
+    mailboxes ? [],
+    extraValues ? {},
+  }:
     {
       "endpoint:${name}" = section {
         inherit name;
         type = "endpoint";
-        values = {
-          inherit (e) context transport allow;
-          disallow = "all";
-          direct_media = e.directMedia;
-          callerid = e.callerId;
-          dtmf_mode = e.dtmfMode;
-          rtp_symmetric = if e.behindNat then true else null;
-          force_rport = if e.behindNat then true else null;
-          rewrite_contact = if e.behindNat then true else null;
-          auth = if auth != null then auth.name else null;
-          outbound_auth = if e.outboundAuth != null then e.outboundAuth.name else null;
-          aors = if aor != null then aor.name else null;
-          mailboxes = if mailboxes == [ ] then null else concatStringsSep "," mailboxes;
-        }
-        // extraValues;
+        values =
+          {
+            inherit (e) context transport allow;
+            disallow = "all";
+            direct_media = e.directMedia;
+            callerid = e.callerId;
+            dtmf_mode = e.dtmfMode;
+            rtp_symmetric =
+              if e.behindNat
+              then true
+              else null;
+            force_rport =
+              if e.behindNat
+              then true
+              else null;
+            rewrite_contact =
+              if e.behindNat
+              then true
+              else null;
+            auth =
+              if auth != null
+              then auth.name
+              else null;
+            outbound_auth =
+              if e.outboundAuth != null
+              then e.outboundAuth.name
+              else null;
+            aors =
+              if aor != null
+              then aor.name
+              else null;
+            mailboxes =
+              if mailboxes == []
+              then null
+              else concatStringsSep "," mailboxes;
+          }
+          // extraValues;
         extra = e.settings;
       };
     }
@@ -659,37 +717,35 @@ let
       };
     };
 
-  endpointSectionsFor =
-    name: e:
+  endpointSectionsFor = name: e:
     endpointSections name e {
       inherit (e) aor auth mailboxes;
     };
 
-  trunkSectionsFor =
-    name: t:
-    let
-      server = hostPort t.host t.port;
-      # A trunk always authenticates outbound with the account credentials.
-      t' = t // {
+  trunkSectionsFor = name: t: let
+    server = hostPort t.host t.port;
+    # A trunk always authenticates outbound with the account credentials.
+    t' =
+      t
+      // {
         outboundAuth =
-          if t.outboundAuth != null then
-            t.outboundAuth
-          else
-            {
-              name = "${name}-outbound";
-              inherit (t) username password;
-              realm = null;
-              settings = { };
-            };
+          if t.outboundAuth != null
+          then t.outboundAuth
+          else {
+            name = "${name}-outbound";
+            inherit (t) username password;
+            realm = null;
+            settings = {};
+          };
       };
-    in
+  in
     endpointSections name t' {
       aor = {
         inherit name;
         maxContacts = 0;
         removeExisting = false;
         inherit (t) qualifyFrequency;
-        contacts = [ "sip:${server}" ];
+        contacts = ["sip:${server}"];
         settings = t.aorSettings;
       };
       auth = null;
@@ -712,14 +768,17 @@ let
           expiration = t.registration.expiration;
           # Asterisk only accepts `endpoint` together with `line`
           inherit (t.registration) line;
-          endpoint = if t.registration.line then name else null;
+          endpoint =
+            if t.registration.line
+            then name
+            else null;
         };
         extra = t.registration.settings;
       };
     };
 
   globalSections =
-    optionalAttrs (pcfg.global != { }) {
+    optionalAttrs (pcfg.global != {}) {
       global = section {
         name = "global";
         type = "global";
@@ -727,7 +786,7 @@ let
         values = pcfg.global;
       };
     }
-    // optionalAttrs (pcfg.system != { }) {
+    // optionalAttrs (pcfg.system != {}) {
       system = section {
         name = "system";
         type = "system";
@@ -738,74 +797,75 @@ let
 
   # --- validation on the final (layer 1) pjsip.conf ---------------------------
 
-  sip = cfg.settings."pjsip.conf" or { };
+  sip = cfg.settings."pjsip.conf" or {};
   objects = filter (s: !(s.template or false)) (attrValues sip);
   namesOfType = type: map (s: s.name) (filter (s: (s.type or null) == type) objects);
 
-  refList =
-    v:
-    if isString v then
-      filter (x: x != "") (map lib.trim (splitString "," v))
-    else if isList v then
-      lib.concatMap refList v
-    else
-      [ ];
+  refList = v:
+    if isString v
+    then filter (x: x != "") (map lib.trim (splitString "," v))
+    else if isList v
+    then lib.concatMap refList v
+    else [];
 
-  danglingRefs =
-    let
-      check =
-        s: key: type:
-        map (ref: "[${s.name}] (type=${s.type}) ${key} = ${ref}: no ${type} named `${ref}`") (
-          filter (ref: !(builtins.elem ref (namesOfType type))) (refList (s.${key} or null))
-        );
-      checksFor =
-        s:
-        {
-          endpoint =
-            check s "auth" "auth"
-            ++ check s "outbound_auth" "auth"
-            ++ check s "aors" "aor"
-            ++ check s "transport" "transport";
-          identify = check s "endpoint" "endpoint";
-          registration =
-            check s "outbound_auth" "auth" ++ check s "transport" "transport" ++ check s "endpoint" "endpoint";
-          aor = check s "outbound_auth" "auth";
-        }
-        .${s.type or ""} or [ ];
-    in
+  danglingRefs = let
+    check = s: key: type:
+      map (ref: "[${s.name}] (type=${s.type}) ${key} = ${ref}: no ${type} named `${ref}`") (
+        filter (ref: !(builtins.elem ref (namesOfType type))) (refList (s.${key} or null))
+      );
+    checksFor = s:
+      {
+        endpoint =
+          check s "auth" "auth"
+          ++ check s "outbound_auth" "auth"
+          ++ check s "aors" "aor"
+          ++ check s "transport" "transport";
+        identify = check s "endpoint" "endpoint";
+        registration =
+          check s "outbound_auth" "auth" ++ check s "transport" "transport" ++ check s "endpoint" "endpoint";
+        aor = check s "outbound_auth" "auth";
+      }
+        .${
+        s.type or ""
+      } or [
+      ];
+  in
     lib.concatMap checksFor objects;
 
-  duplicateObjects =
-    let
-      keys = map (s: "${s.type or "?"} ${s.name}") (filter (s: s ? type) objects);
-    in
+  duplicateObjects = let
+    keys = map (s: "${s.type or "?"} ${s.name}") (filter (s: s ? type) objects);
+  in
     unique (filter (k: lib.count (x: x == k) keys > 1) keys);
 
   # Asterisk refuses to load a registration with `endpoint` but no `line`
   registrationsWithoutLine = map (s: s.name) (
     filter (
       s:
-      (s.type or null) == "registration"
-      && (s.endpoint or null) != null
-      && !(builtins.elem (s.line or false) [
-        true
-        "yes"
-        "true"
-        "on"
-        "y"
-        "t"
-        "1"
-      ])
-    ) objects
+        (s.type or null)
+        == "registration"
+        && (s.endpoint or null) != null
+        && !(builtins.elem (s.line or false) [
+          true
+          "yes"
+          "true"
+          "on"
+          "y"
+          "t"
+          "1"
+        ])
+    )
+    objects
   );
 
   tlsWithoutKeys = map (s: s.name) (
     filter (
       s:
-      (s.type or null) == "transport"
-      && (s.protocol or null) == "tls"
-      && !(s ? cert_file && s ? priv_key_file)
-    ) objects
+        (s.type or null)
+        == "transport"
+        && (s.protocol or null) == "tls"
+        && !(s ? cert_file && s ? priv_key_file)
+    )
+    objects
   );
 
   # Dialplan contexts, where they can be known: sections of extensions.conf
@@ -817,31 +877,30 @@ let
       "extensions.ael"
       "extensions.lua"
     ])
-    && (cfg.includes."extensions.conf" or [ ]) == [ ]
+    && (cfg.includes."extensions.conf" or []) == []
     && !(builtins.any (directive: hasInfix directive dialplanExtra) [
       "#include"
       "#tryinclude"
       "#exec"
     ]);
   dialplanContexts =
-    map (s: s.name) (attrValues (cfg.settings."extensions.conf" or { }))
+    map (s: s.name) (attrValues (cfg.settings."extensions.conf" or {}))
     ++ lib.concatMap (
-      line:
-      let
+      line: let
         m = builtins.match "[[:space:]]*[[]([^]]+)[]].*" line;
       in
-      if m == null then [ ] else m
+        if m == null
+        then []
+        else m
     ) (splitString "\n" dialplanExtra);
   missingContexts = filter (s: !(builtins.elem s.context dialplanContexts)) (
     filter (s: (s.type or null) == "endpoint" && isString (s.context or null)) objects
   );
-
-in
-{
+in {
   options.services.asterisk.pjsip = {
     global = mkOption {
       type = types.attrsOf format.types.value;
-      default = { };
+      default = {};
       example = {
         user_agent = "PBX";
         endpoint_identifier_order = "ip,username";
@@ -851,7 +910,7 @@ in
 
     system = mkOption {
       type = types.attrsOf format.types.value;
-      default = { };
+      default = {};
       example = {
         timer_t1 = 500;
       };
@@ -860,7 +919,7 @@ in
 
     transports = mkOption {
       type = types.attrsOf transportType;
-      default = { };
+      default = {};
       example = lib.literalExpression ''
         {
           udp = { protocol = "udp"; port = 5060; };
@@ -880,7 +939,7 @@ in
 
     acls = mkOption {
       type = types.attrsOf aclType;
-      default = { };
+      default = {};
       example = lib.literalExpression ''
         {
           lan = {
@@ -899,7 +958,7 @@ in
 
     endpoints = mkOption {
       type = types.attrsOf endpointType;
-      default = { };
+      default = {};
       example = lib.literalExpression ''
         {
           "101" = {
@@ -919,7 +978,7 @@ in
 
     trunks = mkOption {
       type = types.attrsOf trunkType;
-      default = { };
+      default = {};
       example = lib.literalExpression ''
         {
           provider = {
@@ -958,29 +1017,29 @@ in
 
     assertions = [
       {
-        assertion = danglingRefs == [ ];
+        assertion = danglingRefs == [];
         message = ''
           services.asterisk: pjsip.conf references objects that do not exist:
             ${concatStringsSep "\n  " danglingRefs}
         '';
       }
       {
-        assertion = duplicateObjects == [ ];
+        assertion = duplicateObjects == [];
         message = ''
           services.asterisk: pjsip.conf defines these objects more than once (same type and name):
             ${concatStringsSep "\n  " duplicateObjects}
         '';
       }
       {
-        assertion = registrationsWithoutLine == [ ];
+        assertion = registrationsWithoutLine == [];
         message = "services.asterisk: pjsip.conf registration(s) ${concatStringsSep ", " registrationsWithoutLine} set `endpoint` without `line = yes`; Asterisk would not load them.";
       }
       {
-        assertion = tlsWithoutKeys == [ ];
+        assertion = tlsWithoutKeys == [];
         message = "services.asterisk: TLS transport(s) ${concatStringsSep ", " tlsWithoutKeys} need a certificate and a private key (pjsip.transports.<name>.tls.certFile and tls.keyFile, or cert_file and priv_key_file).";
       }
       {
-        assertion = !dialplanKnown || missingContexts == [ ];
+        assertion = !dialplanKnown || missingContexts == [];
         message = ''
           services.asterisk: PJSIP endpoints use dialplan contexts that are not defined:
             ${concatStringsSep "\n  " (map (s: "[${s.name}] context = ${s.context}") missingContexts)}
@@ -993,6 +1052,5 @@ in
         }.";
       }
     ];
-
   };
 }

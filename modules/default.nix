@@ -1,7 +1,6 @@
 # services.asterisk: all layers. Replaces nixpkgs' services.asterisk module.
-{ lib, ... }:
-{
-  disabledModules = [ "services/networking/asterisk.nix" ];
+{lib, ...}: {
+  disabledModules = ["services/networking/asterisk.nix"];
 
   imports = [
     (lib.mkRemovedOptionModule [

@@ -4,9 +4,13 @@
 # lines in their context section, with the PIN as a secret placeholder.
 # Mailboxes are declarative: a PIN changed from the phone (VoiceMailMain) is
 # not saved, because the generated configuration is read-only.
-{ config, lib, ... }:
-let
-  inherit (lib)
+{
+  config,
+  lib,
+  ...
+}: let
+  inherit
+    (lib)
     attrValues
     concatStringsSep
     elemAt
@@ -28,19 +32,19 @@ let
 
   cfg = config.services.asterisk;
   vcfg = cfg.voicemail;
-  asteriskLib = import ../lib { inherit lib; };
+  asteriskLib = import ../lib {inherit lib;};
   inherit (asteriskLib) format secrets;
 
-  secretOrString = types.either types.str format.types.secret // {
-    description = "string or secret reference";
-  };
+  secretOrString =
+    types.either types.str format.types.secret
+    // {
+      description = "string or secret reference";
+    };
 
   mailboxType = types.submodule (
-    { name, ... }:
-    let
+    {name, ...}: let
       parts = splitString "@" name;
-    in
-    {
+    in {
       options = {
         mailbox = mkOption {
           type = types.str;
@@ -50,7 +54,10 @@ let
         };
         context = mkOption {
           type = types.str;
-          default = if builtins.length parts > 1 then elemAt parts 1 else "default";
+          default =
+            if builtins.length parts > 1
+            then elemAt parts 1
+            else "default";
           defaultText = lib.literalMD "the part of the attribute name after `@`, or `default`";
           description = "Voicemail context the mailbox belongs to.";
         };
@@ -86,7 +93,7 @@ let
               types.str
             ]
           );
-          default = { };
+          default = {};
           example = {
             attach = true;
             delete = false;
@@ -98,68 +105,93 @@ let
     }
   );
 
-  optionValue = v: if isBool v then (if v then "yes" else "no") else toString v;
+  optionValue = v:
+    if isBool v
+    then
+      (
+        if v
+        then "yes"
+        else "no"
+      )
+    else toString v;
 
-  pinText = pin: if secrets.isSecret pin then secrets.placeholder pin else pin;
+  pinText = pin:
+    if secrets.isSecret pin
+    then secrets.placeholder pin
+    else pin;
 
-  mailboxLine =
-    box:
-    let
-      fields = [
-        (pinText box.pin)
-        box.fullName
-        (if box.email == null then "" else box.email)
-        (if box.pagerEmail == null then "" else box.pagerEmail)
-        (concatStringsSep "|" (mapAttrsToList (k: v: "${k}=${optionValue v}") box.options))
-      ];
-      # drop empty trailing fields
-      trim = list: if list != [ ] && lib.last list == "" then trim (lib.init list) else list;
-    in
+  mailboxLine = box: let
+    fields = [
+      (pinText box.pin)
+      box.fullName
+      (
+        if box.email == null
+        then ""
+        else box.email
+      )
+      (
+        if box.pagerEmail == null
+        then ""
+        else box.pagerEmail
+      )
+      (concatStringsSep "|" (mapAttrsToList (k: v: "${k}=${optionValue v}") box.options))
+    ];
+    # drop empty trailing fields
+    trim = list:
+      if list != [] && lib.last list == ""
+      then trim (lib.init list)
+      else list;
+  in
     concatStringsSep "," (trim fields);
 
   mailboxes = attrValues vcfg.mailboxes;
   contexts = unique (map (box: box.context) mailboxes);
 
-  badFields = filter (
-    box:
-    builtins.any (field: field != null && hasInfix "," field) [
-      box.fullName
-      box.email
-      box.pagerEmail
-    ]
-  ) mailboxes;
+  badFields =
+    filter (
+      box:
+        builtins.any (field: field != null && hasInfix "," field) [
+          box.fullName
+          box.email
+          box.pagerEmail
+        ]
+    )
+    mailboxes;
 
   # mailboxes referenced by typed PJSIP endpoints (MWI) that are not defined
-  voicemailConf = cfg.settings."voicemail.conf" or { };
+  voicemailConf = cfg.settings."voicemail.conf" or {};
   missingMailboxes = lib.concatLists (
     mapAttrsToList (
       endpoint: e:
-      map (ref: "pjsip.endpoints.${endpoint}.mailboxes: ${ref}") (
-        filter (
-          ref:
-          let
-            p = splitString "@" ref;
-            box = elemAt p 0;
-            context = if builtins.length p > 1 then elemAt p 1 else "default";
-          in
-          !(builtins.any (s: s.name == context && s ? ${box}) (attrValues voicemailConf))
-        ) e.mailboxes
-      )
-    ) cfg.pjsip.endpoints
+        map (ref: "pjsip.endpoints.${endpoint}.mailboxes: ${ref}") (
+          filter (
+            ref: let
+              p = splitString "@" ref;
+              box = elemAt p 0;
+              context =
+                if builtins.length p > 1
+                then elemAt p 1
+                else "default";
+            in
+              !(builtins.any (s: s.name == context && s ? ${box}) (attrValues voicemailConf))
+          )
+          e.mailboxes
+        )
+    )
+    cfg.pjsip.endpoints
   );
-in
-{
+in {
   options.services.asterisk.voicemail = {
     enable = mkOption {
       type = types.bool;
-      default = vcfg.mailboxes != { };
+      default = vcfg.mailboxes != {};
       defaultText = lib.literalExpression "mailboxes != { }";
       description = "Load app_voicemail.so and render voicemail.conf.";
     };
 
     mailboxes = mkOption {
       type = types.attrsOf mailboxType;
-      default = { };
+      default = {};
       example = lib.literalExpression ''
         {
           "101" = {
@@ -234,7 +266,7 @@ in
 
     settings = mkOption {
       type = types.attrsOf format.types.value;
-      default = { };
+      default = {};
       example = {
         minsecs = 2;
         maxlogins = 3;
@@ -245,7 +277,7 @@ in
 
   config = mkIf (cfg.enable && vcfg.enable) {
     services.asterisk = {
-      modules.load = [ "app_voicemail.so" ];
+      modules.load = ["app_voicemail.so"];
 
       settings."voicemail.conf" = mkMerge (
         [
@@ -268,7 +300,8 @@ in
         ]
         ++ map (box: {
           ${box.context}.${box.mailbox} = mkDefault (mailboxLine box);
-        }) mailboxes
+        })
+        mailboxes
       );
 
       syntax."voicemail.conf".arrowSections = contexts;
@@ -276,7 +309,7 @@ in
 
     assertions = [
       {
-        assertion = badFields == [ ];
+        assertion = badFields == [];
         message = "services.asterisk.voicemail.mailboxes: names and e-mail addresses cannot contain commas (${
           concatStringsSep ", " (map (box: "${box.mailbox}@${box.context}") badFields)
         }).";
@@ -290,7 +323,7 @@ in
         message = "services.asterisk.voicemail.mailboxes: `general` and `zonemessages` cannot be used as voicemail contexts.";
       }
       {
-        assertion = missingMailboxes == [ ];
+        assertion = missingMailboxes == [];
         message = ''
           services.asterisk: PJSIP endpoints reference voicemail boxes that are not defined:
             ${concatStringsSep "\n  " missingMailboxes}
@@ -299,8 +332,7 @@ in
     ];
 
     warnings = map (
-      box:
-      "services.asterisk.voicemail.mailboxes.\"${box.mailbox}@${box.context}\".pin is a plain string, so it is stored world-readable in the Nix store; use config.lib.asterisk.secret instead."
+      box: "services.asterisk.voicemail.mailboxes.\"${box.mailbox}@${box.context}\".pin is a plain string, so it is stored world-readable in the Nix store; use config.lib.asterisk.secret instead."
     ) (filter (box: isString box.pin) mailboxes);
   };
 }

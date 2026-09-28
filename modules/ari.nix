@@ -1,9 +1,13 @@
 # Typed options for Asterisk's HTTP server (http.conf) and the Asterisk REST
 # Interface (ari.conf). The HTTP server is also what WebSocket SIP transports
 # (`ws`, `wss`) run on.
-{ config, lib, ... }:
-let
-  inherit (lib)
+{
+  config,
+  lib,
+  ...
+}: let
+  inherit
+    (lib)
     concatStringsSep
     filterAttrs
     mapAttrs
@@ -20,12 +24,14 @@ let
   cfg = config.services.asterisk;
   hcfg = cfg.http;
   acfg = cfg.ari;
-  asteriskLib = import ../lib { inherit lib; };
+  asteriskLib = import ../lib {inherit lib;};
   inherit (asteriskLib) format;
 
-  secretOrString = types.either types.str format.types.secret // {
-    description = "string or secret reference";
-  };
+  secretOrString =
+    types.either types.str format.types.secret
+    // {
+      description = "string or secret reference";
+    };
 
   credentialPath = kind: "${cfg.paths.credentials}/http-tls-${kind}";
 
@@ -38,41 +44,41 @@ let
     || (lib.versionAtLeast version "21.10" && lib.versionOlder version "22")
     || (lib.versionAtLeast version "20.15" && lib.versionOlder version "21");
 
-  ariModules = [
-    "res_http_websocket.so"
-  ]
-  ++ optionals needsWebsocketClient [ "res_websocket_client.so" ]
-  ++ [
-    "res_stasis.so"
-    "res_stasis_answer.so"
-    "res_stasis_device_state.so"
-    "res_stasis_playback.so"
-    "res_stasis_recording.so"
-    "res_stasis_snoop.so"
-    "app_stasis.so"
-    "res_ari.so"
-    "res_ari_model.so"
-    "res_ari_applications.so"
-    "res_ari_asterisk.so"
-    "res_ari_bridges.so"
-    "res_ari_channels.so"
-    "res_ari_device_states.so"
-    "res_ari_endpoints.so"
-    "res_ari_events.so"
-    "res_ari_playbacks.so"
-    "res_ari_recordings.so"
-    "res_ari_sounds.so"
-  ];
+  ariModules =
+    [
+      "res_http_websocket.so"
+    ]
+    ++ optionals needsWebsocketClient ["res_websocket_client.so"]
+    ++ [
+      "res_stasis.so"
+      "res_stasis_answer.so"
+      "res_stasis_device_state.so"
+      "res_stasis_playback.so"
+      "res_stasis_recording.so"
+      "res_stasis_snoop.so"
+      "app_stasis.so"
+      "res_ari.so"
+      "res_ari_model.so"
+      "res_ari_applications.so"
+      "res_ari_asterisk.so"
+      "res_ari_bridges.so"
+      "res_ari_channels.so"
+      "res_ari_device_states.so"
+      "res_ari_endpoints.so"
+      "res_ari_events.so"
+      "res_ari_playbacks.so"
+      "res_ari_recordings.so"
+      "res_ari_sounds.so"
+    ];
 
   websocketTransports = builtins.filter (
     t:
-    builtins.elem t.protocol [
-      "ws"
-      "wss"
-    ]
+      builtins.elem t.protocol [
+        "ws"
+        "wss"
+      ]
   ) (builtins.attrValues cfg.pjsip.transports);
-in
-{
+in {
   options.services.asterisk = {
     http = {
       enable = lib.mkEnableOption "Asterisk's built-in HTTP server (needed by ARI and WebSocket transports)";
@@ -125,7 +131,7 @@ in
 
       settings = mkOption {
         type = types.attrsOf format.types.value;
-        default = { };
+        default = {};
         example = {
           prefix = "asterisk";
           sessionlimit = 100;
@@ -153,7 +159,7 @@ in
             };
           }
         );
-        default = { };
+        default = {};
         example = lib.literalExpression ''
           { app.password = config.lib.asterisk.secret config.sops.secrets.ari-app.path; }
         '';
@@ -162,14 +168,14 @@ in
 
       allowedOrigins = mkOption {
         type = types.listOf types.str;
-        default = [ ];
-        example = [ "https://ari.example.org" ];
+        default = [];
+        example = ["https://ari.example.org"];
         description = "Origins allowed for cross-origin requests (`allowed_origins`).";
       };
 
       settings = mkOption {
         type = types.attrsOf format.types.value;
-        default = { };
+        default = {};
         example = {
           pretty = true;
         };
@@ -192,8 +198,14 @@ in
               // lib.optionalAttrs hcfg.tls.enable {
                 tlsenable = true;
                 tlsbindaddr = "${hcfg.tls.address}:${toString hcfg.tls.port}";
-                tlscertfile = if hcfg.tls.certFile != null then credentialPath "cert" else null;
-                tlsprivatekey = if hcfg.tls.keyFile != null then credentialPath "key" else null;
+                tlscertfile =
+                  if hcfg.tls.certFile != null
+                  then credentialPath "cert"
+                  else null;
+                tlsprivatekey =
+                  if hcfg.tls.keyFile != null
+                  then credentialPath "key"
+                  else null;
               }
             )
           ))
@@ -209,7 +221,7 @@ in
           };
 
         firewall.tcpPorts = mkIf hcfg.openFirewall (
-          [ hcfg.port ] ++ optionals hcfg.tls.enable [ hcfg.tls.port ]
+          [hcfg.port] ++ optionals hcfg.tls.enable [hcfg.tls.port]
         );
       };
 
@@ -227,28 +239,30 @@ in
 
         # res_websocket_client logs an error when its file is missing; its
         # connections (outbound WebSockets) go into settings
-        settings."websocket_client.conf" = mkIf needsWebsocketClient { };
+        settings."websocket_client.conf" = mkIf needsWebsocketClient {};
 
-        settings."ari.conf" = {
-          general = mkMerge [
-            {
-              enabled = mkDefault true;
-              allowed_origins = mkIf (acfg.allowedOrigins != [ ]) (
-                mkDefault (concatStringsSep "," acfg.allowedOrigins)
-              );
-            }
-            acfg.settings
-          ];
-        }
-        // mapAttrs' (
-          name: u:
-          nameValuePair "user:${name}" {
-            inherit name;
-            type = "user";
-            password = mkDefault u.password;
-            read_only = mkDefault u.readOnly;
+        settings."ari.conf" =
+          {
+            general = mkMerge [
+              {
+                enabled = mkDefault true;
+                allowed_origins = mkIf (acfg.allowedOrigins != []) (
+                  mkDefault (concatStringsSep "," acfg.allowedOrigins)
+                );
+              }
+              acfg.settings
+            ];
           }
-        ) acfg.users;
+          // mapAttrs' (
+            name: u:
+              nameValuePair "user:${name}" {
+                inherit name;
+                type = "user";
+                password = mkDefault u.password;
+                read_only = mkDefault u.readOnly;
+              }
+          )
+          acfg.users;
       };
 
       assertions = [
@@ -259,7 +273,7 @@ in
       ];
     })
 
-    (mkIf (websocketTransports != [ ]) {
+    (mkIf (websocketTransports != []) {
       services.asterisk.modules.load = [
         "res_http_websocket.so"
         "res_pjsip_transport_websocket.so"

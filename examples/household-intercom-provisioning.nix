@@ -13,17 +13,16 @@
 # interface); they then register with the credentials of their endpoint, sync
 # time from this host, auto-answer pages and never contact Grandstream's
 # cloud or firmware servers.
-{ config, ... }:
-{
+{config, ...}: {
   # the phones' files are rendered again when the password changes
-  sops.secrets.phone-admin.restartUnits = [ "grandstream-provisioning.service" ];
+  sops.secrets.phone-admin.restartUnits = ["grandstream-provisioning.service"];
 
   services.asterisk.provisioning.grandstream = {
     enable = true;
     listenAddress = "10.0.20.10";
-    allowedNetworks = [ "10.0.20.0/24" ];
+    allowedNetworks = ["10.0.20.0/24"];
     openFirewall = true;
-    firewallInterfaces = [ "voip" ];
+    firewallInterfaces = ["voip"];
 
     # the VoIP VLAN has no internet access: serve NTP from this host
     ntp.serve = true;

@@ -4,30 +4,34 @@
 # values exist nowhere in the Nix store; `fixed` ones are test fixtures that
 # clients also need to know.
 {
-  fixed ? { },
-  random ? [ ],
-}:
-{ lib, pkgs, ... }:
-{
+  fixed ? {},
+  random ? [],
+}: {
+  lib,
+  pkgs,
+  ...
+}: {
   systemd.services.provision-test-secrets = {
-    wantedBy = [ "multi-user.target" ];
-    before = [ "asterisk.service" ];
-    requiredBy = [ "asterisk.service" ];
+    wantedBy = ["multi-user.target"];
+    before = ["asterisk.service"];
+    requiredBy = ["asterisk.service"];
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
     };
-    path = [ pkgs.coreutils ];
+    path = [pkgs.coreutils];
     script = ''
       install -d -m 0755 /run/test-secrets
       ${lib.concatStrings (
         lib.mapAttrsToList (name: value: ''
           printf '%s\n' ${lib.escapeShellArg value} > /run/test-secrets/${name}
-        '') fixed
+        '')
+        fixed
       )}
       ${lib.concatMapStrings (name: ''
-        head -c 18 /dev/urandom | base64 | tr -d '\n/+=' > /run/test-secrets/${name}
-      '') random}
+          head -c 18 /dev/urandom | base64 | tr -d '\n/+=' > /run/test-secrets/${name}
+        '')
+        random}
       chmod 0400 /run/test-secrets/*
     '';
   };

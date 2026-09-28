@@ -3,9 +3,13 @@
 # Off by default. When enabled it listens on the loopback address; users are
 # restricted to the loopback network unless `permit` says otherwise, and the
 # firewall is only opened when `openFirewall` is set.
-{ config, lib, ... }:
-let
-  inherit (lib)
+{
+  config,
+  lib,
+  ...
+}: let
+  inherit
+    (lib)
     concatStringsSep
     mapAttrs'
     mkDefault
@@ -18,12 +22,14 @@ let
 
   cfg = config.services.asterisk;
   acfg = cfg.ami;
-  asteriskLib = import ../lib { inherit lib; };
+  asteriskLib = import ../lib {inherit lib;};
   inherit (asteriskLib) format;
 
-  secretOrString = types.either types.str format.types.secret // {
-    description = "string or secret reference";
-  };
+  secretOrString =
+    types.either types.str format.types.secret
+    // {
+      description = "string or secret reference";
+    };
 
   userType = types.submodule {
     options = {
@@ -33,7 +39,7 @@ let
       };
       read = mkOption {
         type = types.listOf types.str;
-        default = [ "all" ];
+        default = ["all"];
         example = [
           "system"
           "call"
@@ -42,7 +48,7 @@ let
       };
       write = mkOption {
         type = types.listOf types.str;
-        default = [ ];
+        default = [];
         example = [
           "system"
           "call"
@@ -60,7 +66,7 @@ let
       };
       settings = mkOption {
         type = types.attrsOf format.types.value;
-        default = { };
+        default = {};
         example = {
           writetimeout = 1000;
         };
@@ -68,8 +74,7 @@ let
       };
     };
   };
-in
-{
+in {
   options.services.asterisk.ami = {
     enable = lib.mkEnableOption "the Asterisk Manager Interface (AMI)";
 
@@ -97,7 +102,7 @@ in
 
     users = mkOption {
       type = types.attrsOf userType;
-      default = { };
+      default = {};
       example = lib.literalExpression ''
         {
           monitoring.secret = config.lib.asterisk.secret config.sops.secrets.ami-monitoring.path;
@@ -112,7 +117,7 @@ in
 
     settings = mkOption {
       type = types.attrsOf format.types.value;
-      default = { };
+      default = {};
       example = {
         displayconnects = false;
       };
@@ -122,35 +127,37 @@ in
 
   config = mkIf (cfg.enable && acfg.enable) {
     services.asterisk = {
-      settings."manager.conf" = {
-        general = mkMerge [
-          {
-            enabled = mkDefault true;
-            bindaddr = mkDefault acfg.address;
-            port = mkDefault acfg.port;
-          }
-          acfg.settings
-        ];
-      }
-      // mapAttrs' (
-        name: u:
-        nameValuePair "user:${name}" (mkMerge [
-          {
-            inherit name;
-            secret = mkDefault u.secret;
-            read = mkIf (u.read != [ ]) (mkDefault (concatStringsSep "," u.read));
-            write = mkIf (u.write != [ ]) (mkDefault (concatStringsSep "," u.write));
-            deny = [
-              "0.0.0.0/0.0.0.0"
-              "::/0"
-            ];
-            inherit (u) permit;
-          }
-          u.settings
-        ])
-      ) acfg.users;
+      settings."manager.conf" =
+        {
+          general = mkMerge [
+            {
+              enabled = mkDefault true;
+              bindaddr = mkDefault acfg.address;
+              port = mkDefault acfg.port;
+            }
+            acfg.settings
+          ];
+        }
+        // mapAttrs' (
+          name: u:
+            nameValuePair "user:${name}" (mkMerge [
+              {
+                inherit name;
+                secret = mkDefault u.secret;
+                read = mkIf (u.read != []) (mkDefault (concatStringsSep "," u.read));
+                write = mkIf (u.write != []) (mkDefault (concatStringsSep "," u.write));
+                deny = [
+                  "0.0.0.0/0.0.0.0"
+                  "::/0"
+                ];
+                inherit (u) permit;
+              }
+              u.settings
+            ])
+        )
+        acfg.users;
 
-      firewall.tcpPorts = mkIf acfg.openFirewall [ acfg.port ];
+      firewall.tcpPorts = mkIf acfg.openFirewall [acfg.port];
     };
 
     assertions = [

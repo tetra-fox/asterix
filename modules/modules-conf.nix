@@ -10,9 +10,9 @@
   lib,
   pkgs,
   ...
-}:
-let
-  inherit (lib)
+}: let
+  inherit
+    (lib)
     mkIf
     mkOption
     types
@@ -144,9 +144,12 @@ let
   ];
 
   # Removed in Asterisk 21 and deprecated before; never load it.
-  legacyModules = [ "chan_sip.so" ];
+  legacyModules = ["chan_sip.so"];
 
-  normalize = name: if lib.hasSuffix ".so" name then name else "${name}.so";
+  normalize = name:
+    if lib.hasSuffix ".so" name
+    then name
+    else "${name}.so";
 
   moduleListType = types.listOf types.str;
 
@@ -155,7 +158,7 @@ let
   loadedModules = lib.subtractLists (map normalize cfg.modules.noload) (
     unique (map normalize (cfg.modules.load ++ cfg.modules.preload))
   );
-  modulesCheck = pkgs.runCommand "asterisk-modules-check" { } ''
+  modulesCheck = pkgs.runCommand "asterisk-modules-check" {} ''
     missing=0
     for module in ${lib.escapeShellArgs loadedModules}; do
       if [ ! -e "${cfg.package}/lib/asterisk/modules/$module" ]; then
@@ -165,8 +168,7 @@ let
     done
     [ "$missing" = 0 ] && touch "$out"
   '';
-in
-{
+in {
   options.services.asterisk.modules = {
     autoload = mkOption {
       type = types.bool;
@@ -194,7 +196,7 @@ in
 
     load = mkOption {
       type = moduleListType;
-      default = [ ];
+      default = [];
       example = [
         "app_system.so"
         "cdr_csv.so"
@@ -208,8 +210,8 @@ in
 
     noload = mkOption {
       type = moduleListType;
-      default = [ ];
-      example = [ "res_pjsip_messaging.so" ];
+      default = [];
+      example = ["res_pjsip_messaging.so"];
       description = ''
         Modules never to load (`noload =>`), taking precedence over
         {option}`services.asterisk.modules.load`. `chan_sip.so` is
@@ -219,8 +221,8 @@ in
 
     preload = mkOption {
       type = moduleListType;
-      default = [ ];
-      example = [ "res_odbc.so" ];
+      default = [];
+      example = ["res_odbc.so"];
       description = "Modules loaded before the core initializes (`preload =>`), such as realtime drivers.";
     };
   };
@@ -237,7 +239,7 @@ in
       };
     };
 
-    system.checks = [ modulesCheck ];
+    system.checks = [modulesCheck];
 
     assertions = [
       {

@@ -4,37 +4,38 @@
 # substring in a failed assertion (`assertion`), in a warning (`warning`), or
 # evaluation of the generated files to throw (`throws`). The result is the
 # list of cases that did not behave as expected.
-{ pkgs, self }:
-let
+{
+  pkgs,
+  self,
+}: let
   inherit (pkgs) lib;
-  inherit (import ./eval-lib.nix { inherit pkgs self; })
+  inherit
+    (import ./eval-lib.nix {inherit pkgs self;})
     evalConfig
     failedAssertions
     throws
     ;
 
   # A valid baseline each case breaks in one place.
-  base =
-    { config, ... }:
-    {
-      services.asterisk = {
-        enable = true;
-        pjsip = {
-          transports.udp = { };
-          endpoints."101" = {
-            context = "internal";
-            auth.password = config.lib.asterisk.secret "/run/secrets/101";
-          };
+  base = {config, ...}: {
+    services.asterisk = {
+      enable = true;
+      pjsip = {
+        transports.udp = {};
+        endpoints."101" = {
+          context = "internal";
+          auth.password = config.lib.asterisk.secret "/run/secrets/101";
         };
-        dialplan.contexts.internal.extensions."_1XX" = [ "Dial(PJSIP/\${EXTEN})" ];
       };
+      dialplan.contexts.internal.extensions."_1XX" = ["Dial(PJSIP/\${EXTEN})"];
     };
+  };
 
   cases = {
     baselineIsValid = {
-      module = { };
-      assertions = [ ];
-      warnings = [ ];
+      module = {};
+      assertions = [];
+      warnings = [];
     };
 
     danglingTransport = {
@@ -52,7 +53,7 @@ let
         name = "office";
         type = "identify";
         endpoint = "office";
-        match = [ "10.0.0.1" ];
+        match = ["10.0.0.1"];
       };
       assertion = "endpoint = office: no endpoint named `office`";
     };
@@ -78,18 +79,16 @@ let
     };
 
     trunkWithoutLineIsValid = {
-      module =
-        { config, ... }:
-        {
-          services.asterisk.pjsip.trunks.provider = {
-            host = "sip.example";
-            username = "u";
-            password = config.lib.asterisk.secret "/run/secrets/trunk";
-            context = "internal";
-            registration.line = false;
-          };
+      module = {config, ...}: {
+        services.asterisk.pjsip.trunks.provider = {
+          host = "sip.example";
+          username = "u";
+          password = config.lib.asterisk.secret "/run/secrets/trunk";
+          context = "internal";
+          registration.line = false;
         };
-      assertions = [ ];
+      };
+      assertions = [];
     };
 
     duplicateObject = {
@@ -97,7 +96,7 @@ let
         name = "101";
         type = "endpoint";
         context = "internal";
-        allow = [ "ulaw" ];
+        allow = ["ulaw"];
       };
       assertion = "more than once (same type and name):\n  endpoint 101";
     };
@@ -111,30 +110,28 @@ let
     };
 
     danglingInclude = {
-      module.services.asterisk.dialplan.contexts.internal.includes = [ "outbound" ];
+      module.services.asterisk.dialplan.contexts.internal.includes = ["outbound"];
       assertion = "[internal] include => outbound";
     };
 
     danglingPredialSubroutine = {
-      module =
-        { config, ... }:
-        {
-          services.asterisk.dialplan.contexts.internal.extensions."100" = [
-            (config.lib.asterisk.dialplan.page {
-              endpoints = [ "101" ];
-              predial = "page-autoanswer";
-            })
-          ];
-        };
+      module = {config, ...}: {
+        services.asterisk.dialplan.contexts.internal.extensions."100" = [
+          (config.lib.asterisk.dialplan.page {
+            endpoints = ["101"];
+            predial = "page-autoanswer";
+          })
+        ];
+      };
       assertion = "pre-dial subroutines refer to contexts that are not defined:\n  [internal] page-autoanswer";
     };
 
     includeWithTimeSpecIsResolved = {
       module.services.asterisk.dialplan.contexts = {
-        internal.includes = [ "daytime,09:00-17:00,mon-fri,*,*" ];
-        daytime.extensions.s = [ "Answer()" ];
+        internal.includes = ["daytime,09:00-17:00,mon-fri,*,*"];
+        daytime.extensions.s = ["Answer()"];
       };
-      assertions = [ ];
+      assertions = [];
     };
 
     contextsFromExtraConfigAreKnown = {
@@ -145,15 +142,15 @@ let
           exten => 1,1,Answer()
         '';
       };
-      assertions = [ ];
+      assertions = [];
     };
 
     includedFilesDisableContextChecks = {
       module.services.asterisk = {
         pjsip.endpoints."101".context = lib.mkForce "elsewhere";
-        includes."extensions.conf" = [ "extensions-local.conf" ];
+        includes."extensions.conf" = ["extensions-local.conf"];
       };
-      assertions = [ ];
+      assertions = [];
     };
 
     tlsWithoutKeys = {
@@ -170,18 +167,16 @@ let
     };
 
     chanSip = {
-      module.services.asterisk.modules.load = [ "chan_sip" ];
+      module.services.asterisk.modules.load = ["chan_sip"];
       assertion = "chan_sip.so is not supported";
     };
 
     secretInStore = {
-      module =
-        { config, ... }:
-        {
-          services.asterisk.pjsip.endpoints."101".auth.password = lib.mkForce (
-            config.lib.asterisk.secret "${builtins.storeDir}/0000000000000000000000000000000-pw"
-          );
-        };
+      module = {config, ...}: {
+        services.asterisk.pjsip.endpoints."101".auth.password = lib.mkForce (
+          config.lib.asterisk.secret "${builtins.storeDir}/0000000000000000000000000000000-pw"
+        );
+      };
       assertion = "is in the\nNix store";
     };
 
@@ -200,14 +195,11 @@ let
     };
 
     secretInterpolatedIntoValue = {
-      module =
-        { config, ... }:
-        {
-          services.asterisk.settings."voicemail.conf".default."200" =
-            "${config.lib.asterisk.secret "/run/secrets/vm-200"},Sales,sales@example.org";
-        };
-      assertions = [ ];
-      warnings = [ ];
+      module = {config, ...}: {
+        services.asterisk.settings."voicemail.conf".default."200" = "${config.lib.asterisk.secret "/run/secrets/vm-200"},Sales,sales@example.org";
+      };
+      assertions = [];
+      warnings = [];
     };
 
     reservedCredentialName = {
@@ -227,31 +219,29 @@ let
     };
 
     extensionWithoutSteps = {
-      module.services.asterisk.dialplan.contexts.internal.extensions."200" = [ ];
+      module.services.asterisk.dialplan.contexts.internal.extensions."200" = [];
       assertion = "extensions without steps or hint: internal/200";
     };
 
     extensionNameWithComma = {
-      module.services.asterisk.dialplan.contexts.internal.extensions."2,1" = [ "Answer()" ];
+      module.services.asterisk.dialplan.contexts.internal.extensions."2,1" = ["Answer()"];
       assertion = "invalid extension name(s)";
     };
 
     reservedContextName = {
-      module.services.asterisk.dialplan.contexts.globals.extensions.s = [ "Answer()" ];
+      module.services.asterisk.dialplan.contexts.globals.extensions.s = ["Answer()"];
       assertion = "`general` and `globals` are reserved";
     };
 
     trunkEndpointNameClash = {
-      module =
-        { config, ... }:
-        {
-          services.asterisk.pjsip.trunks."101" = {
-            host = "sip.example";
-            username = "u";
-            password = config.lib.asterisk.secret "/run/secrets/trunk";
-            context = "internal";
-          };
+      module = {config, ...}: {
+        services.asterisk.pjsip.trunks."101" = {
+          host = "sip.example";
+          username = "u";
+          password = config.lib.asterisk.secret "/run/secrets/trunk";
+          context = "internal";
         };
+      };
       assertion = "pjsip.trunks and pjsip.endpoints share the name(s) 101";
     };
 
@@ -262,14 +252,12 @@ let
     };
 
     ariWithoutHttp = {
-      module =
-        { config, ... }:
-        {
-          services.asterisk.ari = {
-            enable = true;
-            users.app.password = config.lib.asterisk.secret "/run/secrets/ari";
-          };
+      module = {config, ...}: {
+        services.asterisk.ari = {
+          enable = true;
+          users.app.password = config.lib.asterisk.secret "/run/secrets/ari";
         };
+      };
       assertion = "ari.enable requires services.asterisk.http.enable";
     };
 
@@ -295,32 +283,28 @@ let
     };
 
     voicemailNameWithComma = {
-      module =
-        { config, ... }:
-        {
-          services.asterisk.voicemail.mailboxes."101" = {
-            pin = config.lib.asterisk.secret "/run/secrets/vm";
-            fullName = "Doe, John";
-          };
+      module = {config, ...}: {
+        services.asterisk.voicemail.mailboxes."101" = {
+          pin = config.lib.asterisk.secret "/run/secrets/vm";
+          fullName = "Doe, John";
         };
+      };
       assertion = "names and e-mail addresses cannot contain commas (101@default)";
     };
 
     mwiForUndefinedMailbox = {
-      module =
-        { config, ... }:
-        {
-          services.asterisk = {
-            voicemail.mailboxes."101".pin = config.lib.asterisk.secret "/run/secrets/vm";
-            pjsip.endpoints."101".mailboxes = [ "102@default" ];
-          };
+      module = {config, ...}: {
+        services.asterisk = {
+          voicemail.mailboxes."101".pin = config.lib.asterisk.secret "/run/secrets/vm";
+          pjsip.endpoints."101".mailboxes = ["102@default"];
         };
+      };
       assertion = "pjsip.endpoints.101.mailboxes: 102@default";
     };
 
     voicemailPlainPinWarns = {
       module.services.asterisk.voicemail.mailboxes."101".pin = "1234";
-      assertions = [ ];
+      assertions = [];
       warning = "voicemail.mailboxes.\"101@default\".pin is a plain string";
     };
 
@@ -331,12 +315,12 @@ let
 
     plainPasswordWarns = {
       module.services.asterisk.pjsip.endpoints."101".auth.password = lib.mkForce "hunter2";
-      assertions = [ ];
+      assertions = [];
       warning = ''settings."pjsip.conf"."auth:101".password is a plain string'';
     };
 
     sameKeyWarns = {
-      module.services.asterisk.settings."extensions.conf".internal.same = [ "n,Hangup()" ];
+      module.services.asterisk.settings."extensions.conf".internal.same = ["n,Hangup()"];
       warning = "`same` keys in settings.\"extensions.conf\"";
     };
 
@@ -361,37 +345,35 @@ let
     };
   };
 
-  check =
-    name: case:
-    let
-      config = evalConfig [
-        base
-        case.module
-      ];
-      failed = failedAssertions config;
-      inherit (config) warnings;
-      has = needle: haystack: builtins.any (lib.hasInfix needle) haystack;
-      problems =
-        lib.optional (case ? assertion && !(has case.assertion failed)) {
-          expectedAssertion = case.assertion;
-          inherit failed;
-        }
-        ++ lib.optional (case ? assertions && failed != case.assertions) {
-          expectedAssertions = case.assertions;
-          inherit failed;
-        }
-        ++ lib.optional (case ? warning && !(has case.warning warnings)) {
-          expectedWarning = case.warning;
-          inherit warnings;
-        }
-        ++ lib.optional (case ? warnings && warnings != case.warnings) {
-          expectedWarnings = case.warnings;
-          inherit warnings;
-        }
-        ++ lib.optional (case.throws or false && !(throws config.services.asterisk.renderedFiles)) {
-          expectedThrow = true;
-        };
-    in
-    lib.optional (problems != [ ]) { ${name} = problems; };
+  check = name: case: let
+    config = evalConfig [
+      base
+      case.module
+    ];
+    failed = failedAssertions config;
+    inherit (config) warnings;
+    has = needle: haystack: builtins.any (lib.hasInfix needle) haystack;
+    problems =
+      lib.optional (case ? assertion && !(has case.assertion failed)) {
+        expectedAssertion = case.assertion;
+        inherit failed;
+      }
+      ++ lib.optional (case ? assertions && failed != case.assertions) {
+        expectedAssertions = case.assertions;
+        inherit failed;
+      }
+      ++ lib.optional (case ? warning && !(has case.warning warnings)) {
+        expectedWarning = case.warning;
+        inherit warnings;
+      }
+      ++ lib.optional (case ? warnings && warnings != case.warnings) {
+        expectedWarnings = case.warnings;
+        inherit warnings;
+      }
+      ++ lib.optional (case.throws or false && !(throws config.services.asterisk.renderedFiles)) {
+        expectedThrow = true;
+      };
+  in
+    lib.optional (problems != []) {${name} = problems;};
 in
-lib.concatLists (lib.mapAttrsToList check cases)
+  lib.concatLists (lib.mapAttrsToList check cases)

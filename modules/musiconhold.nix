@@ -3,9 +3,13 @@
 # A class plays the files of a directory, which can be a Nix path or package
 # (copied to the store) or a directory relative to Asterisk's data directory
 # (`moh` holds the package's default music).
-{ config, lib, ... }:
-let
-  inherit (lib)
+{
+  config,
+  lib,
+  ...
+}: let
+  inherit
+    (lib)
     filterAttrs
     mapAttrs
     mkDefault
@@ -17,7 +21,7 @@ let
 
   cfg = config.services.asterisk;
   mcfg = cfg.musicOnHold;
-  asteriskLib = import ../lib { inherit lib; };
+  asteriskLib = import ../lib {inherit lib;};
   inherit (asteriskLib) format;
 
   classType = types.submodule {
@@ -57,7 +61,7 @@ let
       };
       entries = mkOption {
         type = types.listOf types.str;
-        default = [ ];
+        default = [];
         description = "Files or URLs played in `playlist` mode (`entry =>`).";
       };
       application = mkOption {
@@ -67,7 +71,7 @@ let
       };
       settings = mkOption {
         type = types.attrsOf format.types.value;
-        default = { };
+        default = {};
         example = {
           announcement = "queue-thankyou";
         };
@@ -75,11 +79,10 @@ let
       };
     };
   };
-in
-{
+in {
   options.services.asterisk.musicOnHold.classes = mkOption {
     type = types.attrsOf classType;
-    default = { };
+    default = {};
     example = lib.literalExpression ''
       {
         default.directory = pkgs.linkFarm "office-moh" [
@@ -95,39 +98,46 @@ in
   };
 
   config = mkIf cfg.enable {
-    services.asterisk.settings."musiconhold.conf" = mapAttrs (
-      _: c:
-      mkMerge [
-        (mapAttrs (_: mkDefault) (
-          filterAttrs (_: v: v != null) {
-            inherit (c)
-              mode
-              directory
-              sort
-              application
-              ;
+    services.asterisk.settings."musiconhold.conf" =
+      mapAttrs (
+        _: c:
+          mkMerge [
+            (mapAttrs (_: mkDefault) (
+              filterAttrs (_: v: v != null) {
+                inherit
+                  (c)
+                  mode
+                  directory
+                  sort
+                  application
+                  ;
+              }
+            ))
+            {entry = c.entries;}
+            c.settings
+          ]
+      )
+      mcfg.classes;
+
+    services.asterisk.syntax."musiconhold.conf".arrowKeys = ["entry"];
+
+    assertions =
+      lib.mapAttrsToList (name: c: {
+        assertion =
+          (c.mode == "files" -> c.directory != null)
+          && (c.mode == "custom" -> c.application != null)
+          && (c.mode == "playlist" -> c.entries != []);
+        message = "services.asterisk.musicOnHold.classes.${name}: mode `${c.mode}` needs ${
+          {
+            files = "a directory";
+            custom = "an application";
+            playlist = "entries";
           }
-        ))
-        { entry = c.entries; }
-        c.settings
-      ]
-    ) mcfg.classes;
-
-    services.asterisk.syntax."musiconhold.conf".arrowKeys = [ "entry" ];
-
-    assertions = lib.mapAttrsToList (name: c: {
-      assertion =
-        (c.mode == "files" -> c.directory != null)
-        && (c.mode == "custom" -> c.application != null)
-        && (c.mode == "playlist" -> c.entries != [ ]);
-      message = "services.asterisk.musicOnHold.classes.${name}: mode `${c.mode}` needs ${
-        {
-          files = "a directory";
-          custom = "an application";
-          playlist = "entries";
-        }
-        .${c.mode}
-      }.";
-    }) mcfg.classes;
+        .${
+            c.mode
+          }
+        }.";
+      })
+      mcfg.classes;
   };
 }

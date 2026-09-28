@@ -2,9 +2,13 @@
 #
 # Asterisk runs in the foreground under systemd, so the `console` channel is
 # its standard output and ends up in the journal (`journalctl -u asterisk`).
-{ config, lib, ... }:
-let
-  inherit (lib)
+{
+  config,
+  lib,
+  ...
+}: let
+  inherit
+    (lib)
     concatStringsSep
     filterAttrs
     mapAttrs
@@ -15,12 +19,11 @@ let
     ;
 
   cfg = config.services.asterisk;
-in
-{
+in {
   options.services.asterisk.logger = {
     channels = mkOption {
       type = types.attrsOf (types.listOf types.str);
-      default = { };
+      default = {};
       example = {
         console = [
           "notice"
@@ -33,7 +36,7 @@ in
           "warning"
           "error"
         ];
-        security = [ "security" ];
+        security = ["security"];
         "syslog.local0" = [
           "warning"
           "error"
@@ -77,7 +80,7 @@ in
           queue_log = mkDefault cfg.logger.queueLog;
         };
         logfiles = mapAttrs (_: concatStringsSep ",") (
-          filterAttrs (_: levels: levels != [ ]) cfg.logger.channels
+          filterAttrs (_: levels: levels != []) cfg.logger.channels
         );
       };
     };

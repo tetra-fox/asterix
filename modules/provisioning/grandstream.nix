@@ -19,9 +19,9 @@
   lib,
   pkgs,
   ...
-}:
-let
-  inherit (lib)
+}: let
+  inherit
+    (lib)
     attrNames
     attrValues
     concatMapStringsSep
@@ -44,7 +44,7 @@ let
 
   cfg = config.services.asterisk.provisioning.grandstream;
   acfg = config.services.asterisk;
-  asteriskLib = import ../../lib { inherit lib; };
+  asteriskLib = import ../../lib {inherit lib;};
   inherit (asteriskLib) format secrets;
 
   runtimeDir = "/run/grandstream-provisioning";
@@ -60,8 +60,7 @@ let
     };
 
   phoneType = types.submodule (
-    { name, ... }:
-    {
+    {name, ...}: {
       options = {
         mac = mkOption {
           type = types.strMatching "([0-9a-fA-F]{2}[:-]?){5}[0-9a-fA-F]{2}";
@@ -93,7 +92,7 @@ let
         };
         settings = mkOption {
           type = types.attrsOf valueType;
-          default = { };
+          default = {};
           example = {
             P1362 = "de";
           };
@@ -103,15 +102,15 @@ let
     }
   );
 
-  normalizeMac = mac: toLower (lib.replaceStrings [ ":" "-" ] [ "" "" ] mac);
+  normalizeMac = mac: toLower (lib.replaceStrings [":" "-"] ["" ""] mac);
 
   # "Kitchen" <101>  ->  Kitchen
-  callerIdName =
-    callerId:
-    let
-      m = builtins.match ''[[:space:]]*"([^"]*)".*'' callerId;
-    in
-    if m == null then null else builtins.head m;
+  callerIdName = callerId: let
+    m = builtins.match ''[[:space:]]*"([^"]*)".*'' callerId;
+  in
+    if m == null
+    then null
+    else builtins.head m;
 
   endpointOf = phone: acfg.pjsip.endpoints.${phone.endpoint} or null;
 
@@ -121,8 +120,14 @@ let
       P47 = cfg.sipServer; # SIP server
       P30 = cfg.ntpServer; # NTP server
       P64 = cfg.timeZone; # time zone
-      P298 = if cfg.autoAnswerByCallInfo then 1 else 0; # allow auto answer by Call-Info/Alert-Info
-      P26072 = if cfg.autoAnswerWarningTone then 1 else 0; # warning tone before auto answer
+      P298 =
+        if cfg.autoAnswerByCallInfo
+        then 1
+        else 0; # allow auto answer by Call-Info/Alert-Info
+      P26072 =
+        if cfg.autoAnswerWarningTone
+        then 1
+        else 0; # warning tone before auto answer
       P212 = 1; # config upgrade via HTTP
       # config server path: this server
       P237 = cfg.listenAddress + lib.optionalString (cfg.port != 80) ":${toString cfg.port}";
@@ -133,27 +138,24 @@ let
       P1414 = 0; # 3CX auto provisioning off
     }
     // (
-      if cfg.firmware.server == null then
-        {
-          P238 = 2; # always skip the firmware check
-          P194 = 0; # no automatic upgrade
-        }
-      else
-        {
-          P6767 = 1; # firmware upgrade via HTTP
-          P192 = cfg.firmware.server; # firmware server path
-          P238 = 1; # check only when the firmware prefix/suffix changes
-        }
+      if cfg.firmware.server == null
+      then {
+        P238 = 2; # always skip the firmware check
+        P194 = 0; # no automatic upgrade
+      }
+      else {
+        P6767 = 1; # firmware upgrade via HTTP
+        P192 = cfg.firmware.server; # firmware server path
+        P238 = 1; # check only when the firmware prefix/suffix changes
+      }
     )
     // cfg.settings
   );
 
-  phoneSettings =
-    name: phone:
-    let
-      endpoint = endpointOf phone;
-      inherit (endpoint) auth;
-    in
+  phoneSettings = name: phone: let
+    endpoint = endpointOf phone;
+    inherit (endpoint) auth;
+  in
     commonSettings
     // {
       P271 = 1; # account 1 active
@@ -162,54 +164,49 @@ let
       P36 = auth.username; # authentication ID
       P34 = auth.password; # authentication password
       P3 =
-        if phone.displayName != null then
-          phone.displayName
-        else if endpoint.callerId != null && callerIdName endpoint.callerId != null then
-          callerIdName endpoint.callerId
-        else
-          phone.endpoint; # display name
+        if phone.displayName != null
+        then phone.displayName
+        else if endpoint.callerId != null && callerIdName endpoint.callerId != null
+        then callerIdName endpoint.callerId
+        else phone.endpoint; # display name
     }
     // phone.settings;
 
-  escapeXml = lib.replaceStrings [ "&" "<" ">" "\"" "'" ] [ "&amp;" "&lt;" "&gt;" "&quot;" "&apos;" ];
+  escapeXml = lib.replaceStrings ["&" "<" ">" "\"" "'"] ["&amp;" "&lt;" "&gt;" "&quot;" "&apos;"];
 
-  valueText =
-    v:
-    if secrets.isSecret v then
-      secrets.placeholder v
-    else if isInt v then
-      toString v
-    else
-      escapeXml v;
+  valueText = v:
+    if secrets.isSecret v
+    then secrets.placeholder v
+    else if isInt v
+    then toString v
+    else escapeXml v;
 
   # numeric order; keys that are not P-values are reported by an assertion
-  pNumber =
-    p:
-    let
-      m = builtins.match "P([0-9]+)" p;
-    in
-    if m == null then 0 else lib.toInt (builtins.head m);
+  pNumber = p: let
+    m = builtins.match "P([0-9]+)" p;
+  in
+    if m == null
+    then 0
+    else lib.toInt (builtins.head m);
 
-  phoneXml =
-    name: phone:
-    let
-      values = phoneSettings name phone;
-      keys = lib.sort (a: b: pNumber a < pNumber b) (attrNames values);
-    in
-    ''
-      <?xml version="1.0" encoding="UTF-8"?>
-      <gs_provision version="1">
-        <mac>${normalizeMac phone.mac}</mac>
-        <config version="1">
-      ${concatStrings (map (p: "    <${p}>${valueText values.${p}}</${p}>\n") keys)}  </config>
-      </gs_provision>
-    '';
+  phoneXml = name: phone: let
+    values = phoneSettings name phone;
+    keys = lib.sort (a: b: pNumber a < pNumber b) (attrNames values);
+  in ''
+    <?xml version="1.0" encoding="UTF-8"?>
+    <gs_provision version="1">
+      <mac>${normalizeMac phone.mac}</mac>
+      <config version="1">
+    ${concatStrings (map (p: "    <${p}>${valueText values.${p}}</${p}>\n") keys)}  </config>
+    </gs_provision>
+  '';
 
   templates = pkgs.linkFarm "grandstream-provisioning" (
     mapAttrsToList (name: phone: {
       name = "cfg${normalizeMac phone.mac}.xml";
       path = pkgs.writeText "cfg${normalizeMac phone.mac}.xml" (phoneXml name phone);
-    }) cfg.phones
+    })
+    cfg.phones
   );
 
   secretRefs = unique (
@@ -273,14 +270,14 @@ let
       }
 
       ${concatMapStringsSep "\n" (
-        ref:
-        "substitute ${
-          lib.escapeShellArgs [
-            (secrets.placeholder ref)
-            (secrets.credentialName ref)
-          ]
-        }"
-      ) secretRefs}
+          ref: "substitute ${
+            lib.escapeShellArgs [
+              (secrets.placeholder ref)
+              (secrets.credentialName ref)
+            ]
+          }"
+        )
+        secretRefs}
 
       if grep -rqF '@NIX_ASTERISK_SECRET:' "$new"; then
         echo "grandstream-provisioning: unresolved secret placeholder" >&2
@@ -295,8 +292,7 @@ let
       rmdir "$new"
     '';
   };
-in
-{
+in {
   options.services.asterisk.provisioning.grandstream = {
     enable = mkEnableOption "provisioning of Grandstream phones over HTTP";
 
@@ -319,7 +315,7 @@ in
 
     allowedNetworks = mkOption {
       type = types.listOf types.str;
-      example = [ "10.0.20.0/24" ];
+      example = ["10.0.20.0/24"];
       description = "Networks allowed to download provisioning files (nginx `allow`).";
     };
 
@@ -331,8 +327,8 @@ in
 
     firewallInterfaces = mkOption {
       type = types.listOf types.str;
-      default = [ ];
-      example = [ "voip" ];
+      default = [];
+      example = ["voip"];
       description = "Interfaces the firewall is opened on; empty means all.";
     };
 
@@ -346,7 +342,10 @@ in
 
     ntpServer = mkOption {
       type = types.nullOr types.str;
-      default = if cfg.ntp.serve then cfg.listenAddress else null;
+      default =
+        if cfg.ntp.serve
+        then cfg.listenAddress
+        else null;
       defaultText = literalExpression "if ntp.serve then listenAddress else null";
       description = "NTP server of the phones (P30); `null` keeps the phone's default.";
     };
@@ -424,7 +423,7 @@ in
 
     settings = mkOption {
       type = types.attrsOf valueType;
-      default = { };
+      default = {};
       example = {
         P1362 = "en";
         P8 = 0;
@@ -434,7 +433,7 @@ in
 
     phones = mkOption {
       type = types.attrsOf phoneType;
-      default = { };
+      default = {};
       example = literalExpression ''
         {
           kitchen = { mac = "00:0b:82:12:34:56"; endpoint = "101"; allowedAddress = "10.0.20.21"; };
@@ -446,36 +445,38 @@ in
   };
 
   config = mkIf cfg.enable {
-    assertions = [
-      {
-        assertion = acfg.enable;
-        message = "services.asterisk.provisioning.grandstream requires services.asterisk.enable.";
-      }
-    ]
-    ++ mapAttrsToList (name: phone: {
-      assertion = endpointOf phone != null && (endpointOf phone).auth != null;
-      message = "services.asterisk.provisioning.grandstream.phones.${name}: endpoint `${phone.endpoint}` must exist in pjsip.endpoints and have `auth` set.";
-    }) cfg.phones
-    ++ [
-      {
-        assertion =
-          let
+    assertions =
+      [
+        {
+          assertion = acfg.enable;
+          message = "services.asterisk.provisioning.grandstream requires services.asterisk.enable.";
+        }
+      ]
+      ++ mapAttrsToList (name: phone: {
+        assertion = endpointOf phone != null && (endpointOf phone).auth != null;
+        message = "services.asterisk.provisioning.grandstream.phones.${name}: endpoint `${phone.endpoint}` must exist in pjsip.endpoints and have `auth` set.";
+      })
+      cfg.phones
+      ++ [
+        {
+          assertion = let
             macs = map (phone: normalizeMac phone.mac) (attrValues cfg.phones);
           in
-          lib.allUnique macs;
-        message = "services.asterisk.provisioning.grandstream.phones: MAC addresses must be unique.";
-      }
-      {
-        assertion = builtins.all (p: builtins.match "P[0-9]+" p != null) (
-          attrNames cfg.settings ++ lib.concatMap (phone: attrNames phone.settings) (attrValues cfg.phones)
-        );
-        message = "services.asterisk.provisioning.grandstream: settings keys must be P-values such as P1362.";
-      }
-    ]
-    ++ map (ref: {
-      assertion = !(secrets.isStorePath ref) && secrets.isValidReference ref;
-      message = "services.asterisk.provisioning.grandstream: invalid secret reference ${secrets.placeholder ref}.";
-    }) secretRefs;
+            lib.allUnique macs;
+          message = "services.asterisk.provisioning.grandstream.phones: MAC addresses must be unique.";
+        }
+        {
+          assertion = builtins.all (p: builtins.match "P[0-9]+" p != null) (
+            attrNames cfg.settings ++ lib.concatMap (phone: attrNames phone.settings) (attrValues cfg.phones)
+          );
+          message = "services.asterisk.provisioning.grandstream: settings keys must be P-values such as P1362.";
+        }
+      ]
+      ++ map (ref: {
+        assertion = !(secrets.isStorePath ref) && secrets.isValidReference ref;
+        message = "services.asterisk.provisioning.grandstream: invalid secret reference ${secrets.placeholder ref}.";
+      })
+      secretRefs;
 
     systemd.services.grandstream-provisioning = {
       description = "Render Grandstream provisioning files";
@@ -483,8 +484,8 @@ in
         "multi-user.target"
         "nginx.service"
       ];
-      before = [ "nginx.service" ];
-      restartTriggers = [ templates ];
+      before = ["nginx.service"];
+      restartTriggers = [templates];
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
@@ -501,7 +502,7 @@ in
         RuntimeDirectory = "grandstream-provisioning";
         RuntimeDirectoryMode = "0700";
         RuntimeDirectoryPreserve = true;
-        CapabilityBoundingSet = [ "" ];
+        CapabilityBoundingSet = [""];
         NoNewPrivileges = true;
         PrivateTmp = true;
         PrivateDevices = true;
@@ -517,7 +518,7 @@ in
           "AF_NETLINK"
         ];
         SystemCallArchitectures = "native";
-        SystemCallFilter = [ "@system-service" ];
+        SystemCallFilter = ["@system-service"];
       };
     };
 
@@ -535,25 +536,26 @@ in
           ${concatMapStringsSep "\n" (net: "allow ${net};") cfg.allowedNetworks}
           deny all;
         '';
-        locations = {
-          "/".return = "404";
-        }
-        // mapAttrs' (
-          _: phone:
-          nameValuePair "= /cfg${normalizeMac phone.mac}.xml" {
-            extraConfig =
-              if phone.allowedAddress != null then
-                ''
-                  allow ${phone.allowedAddress};
-                  deny all;
-                ''
-              else
-                "";
+        locations =
+          {
+            "/".return = "404";
           }
-        ) cfg.phones
-        // optionalAttrs (cfg.firmware.directory != null) {
-          "/firmware/".alias = "${cfg.firmware.directory}/";
-        };
+          // mapAttrs' (
+            _: phone:
+              nameValuePair "= /cfg${normalizeMac phone.mac}.xml" {
+                extraConfig =
+                  if phone.allowedAddress != null
+                  then ''
+                    allow ${phone.allowedAddress};
+                    deny all;
+                  ''
+                  else "";
+              }
+          )
+          cfg.phones
+          // optionalAttrs (cfg.firmware.directory != null) {
+            "/firmware/".alias = "${cfg.firmware.directory}/";
+          };
       };
     };
 
@@ -566,18 +568,16 @@ in
       '';
     };
 
-    networking.firewall =
-      let
-        ports = {
-          allowedTCPPorts = [ cfg.port ];
-          allowedUDPPorts = optional cfg.ntp.serve 123;
-        };
-      in
+    networking.firewall = let
+      ports = {
+        allowedTCPPorts = [cfg.port];
+        allowedUDPPorts = optional cfg.ntp.serve 123;
+      };
+    in
       mkIf cfg.openFirewall (
-        if cfg.firewallInterfaces == [ ] then
-          ports
-        else
-          { interfaces = lib.genAttrs cfg.firewallInterfaces (_: ports); }
+        if cfg.firewallInterfaces == []
+        then ports
+        else {interfaces = lib.genAttrs cfg.firewallInterfaces (_: ports);}
       );
   };
 }

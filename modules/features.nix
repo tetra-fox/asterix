@@ -1,8 +1,12 @@
 # Typed call features (features.conf): in-call DTMF feature codes and
 # custom application features.
-{ config, lib, ... }:
-let
-  inherit (lib)
+{
+  config,
+  lib,
+  ...
+}: let
+  inherit
+    (lib)
     concatStringsSep
     mapAttrs
     mkDefault
@@ -13,7 +17,7 @@ let
 
   cfg = config.services.asterisk;
   fcfg = cfg.features;
-  asteriskLib = import ../lib { inherit lib; };
+  asteriskLib = import ../lib {inherit lib;};
   inherit (asteriskLib) format;
 
   applicationType = types.submodule {
@@ -44,12 +48,11 @@ let
       };
     };
   };
-in
-{
+in {
   options.services.asterisk.features = {
     general = mkOption {
       type = types.attrsOf format.types.value;
-      default = { };
+      default = {};
       example = {
         transferdigittimeout = 3;
         featuredigittimeout = 1500;
@@ -59,7 +62,7 @@ in
 
     featureMap = mkOption {
       type = types.attrsOf types.str;
-      default = { };
+      default = {};
       example = {
         blindxfer = "#1";
         atxfer = "*2";
@@ -75,7 +78,7 @@ in
 
     applications = mkOption {
       type = types.attrsOf applicationType;
-      default = { };
+      default = {};
       example = {
         monkeys = {
           dtmf = "*9";
@@ -92,24 +95,31 @@ in
   };
 
   config = mkIf cfg.enable {
-    services.asterisk.settings."features.conf" = {
-      general = mapAttrs (_: v: if builtins.isList v then v else mkDefault v) fcfg.general;
-    }
-    // lib.optionalAttrs (fcfg.featureMap != { }) {
-      featuremap = mapAttrs (_: mkDefault) fcfg.featureMap;
-    }
-    // lib.optionalAttrs (fcfg.applications != { }) {
-      applicationmap = mapAttrs (
-        _: a:
-        mkDefault (
-          concatStringsSep "," [
-            a.dtmf
-            a.activateOn
-            a.app
-            a.args
-          ]
-        )
-      ) fcfg.applications;
-    };
+    services.asterisk.settings."features.conf" =
+      {
+        general = mapAttrs (_: v:
+          if builtins.isList v
+          then v
+          else mkDefault v)
+        fcfg.general;
+      }
+      // lib.optionalAttrs (fcfg.featureMap != {}) {
+        featuremap = mapAttrs (_: mkDefault) fcfg.featureMap;
+      }
+      // lib.optionalAttrs (fcfg.applications != {}) {
+        applicationmap =
+          mapAttrs (
+            _: a:
+              mkDefault (
+                concatStringsSep "," [
+                  a.dtmf
+                  a.activateOn
+                  a.app
+                  a.args
+                ]
+              )
+          )
+          fcfg.applications;
+      };
   };
 }

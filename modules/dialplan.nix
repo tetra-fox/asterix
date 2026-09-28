@@ -9,9 +9,13 @@
 # `"\${EXTEN}"` in double-quoted strings, `''${EXTEN}` in indented strings, or
 # use `config.lib.asterisk.dialplan.var "EXTEN"`. Semicolons are escaped by
 # the generator and must not be escaped by hand.
-{ config, lib, ... }:
-let
-  inherit (lib)
+{
+  config,
+  lib,
+  ...
+}: let
+  inherit
+    (lib)
     attrNames
     attrValues
     concatLists
@@ -35,7 +39,7 @@ let
 
   cfg = config.services.asterisk;
   dcfg = cfg.dialplan;
-  asteriskLib = import ../lib { inherit lib; };
+  asteriskLib = import ../lib {inherit lib;};
   inherit (asteriskLib) format;
 
   stepType =
@@ -49,7 +53,7 @@ let
           };
           args = mkOption {
             type = types.listOf (types.either types.str types.int);
-            default = [ ];
+            default = [];
             example = [
               "PJSIP/101"
               30
@@ -73,24 +77,24 @@ let
     options = {
       includes = mkOption {
         type = types.listOf types.str;
-        default = [ ];
+        default = [];
         description = "Contexts included in this one (`include =>`), searched in order.";
       };
       switches = mkOption {
         type = types.listOf types.str;
-        default = [ ];
-        example = [ "Realtime/default@extensions" ];
+        default = [];
+        example = ["Realtime/default@extensions"];
         description = "Alternative switches (`switch =>`).";
       };
       ignorePatterns = mkOption {
         type = types.listOf types.str;
-        default = [ ];
-        example = [ "9" ];
+        default = [];
+        example = ["9"];
         description = "Patterns after which dial tone continues (`ignorepat =>`).";
       };
       extensions = mkOption {
         type = types.attrsOf (types.listOf stepType);
-        default = { };
+        default = {};
         example = lib.literalExpression ''
           {
             "100" = [ "Answer()" "Playback(hello-world)" "Hangup()" ];
@@ -107,7 +111,7 @@ let
       };
       hints = mkOption {
         type = types.attrsOf types.str;
-        default = { };
+        default = {};
         example = {
           "101" = "PJSIP/101";
         };
@@ -125,21 +129,32 @@ let
     };
   };
 
-  argString = arg: if isString arg then arg else toString arg;
+  argString = arg:
+    if isString arg
+    then arg
+    else toString arg;
 
-  stepString =
-    step: if isString step then step else "${step.app}(${concatMapStringsSep "," argString step.args})";
+  stepString = step:
+    if isString step
+    then step
+    else "${step.app}(${concatMapStringsSep "," argString step.args})";
 
-  priority =
-    index: step:
-    (if index == 0 then "1" else "n")
-    + (if !(isString step) && step.label != null then "(${step.label})" else "");
+  priority = index: step:
+    (
+      if index == 0
+      then "1"
+      else "n"
+    )
+    + (
+      if !(isString step) && step.label != null
+      then "(${step.label})"
+      else ""
+    );
 
-  extensionLines =
-    context: extension:
+  extensionLines = context: extension:
     optional (context.hints ? ${extension}) "${extension},hint,${context.hints.${extension}}"
     ++ imap0 (i: step: "${extension},${priority i step},${stepString step}") (
-      context.extensions.${extension} or [ ]
+      context.extensions.${extension} or []
     );
 
   contextSection = name: context: {
@@ -161,10 +176,11 @@ let
   );
 
   # Validation of `include =>` targets, where all contexts are known.
-  dialplan = cfg.settings."extensions.conf" or { };
+  dialplan = cfg.settings."extensions.conf" or {};
   extra = cfg.extraConfig."extensions.conf" or "";
   known =
-    (cfg.includes."extensions.conf" or [ ]) == [ ]
+    (cfg.includes."extensions.conf" or [])
+    == []
     && !(builtins.any (directive: hasInfix directive extra) [
       "#include"
       "#tryinclude"
@@ -173,63 +189,70 @@ let
   contexts =
     map (s: s.name) (attrValues dialplan)
     ++ lib.concatMap (
-      line:
-      let
+      line: let
         m = builtins.match "[[:space:]]*[[]([^]]+)[]].*" line;
       in
-      if m == null then [ ] else m
+        if m == null
+        then []
+        else m
     ) (lib.splitString "\n" extra);
-  toList = v: if builtins.isList v then v else [ v ];
+  toList = v:
+    if builtins.isList v
+    then v
+    else [v];
   danglingIncludes = lib.concatMap (
     s:
-    map (target: "[${s.name}] include => ${target}") (
-      filter (
-        target: isString target && !(builtins.elem (lib.head (lib.splitString "," target)) contexts)
-      ) (toList (s.include or [ ]))
-    )
+      map (target: "[${s.name}] include => ${target}") (
+        filter (
+          target: isString target && !(builtins.elem (lib.head (lib.splitString "," target)) contexts)
+        ) (toList (s.include or []))
+      )
   ) (attrValues dialplan);
   # Pre-dial subroutines of Dial()/Page() written as b(context^exten^priority)
   # or B(context^exten^priority).
-  gosubTargets =
-    line:
-    lib.concatMap (m: if builtins.isList m then [ (builtins.elemAt m 0) ] else [ ]) (
+  gosubTargets = line:
+    lib.concatMap (m:
+      if builtins.isList m
+      then [(builtins.elemAt m 0)]
+      else []) (
       builtins.split "[bB][(]([^()^,]+)\\^[^()^,]+\\^[0-9n]+[)]" line
     );
   danglingSubroutines = lib.concatMap (
     s:
-    lib.concatMap (
-      line:
-      map (target: "[${s.name}] ${target} (in: ${line})") (
-        filter (target: !(builtins.elem target contexts)) (gosubTargets line)
-      )
-    ) (filter isString (toList (s.exten or [ ])))
+      lib.concatMap (
+        line:
+          map (target: "[${s.name}] ${target} (in: ${line})") (
+            filter (target: !(builtins.elem target contexts)) (gosubTargets line)
+          )
+      ) (filter isString (toList (s.exten or [])))
   ) (attrValues dialplan);
   emptyExtensions = lib.concatLists (
     mapAttrsToList (
       name: context:
-      map (ext: "${name}/${ext}") (
-        filter (ext: context.extensions.${ext} == [ ] && !(context.hints ? ${ext})) (
-          attrNames context.extensions
+        map (ext: "${name}/${ext}") (
+          filter (ext: context.extensions.${ext} == [] && !(context.hints ? ${ext})) (
+            attrNames context.extensions
+          )
         )
-      )
-    ) dcfg.contexts
+    )
+    dcfg.contexts
   );
   badExtensionNames = lib.concatLists (
     mapAttrsToList (
       name: context:
-      map (ext: "${name}/${ext}") (
-        filter (ext: builtins.match "[^,;[:space:]]+" ext == null) (
-          attrNames context.extensions ++ attrNames context.hints
+        map (ext: "${name}/${ext}") (
+          filter (ext: builtins.match "[^,;[:space:]]+" ext == null) (
+            attrNames context.extensions ++ attrNames context.hints
+          )
         )
-      )
-    ) dcfg.contexts
+    )
+    dcfg.contexts
   );
-in
-{
+in {
   options.services.asterisk.dialplan = {
     general = mkOption {
       type = types.attrsOf format.types.value;
-      default = { };
+      default = {};
       example = {
         autofallthrough = false;
       };
@@ -242,7 +265,7 @@ in
 
     globals = mkOption {
       type = types.attrsOf format.types.atom;
-      default = { };
+      default = {};
       example = lib.literalExpression ''
         {
           TRUNK = "PJSIP/provider";
@@ -254,7 +277,7 @@ in
 
     contexts = mkOption {
       type = types.attrsOf contextType;
-      default = { };
+      default = {};
       example = lib.literalExpression ''
         {
           internal = {
@@ -279,44 +302,51 @@ in
         clearglobalvars = mkDefault true;
       };
 
-      settings."extensions.conf" = {
-        general = {
-          order = 0;
+      settings."extensions.conf" =
+        {
+          general =
+            {
+              order = 0;
+            }
+            // mapAttrs (_: v:
+              if builtins.isList v
+              then v
+              else mkDefault v)
+            dcfg.general;
         }
-        // mapAttrs (_: v: if builtins.isList v then v else mkDefault v) dcfg.general;
-      }
-      // lib.optionalAttrs (dcfg.globals != { }) {
-        globals = {
-          order = 1;
+        // lib.optionalAttrs (dcfg.globals != {}) {
+          globals =
+            {
+              order = 1;
+            }
+            // mapAttrs (_: mkDefault) (filterAttrs (_: v: v != null) dcfg.globals);
         }
-        // mapAttrs (_: mkDefault) (filterAttrs (_: v: v != null) dcfg.globals);
-      }
-      // mapAttrs contextSection dcfg.contexts;
+        // mapAttrs contextSection dcfg.contexts;
 
       extraConfig."extensions.conf" = mkIf (rawBlocks != "") rawBlocks;
     };
 
     assertions = [
       {
-        assertion = !known || danglingIncludes == [ ];
+        assertion = !known || danglingIncludes == [];
         message = ''
           services.asterisk: dialplan includes contexts that are not defined:
             ${concatStringsSep "\n  " danglingIncludes}
         '';
       }
       {
-        assertion = !known || danglingSubroutines == [ ];
+        assertion = !known || danglingSubroutines == [];
         message = ''
           services.asterisk: pre-dial subroutines refer to contexts that are not defined:
             ${concatStringsSep "\n  " danglingSubroutines}
         '';
       }
       {
-        assertion = emptyExtensions == [ ];
+        assertion = emptyExtensions == [];
         message = "services.asterisk.dialplan: extensions without steps or hint: ${concatStringsSep ", " emptyExtensions}.";
       }
       {
-        assertion = badExtensionNames == [ ];
+        assertion = badExtensionNames == [];
         message = "services.asterisk.dialplan: invalid extension name(s) (no commas, semicolons or spaces): ${concatStringsSep ", " badExtensionNames}.";
       }
       {

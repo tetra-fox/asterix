@@ -1,8 +1,10 @@
 # Options reference: `nix build .#docs` produces options.md, options.html and
 # options.json for services.asterisk (including the Grandstream
 # provisioning module).
-{ pkgs, self }:
-let
+{
+  pkgs,
+  self,
+}: let
   inherit (pkgs) lib;
 
   eval = import "${pkgs.path}/nixos/lib/eval-config.nix" {
@@ -25,30 +27,29 @@ let
     options = {
       inherit (eval.options.services) asterisk;
     };
-    transformOptions =
-      option:
+    transformOptions = option:
       option
       // {
-        declarations = map (
-          declaration:
-          let
-            path = lib.removePrefix "${prefix}/" (toString declaration);
-          in
-          {
-            url = "${repository}/${path}";
-            name = path;
-          }
-        ) option.declarations;
+        declarations =
+          map (
+            declaration: let
+              path = lib.removePrefix "${prefix}/" (toString declaration);
+            in {
+              url = "${repository}/${path}";
+              name = path;
+            }
+          )
+          option.declarations;
       };
   };
 in
-pkgs.runCommand "nix-asterisk-docs" { nativeBuildInputs = [ pkgs.cmark ]; } ''
-  mkdir -p $out
-  cp ${optionsDoc.optionsCommonMark} $out/options.md
-  cp ${optionsDoc.optionsJSON}/share/doc/nixos/options.json $out/options.json
-  {
-    echo '<!DOCTYPE html><html><head><meta charset="utf-8"><title>nix-asterisk options</title></head><body>'
-    cmark --unsafe $out/options.md
-    echo '</body></html>'
-  } > $out/options.html
-''
+  pkgs.runCommand "nix-asterisk-docs" {nativeBuildInputs = [pkgs.cmark];} ''
+    mkdir -p $out
+    cp ${optionsDoc.optionsCommonMark} $out/options.md
+    cp ${optionsDoc.optionsJSON}/share/doc/nixos/options.json $out/options.json
+    {
+      echo '<!DOCTYPE html><html><head><meta charset="utf-8"><title>nix-asterisk options</title></head><body>'
+      cmark --unsafe $out/options.md
+      echo '</body></html>'
+    } > $out/options.html
+  ''

@@ -1,8 +1,12 @@
 # Typed ConfBridge options (confbridge.conf): bridge profiles, user profiles
 # and DTMF menus. Layer-1 ids: "bridge:<name>", "user:<name>", "menu:<name>".
-{ config, lib, ... }:
-let
-  inherit (lib)
+{
+  config,
+  lib,
+  ...
+}: let
+  inherit
+    (lib)
     filterAttrs
     isList
     mapAttrs
@@ -17,23 +21,23 @@ let
 
   cfg = config.services.asterisk;
   ccfg = cfg.confbridge;
-  asteriskLib = import ../lib { inherit lib; };
+  asteriskLib = import ../lib {inherit lib;};
   inherit (asteriskLib) format;
 
-  secretOrString = types.either types.str format.types.secret // {
-    description = "string or secret reference";
-  };
+  secretOrString =
+    types.either types.str format.types.secret
+    // {
+      description = "string or secret reference";
+    };
 
-  settingsOption =
-    what:
+  settingsOption = what:
     mkOption {
       type = types.attrsOf format.types.value;
-      default = { };
+      default = {};
       description = "Additional keys of the ${what} section.";
     };
 
-  optionalBool =
-    description:
+  optionalBool = description:
     mkOption {
       type = types.nullOr types.bool;
       default = null;
@@ -82,30 +86,32 @@ let
   };
 
   # Scalars become defaults, lists stay definitions, nulls are dropped.
-  toSection =
-    attrs: mapAttrs (_: v: if isList v then v else mkDefault v) (filterAttrs (_: v: v != null) attrs);
+  toSection = attrs:
+    mapAttrs (_: v:
+      if isList v
+      then v
+      else mkDefault v) (filterAttrs (_: v: v != null) attrs);
 
-  profiles =
-    kind: attrs: toValues:
+  profiles = kind: attrs: toValues:
     mapAttrs' (
       name: p:
-      nameValuePair "${kind}:${name}" (mkMerge [
-        (
-          {
-            inherit name;
-            type = kind;
-          }
-          // toSection (toValues p)
-        )
-        (p.settings or { })
-      ])
-    ) attrs;
-in
-{
+        nameValuePair "${kind}:${name}" (mkMerge [
+          (
+            {
+              inherit name;
+              type = kind;
+            }
+            // toSection (toValues p)
+          )
+          (p.settings or {})
+        ])
+    )
+    attrs;
+in {
   options.services.asterisk.confbridge = {
     bridges = mkOption {
       type = types.attrsOf bridgeType;
-      default = { };
+      default = {};
       example = {
         board.maxMembers = 10;
       };
@@ -117,7 +123,7 @@ in
 
     users = mkOption {
       type = types.attrsOf userType;
-      default = { };
+      default = {};
       example = lib.literalExpression ''
         {
           chair = { admin = true; marked = true; };
@@ -132,7 +138,7 @@ in
 
     menus = mkOption {
       type = types.attrsOf (types.attrsOf types.str);
-      default = { };
+      default = {};
       example = {
         admin_menu = {
           "*1" = "toggle_mute";
@@ -153,7 +159,8 @@ in
         inherit (b) language;
       }))
       (profiles "user" ccfg.users (u: {
-        inherit (u)
+        inherit
+          (u)
           admin
           marked
           pin

@@ -174,7 +174,8 @@ in {
       example = literalExpression "config.lib.asterisk.secret config.sops.secrets.ht801-admin.path";
       description = ''
         Password of the adapters' web interface (P2), normally a secret
-        reference. HT801 V2 requires 4 to 30 characters.
+        reference. A plain string is stored world-readable in the Nix store and
+        triggers a warning. HT801 V2 requires 4 to 30 characters.
       '';
     };
 
@@ -201,6 +202,8 @@ in {
   };
 
   config = mkIf cfg.enable {
+    warnings = lib.optional (builtins.isString cfg.adminPassword) "services.asterisk.provisioning.grandstream.ht801.adminPassword is a plain string, so it is stored world-readable in the Nix store; use config.lib.asterisk.secret instead.";
+
     assertions =
       [
         {

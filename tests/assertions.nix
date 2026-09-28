@@ -303,6 +303,20 @@
       assertion = "pjsip.endpoints.101.mailboxes: 102@default";
     };
 
+    ht801PlainAdminPasswordWarns = {
+      module.services.asterisk.provisioning = {
+        listenAddress = "10.0.20.10";
+        allowedNetworks = ["10.0.20.0/24"];
+        grandstream.ht801 = {
+          enable = true;
+          adminPassword = "admin";
+          devices."101".mac = "c0:74:ad:00:01:01";
+        };
+      };
+      assertions = [];
+      warning = "ht801.adminPassword is a plain string";
+    };
+
     voicemailPlainPinWarns = {
       module.services.asterisk.voicemail.mailboxes."101".pin = "1234";
       assertions = [];

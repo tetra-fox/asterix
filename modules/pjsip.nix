@@ -440,13 +440,30 @@ let
           caListFile = mkOption {
             type = types.nullOr types.str;
             default = null;
-            description = "CA certificates used to verify peers, loaded as a systemd credential.";
+            description = ''
+              CA certificates used to verify peers, loaded as a systemd
+              credential. By default TLS transports use the system's CA bundle
+              ({option}`security.pki.caBundle`), so `verifyServer` works with
+              publicly signed certificates.
+            '';
           };
           method = mkOption {
-            type = types.nullOr types.str;
-            default = null;
-            example = "tlsv1_2";
-            description = "TLS protocol version (pjsip `method`).";
+            type = types.nullOr (
+              types.enum [
+                "tlsv1"
+                "tlsv1_1"
+                "tlsv1_2"
+                "tlsv1_3"
+                "sslv23"
+              ]
+            );
+            default = "tlsv1_2";
+            example = "sslv23";
+            description = ''
+              TLS protocol version (pjsip `method`); `sslv23` negotiates the
+              highest version both sides support. Asterisk's own default (used
+              with `null`) is TLS 1.0, which current OpenSSL refuses to talk to.
+            '';
           };
           verifyClient = mkOption {
             type = types.bool;
@@ -523,8 +540,16 @@ let
         local_net = t.localNet;
         cert_file = if t.tls.certFile != null then credentialPath name "cert" else null;
         priv_key_file = if t.tls.keyFile != null then credentialPath name "key" else null;
-        ca_list_file = if t.tls.caListFile != null then credentialPath name "ca" else null;
-        method = t.tls.method;
+        # without a CA list, pjproject logs an error for every TLS connection
+        # it accepts
+        ca_list_file =
+          if t.tls.caListFile != null then
+            credentialPath name "ca"
+          else if t.protocol == "tls" then
+            config.security.pki.caBundle
+          else
+            null;
+        method = if t.protocol == "tls" then t.tls.method else null;
         verify_client = if t.protocol == "tls" then t.tls.verifyClient else null;
         verify_server = if t.protocol == "tls" then t.tls.verifyServer else null;
         allow_reload = if t.allowReload then true else null;

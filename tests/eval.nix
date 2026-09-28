@@ -318,6 +318,13 @@ lib.runTests {
         key = builtins.filter (lib.hasPrefix "priv_key_file") (
           lib.splitString "\n" config.services.asterisk-declarative.renderedFiles."pjsip.conf"
         );
+        # Asterisk's default is TLS 1.0, which OpenSSL 3 clients refuse
+        method = builtins.filter (lib.hasPrefix "method") (
+          lib.splitString "\n" config.services.asterisk-declarative.renderedFiles."pjsip.conf"
+        );
+        ca = builtins.filter (lib.hasPrefix "ca_list_file") (
+          lib.splitString "\n" config.services.asterisk-declarative.renderedFiles."pjsip.conf"
+        );
       };
     expected = {
       LoadCredential = [
@@ -326,6 +333,8 @@ lib.runTests {
         "pjsip-tls-key:/var/lib/acme/pbx/key.pem"
       ];
       key = [ "priv_key_file = /run/credentials/asterisk.service/pjsip-tls-key" ];
+      method = [ "method = tlsv1_2" ];
+      ca = [ "ca_list_file = ${(evalConfig [ phone ]).security.pki.caBundle}" ];
     };
   };
 

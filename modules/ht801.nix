@@ -36,7 +36,7 @@
     unique
     ;
 
-  cfg = config.services.asterisk.ht801;
+  cfg = config.services.asterisk.provisioning.ht801;
   acfg = config.services.asterisk;
   asteriskLib = import ../lib {inherit lib;};
   inherit (asteriskLib) format secrets;
@@ -236,7 +236,7 @@
     '';
   };
 in {
-  options.services.asterisk.ht801 = {
+  options.services.asterisk.provisioning.ht801 = {
     enable = mkEnableOption "provisioning of Grandstream HT801 adapters over HTTP";
 
     listenAddress = mkOption {
@@ -334,27 +334,27 @@ in {
       [
         {
           assertion = acfg.enable;
-          message = "services.asterisk.ht801 requires services.asterisk.enable.";
+          message = "services.asterisk.provisioning.ht801 requires services.asterisk.enable.";
         }
         {
           assertion = lib.allUnique (map (device: normalizeMac device.mac) (attrValues cfg.devices));
-          message = "services.asterisk.ht801.devices: MAC addresses must be unique.";
+          message = "services.asterisk.provisioning.ht801.devices: MAC addresses must be unique.";
         }
         {
           assertion = builtins.all (p: builtins.match "P[0-9]+" p != null) (
             attrNames cfg.settings ++ lib.concatMap (device: attrNames device.settings) (attrValues cfg.devices)
           );
-          message = "services.asterisk.ht801: settings keys must be P-values such as P1362.";
+          message = "services.asterisk.provisioning.ht801: settings keys must be P-values such as P1362.";
         }
       ]
       ++ mapAttrsToList (name: device: {
         assertion = endpointOf device != null && (endpointOf device).auth != null;
-        message = "services.asterisk.ht801.devices.${name}: endpoint `${device.endpoint}` must exist in pjsip.endpoints and have `auth` set.";
+        message = "services.asterisk.provisioning.ht801.devices.${name}: endpoint `${device.endpoint}` must exist in pjsip.endpoints and have `auth` set.";
       })
       cfg.devices
       ++ map (ref: {
         assertion = !(secrets.isStorePath ref) && secrets.isValidReference ref;
-        message = "services.asterisk.ht801: invalid secret reference ${secrets.placeholder ref}.";
+        message = "services.asterisk.provisioning.ht801: invalid secret reference ${secrets.placeholder ref}.";
       })
       secretRefs;
 

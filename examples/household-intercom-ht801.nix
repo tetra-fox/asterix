@@ -21,7 +21,7 @@
     restartUnits = ["ht801-provisioning.service"];
   });
 
-  services.asterisk.ht801 = {
+  services.asterisk.provisioning.ht801 = {
     enable = true;
     listenAddress = "10.0.20.10";
     allowedNetworks = ["10.0.20.0/24"];

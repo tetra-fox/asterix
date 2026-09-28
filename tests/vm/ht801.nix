@@ -41,7 +41,7 @@ in
           voip.vlan = 2;
         };
         # adapter 101 has a static lease
-        services.asterisk.ht801.devices."101".allowedAddress = "10.0.20.21";
+        services.asterisk.provisioning.ht801.devices."101".allowedAddress = "10.0.20.21";
       };
 
       adapters = {

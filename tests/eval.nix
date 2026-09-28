@@ -798,6 +798,34 @@ lib.runTests {
        same => n,Hangup()'';
   };
 
+  # Asterisk ignores -p unless it starts as root: systemd sets the policy
+  testRealtimeSchedulingIsSetBySystemd = {
+    expr =
+      let
+        service =
+          (evalConfig [
+            phone
+            { services.asterisk-declarative.realtime = true; }
+          ]).systemd.services.asterisk.serviceConfig;
+      in
+      {
+        inherit (service)
+          CPUSchedulingPolicy
+          CPUSchedulingPriority
+          LimitRTPRIO
+          RestrictRealtime
+          ;
+        dashP = lib.hasInfix " -p" service.ExecStart;
+      };
+    expected = {
+      CPUSchedulingPolicy = "rr";
+      CPUSchedulingPriority = 10;
+      LimitRTPRIO = 10;
+      RestrictRealtime = false;
+      dashP = false;
+    };
+  };
+
   testChanSipAlwaysNoloaded = {
     expr = lib.hasInfix "noload => chan_sip.so" (rendered [ phone ])."modules.conf";
     expected = true;

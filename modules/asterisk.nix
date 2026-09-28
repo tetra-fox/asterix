@@ -592,8 +592,11 @@ in
       type = types.bool;
       default = false;
       description = ''
-        Run Asterisk with realtime scheduling (`asterisk -p`). The unit gets
-        `LimitRTPRIO=` instead of `CAP_SYS_NICE`.
+        Run Asterisk with realtime scheduling (SCHED_RR, priority 10).
+        Asterisk only raises its own priority when started as root, so the
+        unit starts it with `CPUSchedulingPolicy=rr` instead of passing `-p`.
+        Asterisk notices and runs its `astcanary` watchdog, which lowers the
+        priority again if Asterisk starves the rest of the system.
       '';
     };
 
@@ -863,7 +866,6 @@ in
               "-C"
               "${paths.config}/asterisk.conf"
             ]
-            ++ optional cfg.realtime "-p"
             ++ cfg.extraArguments
           );
           ExecStartPost = waitForBoot;
@@ -884,6 +886,10 @@ in
           LogsDirectoryMode = "0750";
           UMask = "0027";
           LimitNOFILE = 65536;
+          # Realtime scheduling is set by systemd: Asterisk ignores -p unless
+          # it starts as root. LimitRTPRIO lets it adjust the priority later.
+          CPUSchedulingPolicy = mkIf cfg.realtime "rr";
+          CPUSchedulingPriority = mkIf cfg.realtime 10;
           LimitRTPRIO = mkIf cfg.realtime 10;
 
           # Hardening. Asterisk runs unprivileged from the start (no -U), so

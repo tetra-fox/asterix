@@ -164,11 +164,18 @@ pkgs.testers.runNixOSTest {
         wrong.stop()
 
     with subtest("credentials only work from the phone's own network"):
-        # desk phone 103's correct password, used from the trusted LAN
+        # desk phone 103's correct password, used from the trusted LAN. Asterisk
+        # answers a request that fails the endpoint's contact ACL like one with a
+        # wrong password (401), so the reason is only in its log.
         moved = Phone(softphones, "moved", "103", passwords["103"], "10.0.10.10", sip_port=5070, cli_port=2310)
         moved.start()
-        moved.wait_registration_failed("registration failed, status=403")
+        moved.wait_registration_failed("Credential failed to authenticate")
         moved.stop()
+        journal = pbx.succeed("journalctl -u asterisk.service")
+        assert re.search(
+            r"from '<sip:103@10\.0\.10\.10>' failed for '10\.0\.10\.21:5070' .* - Not match Endpoint Contact ACL", journal
+        ), "103 was not rejected by its contact ACL"
+        assert "103@10.0.10.21" not in asterisk(pbx, "pjsip show contacts")
 
     with subtest("the intruder cannot register: firewall"):
         intruder.succeed("ping -c 1 -W 5 10.0.10.10")

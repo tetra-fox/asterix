@@ -15,7 +15,7 @@ let
     types
     ;
 
-  cfg = config.services.asterisk-declarative;
+  cfg = config.services.asterisk;
   mcfg = cfg.musicOnHold;
   asteriskLib = import ../lib { inherit lib; };
   inherit (asteriskLib) format;
@@ -77,7 +77,7 @@ let
   };
 in
 {
-  options.services.asterisk-declarative.musicOnHold.classes = mkOption {
+  options.services.asterisk.musicOnHold.classes = mkOption {
     type = types.attrsOf classType;
     default = { };
     example = lib.literalExpression ''
@@ -95,7 +95,7 @@ in
   };
 
   config = mkIf cfg.enable {
-    services.asterisk-declarative.settings."musiconhold.conf" = mapAttrs (
+    services.asterisk.settings."musiconhold.conf" = mapAttrs (
       _: c:
       mkMerge [
         (mapAttrs (_: mkDefault) (
@@ -113,14 +113,14 @@ in
       ]
     ) mcfg.classes;
 
-    services.asterisk-declarative.syntax."musiconhold.conf".arrowKeys = [ "entry" ];
+    services.asterisk.syntax."musiconhold.conf".arrowKeys = [ "entry" ];
 
     assertions = lib.mapAttrsToList (name: c: {
       assertion =
         (c.mode == "files" -> c.directory != null)
         && (c.mode == "custom" -> c.application != null)
         && (c.mode == "playlist" -> c.entries != [ ]);
-      message = "services.asterisk-declarative.musicOnHold.classes.${name}: mode `${c.mode}` needs ${
+      message = "services.asterisk.musicOnHold.classes.${name}: mode `${c.mode}` needs ${
         {
           files = "a directory";
           custom = "an application";

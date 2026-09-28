@@ -12,7 +12,7 @@
 #   *97           voicemail menu
 #
 # Keys without a typed option can be set through the `settings` attribute of
-# typed objects or through `services.asterisk-declarative.settings`.
+# typed objects or through `services.asterisk.settings`.
 # Passwords and PINs come from sops-nix (set sops.defaultSopsFile in the host's
 # configuration).
 { config, lib, ... }:
@@ -44,7 +44,7 @@ in
         reloadUnits = [ "asterisk.service" ];
       });
 
-  services.asterisk-declarative = {
+  services.asterisk = {
     enable = true;
 
     openFirewall = true;

@@ -18,7 +18,7 @@
   # the phones' files are rendered again when the password changes
   sops.secrets.phone-admin.restartUnits = [ "grandstream-provisioning.service" ];
 
-  services.asterisk-declarative.provisioning.grandstream = {
+  services.asterisk.provisioning.grandstream = {
     enable = true;
     listenAddress = "10.0.20.10";
     allowedNetworks = [ "10.0.20.0/24" ];

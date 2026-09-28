@@ -17,7 +17,7 @@ let
     types
     ;
 
-  cfg = config.services.asterisk-declarative;
+  cfg = config.services.asterisk;
   hcfg = cfg.http;
   acfg = cfg.ari;
   asteriskLib = import ../lib { inherit lib; };
@@ -73,7 +73,7 @@ let
   ) (builtins.attrValues cfg.pjsip.transports);
 in
 {
-  options.services.asterisk-declarative = {
+  options.services.asterisk = {
     http = {
       enable = lib.mkEnableOption "Asterisk's built-in HTTP server (needed by ARI and WebSocket transports)";
 
@@ -118,8 +118,8 @@ in
         default = false;
         description = ''
           Open the HTTP (and HTTPS) port (on
-          {option}`services.asterisk-declarative.firewallInterfaces` when
-          {option}`services.asterisk-declarative.openFirewall` is set).
+          {option}`services.asterisk.firewallInterfaces` when
+          {option}`services.asterisk.openFirewall` is set).
         '';
       };
 
@@ -180,7 +180,7 @@ in
 
   config = mkIf cfg.enable (mkMerge [
     (mkIf hcfg.enable {
-      services.asterisk-declarative = {
+      services.asterisk = {
         settings."http.conf".general = mkMerge [
           (mapAttrs (_: mkDefault) (
             filterAttrs (_: v: v != null) (
@@ -216,13 +216,13 @@ in
       assertions = [
         {
           assertion = hcfg.tls.enable -> (hcfg.tls.certFile != null && hcfg.tls.keyFile != null);
-          message = "services.asterisk-declarative.http.tls needs certFile and keyFile.";
+          message = "services.asterisk.http.tls needs certFile and keyFile.";
         }
       ];
     })
 
     (mkIf acfg.enable {
-      services.asterisk-declarative = {
+      services.asterisk = {
         modules.load = ariModules;
 
         # res_websocket_client logs an error when its file is missing; its
@@ -254,13 +254,13 @@ in
       assertions = [
         {
           assertion = hcfg.enable;
-          message = "services.asterisk-declarative.ari.enable requires services.asterisk-declarative.http.enable.";
+          message = "services.asterisk.ari.enable requires services.asterisk.http.enable.";
         }
       ];
     })
 
     (mkIf (websocketTransports != [ ]) {
-      services.asterisk-declarative.modules.load = [
+      services.asterisk.modules.load = [
         "res_http_websocket.so"
         "res_pjsip_transport_websocket.so"
       ];
@@ -268,11 +268,11 @@ in
       assertions = [
         {
           assertion = hcfg.enable;
-          message = "services.asterisk-declarative: WebSocket transports (ws, wss) require services.asterisk-declarative.http.enable.";
+          message = "services.asterisk: WebSocket transports (ws, wss) require services.asterisk.http.enable.";
         }
         {
           assertion = builtins.any (t: t.protocol == "wss") websocketTransports -> hcfg.tls.enable;
-          message = "services.asterisk-declarative: a wss transport requires services.asterisk-declarative.http.tls.enable.";
+          message = "services.asterisk: a wss transport requires services.asterisk.http.tls.enable.";
         }
       ];
     })

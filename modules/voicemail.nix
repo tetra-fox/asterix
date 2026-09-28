@@ -26,7 +26,7 @@ let
     unique
     ;
 
-  cfg = config.services.asterisk-declarative;
+  cfg = config.services.asterisk;
   vcfg = cfg.voicemail;
   asteriskLib = import ../lib { inherit lib; };
   inherit (asteriskLib) format secrets;
@@ -149,7 +149,7 @@ let
   );
 in
 {
-  options.services.asterisk-declarative.voicemail = {
+  options.services.asterisk.voicemail = {
     enable = mkOption {
       type = types.bool;
       default = vcfg.mailboxes != { };
@@ -244,7 +244,7 @@ in
   };
 
   config = mkIf (cfg.enable && vcfg.enable) {
-    services.asterisk-declarative = {
+    services.asterisk = {
       modules.load = [ "app_voicemail.so" ];
 
       settings."voicemail.conf" = mkMerge (
@@ -277,22 +277,22 @@ in
     assertions = [
       {
         assertion = badFields == [ ];
-        message = "services.asterisk-declarative.voicemail.mailboxes: names and e-mail addresses cannot contain commas (${
+        message = "services.asterisk.voicemail.mailboxes: names and e-mail addresses cannot contain commas (${
           concatStringsSep ", " (map (box: "${box.mailbox}@${box.context}") badFields)
         }).";
       }
       {
         assertion = builtins.all (box: builtins.match "[A-Za-z0-9_*#+-]+" box.mailbox != null) mailboxes;
-        message = "services.asterisk-declarative.voicemail.mailboxes: mailbox numbers may only contain letters, digits and _*#+-.";
+        message = "services.asterisk.voicemail.mailboxes: mailbox numbers may only contain letters, digits and _*#+-.";
       }
       {
         assertion = !(builtins.elem "general" contexts || builtins.elem "zonemessages" contexts);
-        message = "services.asterisk-declarative.voicemail.mailboxes: `general` and `zonemessages` cannot be used as voicemail contexts.";
+        message = "services.asterisk.voicemail.mailboxes: `general` and `zonemessages` cannot be used as voicemail contexts.";
       }
       {
         assertion = missingMailboxes == [ ];
         message = ''
-          services.asterisk-declarative: PJSIP endpoints reference voicemail boxes that are not defined:
+          services.asterisk: PJSIP endpoints reference voicemail boxes that are not defined:
             ${concatStringsSep "\n  " missingMailboxes}
         '';
       }
@@ -300,7 +300,7 @@ in
 
     warnings = map (
       box:
-      "services.asterisk-declarative.voicemail.mailboxes.\"${box.mailbox}@${box.context}\".pin is a plain string, so it is stored world-readable in the Nix store; use config.lib.asterisk.secret instead."
+      "services.asterisk.voicemail.mailboxes.\"${box.mailbox}@${box.context}\".pin is a plain string, so it is stored world-readable in the Nix store; use config.lib.asterisk.secret instead."
     ) (filter (box: isString box.pin) mailboxes);
   };
 }

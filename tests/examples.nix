@@ -50,7 +50,7 @@ in
       [
         {
           name = "config";
-          path = config.services.asterisk-declarative.generatedConfig;
+          path = config.services.asterisk.generatedConfig;
         }
       ]
       ++ lib.imap0 (i: check: {

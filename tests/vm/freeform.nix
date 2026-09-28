@@ -35,7 +35,7 @@ let
   bob = phone "102";
 in
 {
-  services.asterisk-declarative = {
+  services.asterisk = {
     enable = true;
     openFirewall = true;
 

@@ -18,7 +18,7 @@ pkgs.testers.runNixOSTest {
       officeMusic = pkgs.linkFarm "office-moh" [
         {
           name = "hold.wav";
-          path = "${config.services.asterisk-declarative.package}/var/lib/asterisk/moh/macroform-cold_day.wav";
+          path = "${config.services.asterisk.package}/var/lib/asterisk/moh/macroform-cold_day.wav";
         }
       ];
     in
@@ -42,7 +42,7 @@ pkgs.testers.runNixOSTest {
         pkgs.sqlite
       ];
 
-      services.asterisk-declarative = {
+      services.asterisk = {
         enable = true;
 
         pjsip = {

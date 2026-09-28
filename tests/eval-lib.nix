@@ -18,7 +18,7 @@ rec {
       ++ modules;
     }).config;
 
-  rendered = modules: (evalConfig modules).services.asterisk-declarative.renderedFiles;
+  rendered = modules: (evalConfig modules).services.asterisk.renderedFiles;
 
   failedAssertions = config: map (a: a.message) (lib.filter (a: !a.assertion) config.assertions);
 

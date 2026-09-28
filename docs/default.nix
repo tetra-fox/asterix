@@ -1,5 +1,5 @@
 # Options reference: `nix build .#docs` produces options.md, options.html and
-# options.json for services.asterisk-declarative (including the Grandstream
+# options.json for services.asterisk (including the Grandstream
 # provisioning module).
 { pkgs, self }:
 let
@@ -23,7 +23,7 @@ let
 
   optionsDoc = pkgs.nixosOptionsDoc {
     options = {
-      inherit (eval.options.services) asterisk-declarative;
+      inherit (eval.options.services) asterisk;
     };
     transformOptions =
       option:

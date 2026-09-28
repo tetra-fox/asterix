@@ -14,7 +14,7 @@ let
     types
     ;
 
-  cfg = config.services.asterisk-declarative;
+  cfg = config.services.asterisk;
   ccfg = cfg.cdr;
   ecfg = cfg.cel;
   asteriskLib = import ../lib { inherit lib; };
@@ -72,7 +72,7 @@ let
   };
 in
 {
-  options.services.asterisk-declarative = {
+  options.services.asterisk = {
     cdr = {
       enable = mkOption {
         type = types.bool;
@@ -133,7 +133,7 @@ in
 
   config = mkIf cfg.enable (mkMerge [
     {
-      services.asterisk-declarative = {
+      services.asterisk = {
         settings."cdr.conf".general = mkMerge [
           {
             enable = mkDefault ccfg.enable;
@@ -157,7 +157,7 @@ in
       systemd.services.asterisk.serviceConfig.LogsDirectory = [ "asterisk/cdr-csv" ];
 
       # cdr_csv declines to load when [csv] has no keys: write its defaults
-      services.asterisk-declarative.settings."cdr.conf".csv = {
+      services.asterisk.settings."cdr.conf".csv = {
         accountlogs = mkDefault true;
         usegmtime = mkDefault false;
         loguniqueid = mkDefault false;
@@ -168,18 +168,18 @@ in
     })
 
     (mkIf ccfg.sqlite.enable {
-      services.asterisk-declarative.settings."cdr_sqlite3_custom.conf".master =
+      services.asterisk.settings."cdr_sqlite3_custom.conf".master =
         sqliteSection ccfg.sqlite.table cdrColumns;
     })
 
     (mkIf ecfg.sqlite.enable {
-      services.asterisk-declarative.settings."cel_sqlite3_custom.conf".master =
+      services.asterisk.settings."cel_sqlite3_custom.conf".master =
         sqliteSection ecfg.sqlite.table celColumns;
     })
 
     {
       # cdr_sqlite3_custom.conf and cel_sqlite3_custom.conf use `key => value`
-      services.asterisk-declarative.syntax =
+      services.asterisk.syntax =
         lib.genAttrs
           [
             "cdr_sqlite3_custom.conf"

@@ -17,7 +17,7 @@ let
   base =
     { config, ... }:
     {
-      services.asterisk-declarative = {
+      services.asterisk = {
         enable = true;
         pjsip = {
           transports.udp = { };
@@ -38,17 +38,17 @@ let
     };
 
     danglingTransport = {
-      module.services.asterisk-declarative.pjsip.endpoints."101".transport = "tcp";
+      module.services.asterisk.pjsip.endpoints."101".transport = "tcp";
       assertion = "[101] (type=endpoint) transport = tcp: no transport named `tcp`";
     };
 
     danglingAorFromLayerOne = {
-      module.services.asterisk-declarative.settings."pjsip.conf"."endpoint:101".aors = lib.mkForce "nope";
+      module.services.asterisk.settings."pjsip.conf"."endpoint:101".aors = lib.mkForce "nope";
       assertion = "aors = nope: no aor named `nope`";
     };
 
     danglingIdentifyEndpoint = {
-      module.services.asterisk-declarative.settings."pjsip.conf".office-identify = {
+      module.services.asterisk.settings."pjsip.conf".office-identify = {
         name = "office";
         type = "identify";
         endpoint = "office";
@@ -58,7 +58,7 @@ let
     };
 
     danglingRegistrationAuth = {
-      module.services.asterisk-declarative.settings."pjsip.conf".reg = {
+      module.services.asterisk.settings."pjsip.conf".reg = {
         type = "registration";
         server_uri = "sip:sip.example";
         client_uri = "sip:1@sip.example";
@@ -68,7 +68,7 @@ let
     };
 
     registrationEndpointWithoutLine = {
-      module.services.asterisk-declarative.settings."pjsip.conf".reg = {
+      module.services.asterisk.settings."pjsip.conf".reg = {
         type = "registration";
         server_uri = "sip:sip.example";
         client_uri = "sip:1@sip.example";
@@ -81,7 +81,7 @@ let
       module =
         { config, ... }:
         {
-          services.asterisk-declarative.pjsip.trunks.provider = {
+          services.asterisk.pjsip.trunks.provider = {
             host = "sip.example";
             username = "u";
             password = config.lib.asterisk.secret "/run/secrets/trunk";
@@ -93,7 +93,7 @@ let
     };
 
     duplicateObject = {
-      module.services.asterisk-declarative.settings."pjsip.conf".again = {
+      module.services.asterisk.settings."pjsip.conf".again = {
         name = "101";
         type = "endpoint";
         context = "internal";
@@ -103,7 +103,7 @@ let
     };
 
     missingEndpointContext = {
-      module.services.asterisk-declarative.pjsip.endpoints."102" = {
+      module.services.asterisk.pjsip.endpoints."102" = {
         context = "nowhere";
         aor = null;
       };
@@ -111,7 +111,7 @@ let
     };
 
     danglingInclude = {
-      module.services.asterisk-declarative.dialplan.contexts.internal.includes = [ "outbound" ];
+      module.services.asterisk.dialplan.contexts.internal.includes = [ "outbound" ];
       assertion = "[internal] include => outbound";
     };
 
@@ -119,7 +119,7 @@ let
       module =
         { config, ... }:
         {
-          services.asterisk-declarative.dialplan.contexts.internal.extensions."100" = [
+          services.asterisk.dialplan.contexts.internal.extensions."100" = [
             (config.lib.asterisk.dialplan.page {
               endpoints = [ "101" ];
               predial = "page-autoanswer";
@@ -130,7 +130,7 @@ let
     };
 
     includeWithTimeSpecIsResolved = {
-      module.services.asterisk-declarative.dialplan.contexts = {
+      module.services.asterisk.dialplan.contexts = {
         internal.includes = [ "daytime,09:00-17:00,mon-fri,*,*" ];
         daytime.extensions.s = [ "Answer()" ];
       };
@@ -138,7 +138,7 @@ let
     };
 
     contextsFromExtraConfigAreKnown = {
-      module.services.asterisk-declarative = {
+      module.services.asterisk = {
         pjsip.endpoints."101".context = lib.mkForce "legacy";
         extraConfig."extensions.conf" = ''
           [legacy]
@@ -149,7 +149,7 @@ let
     };
 
     includedFilesDisableContextChecks = {
-      module.services.asterisk-declarative = {
+      module.services.asterisk = {
         pjsip.endpoints."101".context = lib.mkForce "elsewhere";
         includes."extensions.conf" = [ "extensions-local.conf" ];
       };
@@ -157,12 +157,12 @@ let
     };
 
     tlsWithoutKeys = {
-      module.services.asterisk-declarative.pjsip.transports.tls.protocol = "tls";
+      module.services.asterisk.pjsip.transports.tls.protocol = "tls";
       assertion = "TLS transport(s) tls need a certificate and a private key";
     };
 
     rtpRangeInverted = {
-      module.services.asterisk-declarative.rtp.portRange = {
+      module.services.asterisk.rtp.portRange = {
         from = 20000;
         to = 10000;
       };
@@ -170,7 +170,7 @@ let
     };
 
     chanSip = {
-      module.services.asterisk-declarative.modules.load = [ "chan_sip" ];
+      module.services.asterisk.modules.load = [ "chan_sip" ];
       assertion = "chan_sip.so is not supported";
     };
 
@@ -178,7 +178,7 @@ let
       module =
         { config, ... }:
         {
-          services.asterisk-declarative.pjsip.endpoints."101".auth.password = lib.mkForce (
+          services.asterisk.pjsip.endpoints."101".auth.password = lib.mkForce (
             config.lib.asterisk.secret "${builtins.storeDir}/0000000000000000000000000000000-pw"
           );
         };
@@ -186,14 +186,14 @@ let
     };
 
     invalidCredentialName = {
-      module.services.asterisk-declarative.pjsip.endpoints."101".auth.password = lib.mkForce {
+      module.services.asterisk.pjsip.endpoints."101".auth.password = lib.mkForce {
         _credential = "bad/name";
       };
       assertion = "invalid systemd credential name `bad/name`";
     };
 
     unsafeSecretPath = {
-      module.services.asterisk-declarative.pjsip.endpoints."101".auth.password = lib.mkForce {
+      module.services.asterisk.pjsip.endpoints."101".auth.password = lib.mkForce {
         _secret = "/run/secrets/with space";
       };
       assertion = "secret path `/run/secrets/with space` must be absolute";
@@ -203,7 +203,7 @@ let
       module =
         { config, ... }:
         {
-          services.asterisk-declarative.settings."voicemail.conf".default."200" =
+          services.asterisk.settings."voicemail.conf".default."200" =
             "${config.lib.asterisk.secret "/run/secrets/vm-200"},Sales,sales@example.org";
         };
       assertions = [ ];
@@ -211,33 +211,33 @@ let
     };
 
     reservedCredentialName = {
-      module.services.asterisk-declarative.credentials.secret-x = "/run/x";
+      module.services.asterisk.credentials.secret-x = "/run/x";
       assertion = "invalid or reserved credential name `secret-x`";
     };
 
     managedDirectory = {
-      module.services.asterisk-declarative.settings."asterisk.conf".directories.astetcdir =
+      module.services.asterisk.settings."asterisk.conf".directories.astetcdir =
         lib.mkForce "/etc/asterisk";
       assertion = "directories.astetcdir is managed by the module";
     };
 
     invalidFileName = {
-      module.services.asterisk-declarative.settings."../escape.conf".x.a = 1;
+      module.services.asterisk.settings."../escape.conf".x.a = 1;
       assertion = "invalid configuration file name `../escape.conf`";
     };
 
     extensionWithoutSteps = {
-      module.services.asterisk-declarative.dialplan.contexts.internal.extensions."200" = [ ];
+      module.services.asterisk.dialplan.contexts.internal.extensions."200" = [ ];
       assertion = "extensions without steps or hint: internal/200";
     };
 
     extensionNameWithComma = {
-      module.services.asterisk-declarative.dialplan.contexts.internal.extensions."2,1" = [ "Answer()" ];
+      module.services.asterisk.dialplan.contexts.internal.extensions."2,1" = [ "Answer()" ];
       assertion = "invalid extension name(s)";
     };
 
     reservedContextName = {
-      module.services.asterisk-declarative.dialplan.contexts.globals.extensions.s = [ "Answer()" ];
+      module.services.asterisk.dialplan.contexts.globals.extensions.s = [ "Answer()" ];
       assertion = "`general` and `globals` are reserved";
     };
 
@@ -245,7 +245,7 @@ let
       module =
         { config, ... }:
         {
-          services.asterisk-declarative.pjsip.trunks."101" = {
+          services.asterisk.pjsip.trunks."101" = {
             host = "sip.example";
             username = "u";
             password = config.lib.asterisk.secret "/run/secrets/trunk";
@@ -255,38 +255,39 @@ let
       assertion = "pjsip.trunks and pjsip.endpoints share the name(s) 101";
     };
 
-    upstreamModuleEnabledToo = {
-      module.services.asterisk.enable = true;
-      assertion = "services.asterisk-declarative and services.asterisk cannot be enabled\ntogether";
+    # nixpkgs' module is replaced: its options point to the new ones
+    upstreamConfFilesRemoved = {
+      module.services.asterisk.confFiles."extensions.conf" = "";
+      assertion = "Use services.asterisk.settings.<file>";
     };
 
     ariWithoutHttp = {
       module =
         { config, ... }:
         {
-          services.asterisk-declarative.ari = {
+          services.asterisk.ari = {
             enable = true;
             users.app.password = config.lib.asterisk.secret "/run/secrets/ari";
           };
         };
-      assertion = "ari.enable requires services.asterisk-declarative.http.enable";
+      assertion = "ari.enable requires services.asterisk.http.enable";
     };
 
     wssWithoutHttpTls = {
-      module.services.asterisk-declarative = {
+      module.services.asterisk = {
         http.enable = true;
         pjsip.transports.wss.protocol = "wss";
       };
-      assertion = "a wss transport requires services.asterisk-declarative.http.tls.enable";
+      assertion = "a wss transport requires services.asterisk.http.tls.enable";
     };
 
     websocketWithoutHttp = {
-      module.services.asterisk-declarative.pjsip.transports.ws.protocol = "ws";
-      assertion = "WebSocket transports (ws, wss) require services.asterisk-declarative.http.enable";
+      module.services.asterisk.pjsip.transports.ws.protocol = "ws";
+      assertion = "WebSocket transports (ws, wss) require services.asterisk.http.enable";
     };
 
     httpTlsWithoutKey = {
-      module.services.asterisk-declarative.http = {
+      module.services.asterisk.http = {
         enable = true;
         tls.enable = true;
       };
@@ -297,7 +298,7 @@ let
       module =
         { config, ... }:
         {
-          services.asterisk-declarative.voicemail.mailboxes."101" = {
+          services.asterisk.voicemail.mailboxes."101" = {
             pin = config.lib.asterisk.secret "/run/secrets/vm";
             fullName = "Doe, John";
           };
@@ -309,7 +310,7 @@ let
       module =
         { config, ... }:
         {
-          services.asterisk-declarative = {
+          services.asterisk = {
             voicemail.mailboxes."101".pin = config.lib.asterisk.secret "/run/secrets/vm";
             pjsip.endpoints."101".mailboxes = [ "102@default" ];
           };
@@ -318,44 +319,44 @@ let
     };
 
     voicemailPlainPinWarns = {
-      module.services.asterisk-declarative.voicemail.mailboxes."101".pin = "1234";
+      module.services.asterisk.voicemail.mailboxes."101".pin = "1234";
       assertions = [ ];
       warning = "voicemail.mailboxes.\"101@default\".pin is a plain string";
     };
 
     musicOnHoldFilesWithoutDirectory = {
-      module.services.asterisk-declarative.musicOnHold.classes.office.sort = "alpha";
+      module.services.asterisk.musicOnHold.classes.office.sort = "alpha";
       assertion = "musicOnHold.classes.office: mode `files` needs a directory";
     };
 
     plainPasswordWarns = {
-      module.services.asterisk-declarative.pjsip.endpoints."101".auth.password = lib.mkForce "hunter2";
+      module.services.asterisk.pjsip.endpoints."101".auth.password = lib.mkForce "hunter2";
       assertions = [ ];
       warning = ''settings."pjsip.conf"."auth:101".password is a plain string'';
     };
 
     sameKeyWarns = {
-      module.services.asterisk-declarative.settings."extensions.conf".internal.same = [ "n,Hangup()" ];
+      module.services.asterisk.settings."extensions.conf".internal.same = [ "n,Hangup()" ];
       warning = "`same` keys in settings.\"extensions.conf\"";
     };
 
     newlineInValueThrows = {
-      module.services.asterisk-declarative.pjsip.endpoints."101".callerId = "a\nb";
+      module.services.asterisk.pjsip.endpoints."101".callerId = "a\nb";
       throws = true;
     };
 
     invalidKeyThrows = {
-      module.services.asterisk-declarative.settings."pjsip.conf"."endpoint:101"."bad key=" = "x";
+      module.services.asterisk.settings."pjsip.conf"."endpoint:101"."bad key=" = "x";
       throws = true;
     };
 
     invalidProtocolThrows = {
-      module.services.asterisk-declarative.pjsip.transports.udp.protocol = "sctp";
+      module.services.asterisk.pjsip.transports.udp.protocol = "sctp";
       throws = true;
     };
 
     nestedAttrsetValueThrows = {
-      module.services.asterisk-declarative.settings."rtp.conf".general.rtpstart.nested = 1;
+      module.services.asterisk.settings."rtp.conf".general.rtpstart.nested = 1;
       throws = true;
     };
   };
@@ -387,11 +388,9 @@ let
           expectedWarnings = case.warnings;
           inherit warnings;
         }
-        ++
-          lib.optional (case.throws or false && !(throws config.services.asterisk-declarative.renderedFiles))
-            {
-              expectedThrow = true;
-            };
+        ++ lib.optional (case.throws or false && !(throws config.services.asterisk.renderedFiles)) {
+          expectedThrow = true;
+        };
     in
     lib.optional (problems != [ ]) { ${name} = problems; };
 in

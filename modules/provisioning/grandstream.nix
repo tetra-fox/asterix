@@ -2,7 +2,7 @@
 # GXP21xx and similar): serves `cfg<MAC>.xml` in Grandstream's gs_provision
 # format over HTTP from nginx.
 #
-# Each phone is tied to an endpoint of services.asterisk-declarative.pjsip, and
+# Each phone is tied to an endpoint of services.asterisk.pjsip, and
 # its SIP credentials are taken from there. Files contain passwords, so they
 # are rendered at runtime into a tmpfs with the same secret mechanism as
 # Asterisk's configuration; the store only holds placeholders. Secrets given
@@ -13,7 +13,7 @@
 # (config-template.zip from grandstream.com/support/tools: GRP260x 1.0.7.71,
 # GRP261x/2x/3x/5x/7x 1.0.15.8, GXP16xx 1.0.7.81, GXP2130/40/60/70/35
 # 1.0.11.106). Other vendors can be added as sibling modules under
-# services.asterisk-declarative.provisioning.
+# services.asterisk.provisioning.
 {
   config,
   lib,
@@ -42,8 +42,8 @@ let
     unique
     ;
 
-  cfg = config.services.asterisk-declarative.provisioning.grandstream;
-  acfg = config.services.asterisk-declarative;
+  cfg = config.services.asterisk.provisioning.grandstream;
+  acfg = config.services.asterisk;
   asteriskLib = import ../../lib { inherit lib; };
   inherit (asteriskLib) format secrets;
 
@@ -73,7 +73,7 @@ let
           default = name;
           defaultText = literalExpression "<name>";
           description = ''
-            Endpoint in {option}`services.asterisk-declarative.pjsip.endpoints`
+            Endpoint in {option}`services.asterisk.pjsip.endpoints`
             whose credentials the phone registers with.
           '';
         };
@@ -297,7 +297,7 @@ let
   };
 in
 {
-  options.services.asterisk-declarative.provisioning.grandstream = {
+  options.services.asterisk.provisioning.grandstream = {
     enable = mkEnableOption "provisioning of Grandstream phones over HTTP";
 
     listenAddress = mkOption {
@@ -449,12 +449,12 @@ in
     assertions = [
       {
         assertion = acfg.enable;
-        message = "services.asterisk-declarative.provisioning.grandstream requires services.asterisk-declarative.enable.";
+        message = "services.asterisk.provisioning.grandstream requires services.asterisk.enable.";
       }
     ]
     ++ mapAttrsToList (name: phone: {
       assertion = endpointOf phone != null && (endpointOf phone).auth != null;
-      message = "services.asterisk-declarative.provisioning.grandstream.phones.${name}: endpoint `${phone.endpoint}` must exist in pjsip.endpoints and have `auth` set.";
+      message = "services.asterisk.provisioning.grandstream.phones.${name}: endpoint `${phone.endpoint}` must exist in pjsip.endpoints and have `auth` set.";
     }) cfg.phones
     ++ [
       {
@@ -463,18 +463,18 @@ in
             macs = map (phone: normalizeMac phone.mac) (attrValues cfg.phones);
           in
           lib.allUnique macs;
-        message = "services.asterisk-declarative.provisioning.grandstream.phones: MAC addresses must be unique.";
+        message = "services.asterisk.provisioning.grandstream.phones: MAC addresses must be unique.";
       }
       {
         assertion = builtins.all (p: builtins.match "P[0-9]+" p != null) (
           attrNames cfg.settings ++ lib.concatMap (phone: attrNames phone.settings) (attrValues cfg.phones)
         );
-        message = "services.asterisk-declarative.provisioning.grandstream: settings keys must be P-values such as P1362.";
+        message = "services.asterisk.provisioning.grandstream: settings keys must be P-values such as P1362.";
       }
     ]
     ++ map (ref: {
       assertion = !(secrets.isStorePath ref) && secrets.isValidReference ref;
-      message = "services.asterisk-declarative.provisioning.grandstream: invalid secret reference ${secrets.placeholder ref}.";
+      message = "services.asterisk.provisioning.grandstream: invalid secret reference ${secrets.placeholder ref}.";
     }) secretRefs;
 
     systemd.services.grandstream-provisioning = {

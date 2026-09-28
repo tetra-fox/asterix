@@ -33,7 +33,7 @@ let
     unique
     ;
 
-  cfg = config.services.asterisk-declarative;
+  cfg = config.services.asterisk;
   dcfg = cfg.dialplan;
   asteriskLib = import ../lib { inherit lib; };
   inherit (asteriskLib) format;
@@ -226,7 +226,7 @@ let
   );
 in
 {
-  options.services.asterisk-declarative.dialplan = {
+  options.services.asterisk.dialplan = {
     general = mkOption {
       type = types.attrsOf format.types.value;
       default = { };
@@ -272,7 +272,7 @@ in
   };
 
   config = mkIf cfg.enable {
-    services.asterisk-declarative = {
+    services.asterisk = {
       dialplan.general = {
         static = mkDefault true;
         writeprotect = mkDefault true;
@@ -300,28 +300,28 @@ in
       {
         assertion = !known || danglingIncludes == [ ];
         message = ''
-          services.asterisk-declarative: dialplan includes contexts that are not defined:
+          services.asterisk: dialplan includes contexts that are not defined:
             ${concatStringsSep "\n  " danglingIncludes}
         '';
       }
       {
         assertion = !known || danglingSubroutines == [ ];
         message = ''
-          services.asterisk-declarative: pre-dial subroutines refer to contexts that are not defined:
+          services.asterisk: pre-dial subroutines refer to contexts that are not defined:
             ${concatStringsSep "\n  " danglingSubroutines}
         '';
       }
       {
         assertion = emptyExtensions == [ ];
-        message = "services.asterisk-declarative.dialplan: extensions without steps or hint: ${concatStringsSep ", " emptyExtensions}.";
+        message = "services.asterisk.dialplan: extensions without steps or hint: ${concatStringsSep ", " emptyExtensions}.";
       }
       {
         assertion = badExtensionNames == [ ];
-        message = "services.asterisk-declarative.dialplan: invalid extension name(s) (no commas, semicolons or spaces): ${concatStringsSep ", " badExtensionNames}.";
+        message = "services.asterisk.dialplan: invalid extension name(s) (no commas, semicolons or spaces): ${concatStringsSep ", " badExtensionNames}.";
       }
       {
         assertion = !(dcfg.contexts ? general || dcfg.contexts ? globals);
-        message = "services.asterisk-declarative.dialplan.contexts: `general` and `globals` are reserved; use dialplan.general and dialplan.globals.";
+        message = "services.asterisk.dialplan.contexts: `general` and `globals` are reserved; use dialplan.general and dialplan.globals.";
       }
     ];
   };

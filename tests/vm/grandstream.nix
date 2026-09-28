@@ -44,7 +44,7 @@ pkgs.testers.runNixOSTest {
         voip.vlan = 2;
       };
       # the kitchen phone has a static lease
-      services.asterisk-declarative.provisioning.grandstream.phones.kitchen.allowedAddress = "10.0.20.21";
+      services.asterisk.provisioning.grandstream.phones.kitchen.allowedAddress = "10.0.20.21";
     };
 
     deskphone = {

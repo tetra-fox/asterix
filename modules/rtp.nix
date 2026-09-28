@@ -10,13 +10,13 @@ let
     types
     ;
 
-  cfg = config.services.asterisk-declarative;
+  cfg = config.services.asterisk;
   rcfg = cfg.rtp;
   asteriskLib = import ../lib { inherit lib; };
   inherit (asteriskLib) format;
 in
 {
-  options.services.asterisk-declarative.rtp = {
+  options.services.asterisk.rtp = {
     portRange = {
       from = mkOption {
         type = types.port;
@@ -85,7 +85,7 @@ in
   };
 
   config = mkIf cfg.enable {
-    services.asterisk-declarative.settings."rtp.conf".general = lib.mkMerge [
+    services.asterisk.settings."rtp.conf".general = lib.mkMerge [
       (mapAttrs (_: mkDefault) (
         filterAttrs (_: v: v != null) {
           rtpstart = rcfg.portRange.from;
@@ -104,7 +104,7 @@ in
     assertions = [
       {
         assertion = rcfg.portRange.from < rcfg.portRange.to;
-        message = "services.asterisk-declarative.rtp.portRange: `from` (${toString rcfg.portRange.from}) must be lower than `to` (${toString rcfg.portRange.to}).";
+        message = "services.asterisk.rtp.portRange: `from` (${toString rcfg.portRange.from}) must be lower than `to` (${toString rcfg.portRange.to}).";
       }
     ];
   };

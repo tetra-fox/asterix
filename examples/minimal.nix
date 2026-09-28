@@ -12,7 +12,7 @@ in
     reloadUnits = [ "asterisk.service" ];
   });
 
-  services.asterisk-declarative = {
+  services.asterisk = {
     enable = true;
     openFirewall = true;
 

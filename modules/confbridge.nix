@@ -15,7 +15,7 @@ let
     types
     ;
 
-  cfg = config.services.asterisk-declarative;
+  cfg = config.services.asterisk;
   ccfg = cfg.confbridge;
   asteriskLib = import ../lib { inherit lib; };
   inherit (asteriskLib) format;
@@ -102,7 +102,7 @@ let
     ) attrs;
 in
 {
-  options.services.asterisk-declarative.confbridge = {
+  options.services.asterisk.confbridge = {
     bridges = mkOption {
       type = types.attrsOf bridgeType;
       default = { };
@@ -145,7 +145,7 @@ in
   };
 
   config = mkIf cfg.enable {
-    services.asterisk-declarative.settings."confbridge.conf" = mkMerge [
+    services.asterisk.settings."confbridge.conf" = mkMerge [
       (profiles "bridge" ccfg.bridges (b: {
         max_members = b.maxMembers;
         record_conference = b.recordConference;

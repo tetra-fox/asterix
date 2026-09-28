@@ -88,7 +88,7 @@ in
     extension: _: lib.nameValuePair "sip-${extension}" { reloadUnits = [ "asterisk.service" ]; }
   ) phones;
 
-  services.asterisk-declarative = {
+  services.asterisk = {
     enable = true;
 
     # SIP and RTP only on the two phone networks.

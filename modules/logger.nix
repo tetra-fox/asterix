@@ -14,10 +14,10 @@ let
     types
     ;
 
-  cfg = config.services.asterisk-declarative;
+  cfg = config.services.asterisk;
 in
 {
-  options.services.asterisk-declarative.logger = {
+  options.services.asterisk.logger = {
     channels = mkOption {
       type = types.attrsOf (types.listOf types.str);
       default = { };
@@ -63,7 +63,7 @@ in
   };
 
   config = mkIf cfg.enable {
-    services.asterisk-declarative = {
+    services.asterisk = {
       logger.channels.console = mkDefault [
         "notice"
         "warning"

@@ -26,16 +26,16 @@ pkgs.testers.runNixOSTest {
 
       specialisation = {
         dialplan.configuration = {
-          services.asterisk-declarative.dialplan.contexts.phones.extensions."199" = [
+          services.asterisk.dialplan.contexts.phones.extensions."199" = [
             "Answer()"
             "Hangup()"
           ];
         };
         endpoint.configuration = {
-          services.asterisk-declarative.pjsip.endpoints."102".callerId = ''"Office" <102>'';
+          services.asterisk.pjsip.endpoints."102".callerId = ''"Office" <102>'';
         };
         modules.configuration = {
-          services.asterisk-declarative.modules.load = [ "app_system.so" ];
+          services.asterisk.modules.load = [ "app_system.so" ];
         };
       };
     };

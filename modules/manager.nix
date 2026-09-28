@@ -16,7 +16,7 @@ let
     types
     ;
 
-  cfg = config.services.asterisk-declarative;
+  cfg = config.services.asterisk;
   acfg = cfg.ami;
   asteriskLib = import ../lib { inherit lib; };
   inherit (asteriskLib) format;
@@ -70,7 +70,7 @@ let
   };
 in
 {
-  options.services.asterisk-declarative.ami = {
+  options.services.asterisk.ami = {
     enable = lib.mkEnableOption "the Asterisk Manager Interface (AMI)";
 
     address = mkOption {
@@ -89,8 +89,8 @@ in
       type = types.bool;
       default = false;
       description = ''
-        Open the AMI port (on {option}`services.asterisk-declarative.firewallInterfaces`
-        when {option}`services.asterisk-declarative.openFirewall` is set). AMI
+        Open the AMI port (on {option}`services.asterisk.firewallInterfaces`
+        when {option}`services.asterisk.openFirewall` is set). AMI
         is unencrypted; prefer a tunnel.
       '';
     };
@@ -121,7 +121,7 @@ in
   };
 
   config = mkIf (cfg.enable && acfg.enable) {
-    services.asterisk-declarative = {
+    services.asterisk = {
       settings."manager.conf" = {
         general = mkMerge [
           {
@@ -156,7 +156,7 @@ in
     assertions = [
       {
         assertion = !(acfg.users ? general);
-        message = "services.asterisk-declarative.ami.users: `general` is reserved.";
+        message = "services.asterisk.ami.users: `general` is reserved.";
       }
     ];
   };

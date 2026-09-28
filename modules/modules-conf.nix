@@ -19,7 +19,7 @@ let
     unique
     ;
 
-  cfg = config.services.asterisk-declarative;
+  cfg = config.services.asterisk;
 
   baseModules = [
     # object storage used by res_pjsip and others
@@ -159,7 +159,7 @@ let
     missing=0
     for module in ${lib.escapeShellArgs loadedModules}; do
       if [ ! -e "${cfg.package}/lib/asterisk/modules/$module" ]; then
-        echo "services.asterisk-declarative.modules: $module does not exist in ${cfg.package.name}" >&2
+        echo "services.asterisk.modules: $module does not exist in ${cfg.package.name}" >&2
         missing=1
       fi
     done
@@ -167,14 +167,14 @@ let
   '';
 in
 {
-  options.services.asterisk-declarative.modules = {
+  options.services.asterisk.modules = {
     autoload = mkOption {
       type = types.bool;
       default = false;
       description = ''
         Load every module Asterisk finds, except the ones in
-        {option}`services.asterisk-declarative.modules.noload`. Off by default:
-        only the modules in {option}`services.asterisk-declarative.modules.load`
+        {option}`services.asterisk.modules.noload`. Off by default:
+        only the modules in {option}`services.asterisk.modules.load`
         are loaded.
       '';
     };
@@ -184,11 +184,11 @@ in
       default = true;
       description = ''
         Add the module's lean default set to
-        {option}`services.asterisk-declarative.modules.load`: PJSIP, RTP,
+        {option}`services.asterisk.modules.load`: PJSIP, RTP,
         SRTP, bridging, the ulaw/alaw/G.722/GSM/Opus codecs, sound file
         formats, music on hold, the dialplan and its common applications and
         functions. Remove single modules with
-        {option}`services.asterisk-declarative.modules.noload`.
+        {option}`services.asterisk.modules.noload`.
       '';
     };
 
@@ -212,7 +212,7 @@ in
       example = [ "res_pjsip_messaging.so" ];
       description = ''
         Modules never to load (`noload =>`), taking precedence over
-        {option}`services.asterisk-declarative.modules.load`. `chan_sip.so` is
+        {option}`services.asterisk.modules.load`. `chan_sip.so` is
         always excluded.
       '';
     };
@@ -226,7 +226,7 @@ in
   };
 
   config = mkIf cfg.enable {
-    services.asterisk-declarative = {
+    services.asterisk = {
       modules.load = mkIf cfg.modules.defaultModules (baseModules ++ pjsipModules);
 
       settings."modules.conf".modules = {
@@ -242,7 +242,7 @@ in
     assertions = [
       {
         assertion = !(builtins.any (m: builtins.elem (normalize m) legacyModules) cfg.modules.load);
-        message = "services.asterisk-declarative.modules.load: chan_sip.so is not supported; use PJSIP (chan_pjsip.so).";
+        message = "services.asterisk.modules.load: chan_sip.so is not supported; use PJSIP (chan_pjsip.so).";
       }
     ];
   };

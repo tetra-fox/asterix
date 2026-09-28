@@ -75,7 +75,7 @@ pkgs.testers.runNixOSTest {
         };
         networking.firewall.allowedUDPPorts = [ 53 ];
 
-        services.asterisk-declarative = {
+        services.asterisk = {
           enable = true;
           openFirewall = true;
           pjsip = {

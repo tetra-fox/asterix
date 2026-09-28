@@ -51,7 +51,7 @@ pkgs.testers.runNixOSTest {
         servers.vlan = 3;
       };
       # SIP messages in the journal, to check the paging headers on the wire
-      services.asterisk-declarative = {
+      services.asterisk = {
         pjsip.global.debug = true;
         logger.channels.console = [
           "notice"

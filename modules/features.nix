@@ -11,7 +11,7 @@ let
     types
     ;
 
-  cfg = config.services.asterisk-declarative;
+  cfg = config.services.asterisk;
   fcfg = cfg.features;
   asteriskLib = import ../lib { inherit lib; };
   inherit (asteriskLib) format;
@@ -46,7 +46,7 @@ let
   };
 in
 {
-  options.services.asterisk-declarative.features = {
+  options.services.asterisk.features = {
     general = mkOption {
       type = types.attrsOf format.types.value;
       default = { };
@@ -92,7 +92,7 @@ in
   };
 
   config = mkIf cfg.enable {
-    services.asterisk-declarative.settings."features.conf" = {
+    services.asterisk.settings."features.conf" = {
       general = mapAttrs (_: v: if builtins.isList v then v else mkDefault v) fcfg.general;
     }
     // lib.optionalAttrs (fcfg.featureMap != { }) {

@@ -14,7 +14,7 @@ let
     types
     ;
 
-  cfg = config.services.asterisk-declarative;
+  cfg = config.services.asterisk;
   qcfg = cfg.queues;
   asteriskLib = import ../lib { inherit lib; };
   inherit (asteriskLib) format;
@@ -124,7 +124,7 @@ let
     concatStringsSep "," (trim fields);
 in
 {
-  options.services.asterisk-declarative.queues = {
+  options.services.asterisk.queues = {
     persistentMembers = mkOption {
       type = types.bool;
       default = false;
@@ -151,7 +151,7 @@ in
   };
 
   config = mkIf (cfg.enable && qcfg.queues != { }) {
-    services.asterisk-declarative = {
+    services.asterisk = {
       modules.load = [ "app_queue.so" ];
 
       settings."queues.conf" = {
@@ -177,7 +177,7 @@ in
     assertions = [
       {
         assertion = !(qcfg.queues ? general);
-        message = "services.asterisk-declarative.queues.queues: `general` is reserved.";
+        message = "services.asterisk.queues.queues: `general` is reserved.";
       }
     ];
   };

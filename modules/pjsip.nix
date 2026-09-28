@@ -45,7 +45,7 @@ let
     unique
     ;
 
-  cfg = config.services.asterisk-declarative;
+  cfg = config.services.asterisk;
   pcfg = cfg.pjsip;
   asteriskLib = import ../lib { inherit lib; };
   inherit (asteriskLib) format;
@@ -838,7 +838,7 @@ let
 
 in
 {
-  options.services.asterisk-declarative.pjsip = {
+  options.services.asterisk.pjsip = {
     global = mkOption {
       type = types.attrsOf format.types.value;
       default = { };
@@ -874,7 +874,7 @@ in
       description = ''
         PJSIP transports. Changing a transport restarts Asterisk, since
         transports are not reloadable. The firewall ports are derived from
-        these (see {option}`services.asterisk-declarative.openFirewall`).
+        these (see {option}`services.asterisk.openFirewall`).
       '';
     };
 
@@ -940,7 +940,7 @@ in
   };
 
   config = mkIf cfg.enable {
-    services.asterisk-declarative = {
+    services.asterisk = {
       settings."pjsip.conf" = mkMerge [
         globalSections
         transportSections
@@ -960,35 +960,35 @@ in
       {
         assertion = danglingRefs == [ ];
         message = ''
-          services.asterisk-declarative: pjsip.conf references objects that do not exist:
+          services.asterisk: pjsip.conf references objects that do not exist:
             ${concatStringsSep "\n  " danglingRefs}
         '';
       }
       {
         assertion = duplicateObjects == [ ];
         message = ''
-          services.asterisk-declarative: pjsip.conf defines these objects more than once (same type and name):
+          services.asterisk: pjsip.conf defines these objects more than once (same type and name):
             ${concatStringsSep "\n  " duplicateObjects}
         '';
       }
       {
         assertion = registrationsWithoutLine == [ ];
-        message = "services.asterisk-declarative: pjsip.conf registration(s) ${concatStringsSep ", " registrationsWithoutLine} set `endpoint` without `line = yes`; Asterisk would not load them.";
+        message = "services.asterisk: pjsip.conf registration(s) ${concatStringsSep ", " registrationsWithoutLine} set `endpoint` without `line = yes`; Asterisk would not load them.";
       }
       {
         assertion = tlsWithoutKeys == [ ];
-        message = "services.asterisk-declarative: TLS transport(s) ${concatStringsSep ", " tlsWithoutKeys} need a certificate and a private key (pjsip.transports.<name>.tls.certFile and tls.keyFile, or cert_file and priv_key_file).";
+        message = "services.asterisk: TLS transport(s) ${concatStringsSep ", " tlsWithoutKeys} need a certificate and a private key (pjsip.transports.<name>.tls.certFile and tls.keyFile, or cert_file and priv_key_file).";
       }
       {
         assertion = !dialplanKnown || missingContexts == [ ];
         message = ''
-          services.asterisk-declarative: PJSIP endpoints use dialplan contexts that are not defined:
+          services.asterisk: PJSIP endpoints use dialplan contexts that are not defined:
             ${concatStringsSep "\n  " (map (s: "[${s.name}] context = ${s.context}") missingContexts)}
         '';
       }
       {
         assertion = builtins.all (n: !(pcfg.endpoints ? ${n})) (attrNames pcfg.trunks);
-        message = "services.asterisk-declarative: pjsip.trunks and pjsip.endpoints share the name(s) ${
+        message = "services.asterisk: pjsip.trunks and pjsip.endpoints share the name(s) ${
           concatStringsSep ", " (filter (n: pcfg.endpoints ? ${n}) (attrNames pcfg.trunks))
         }.";
       }

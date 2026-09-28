@@ -39,7 +39,7 @@ pkgs.testers.runNixOSTest {
           '';
         };
 
-        services.asterisk-declarative = {
+        services.asterisk = {
           enable = true;
           realtime = true;
           openFirewall = true;

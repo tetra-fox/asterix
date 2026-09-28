@@ -109,7 +109,11 @@ pkgs.testers.runNixOSTest {
 
     with subtest("secrets are only in the runtime copy"):
         template = pbx.succeed("systemctl cat grandstream-provisioning.service | grep -o '/nix/store/[^ ]*-grandstream-provisioning-render' | head -1").strip()
-        pbx.fail(f"nix-store -qR {template} | xargs grep -rl desk-101-pw")
+        # the renderer, the file templates it copies and the linkFarm of them
+        paths = [p for p in pbx.succeed(f"nix-store -qR {template}").split() if "grandstream" in p or "-cfg" in p]
+        assert any(p.endswith("-cfg000b82000101.xml") for p in paths), paths
+        # exit status 1: searched everything, no match
+        pbx.succeed(f"grep -rl desk-101-pw {' '.join(paths)}; test $? -eq 1")
         pbx.succeed("test \"$(stat -c '%U %a' /run/grandstream-provisioning/cfg000b82000101.xml)\" = 'nginx 400'")
 
     with subtest("files are restricted to the phone's address and unknown paths"):

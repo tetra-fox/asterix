@@ -28,8 +28,6 @@
     nixosModules = {
       default = self.nixosModules.asterisk;
       asterisk = ./modules;
-      # optional: provisioning for Grandstream phones
-      grandstream-provisioning = ./modules/provisioning/grandstream.nix;
     };
 
     checks = forAllSystems (pkgs: import ./tests {inherit pkgs self sops-nix;});

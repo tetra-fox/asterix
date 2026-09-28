@@ -64,8 +64,6 @@ in {
 
   vm-tier2 = import ./vm/tier2.nix {inherit pkgs self;};
 
-  vm-grandstream = import ./vm/grandstream.nix {inherit pkgs self sopsSecrets;};
-
   vm-tls-realtime = import ./vm/tls-realtime.nix {inherit pkgs self;};
 
   # every option has a description and the reference builds

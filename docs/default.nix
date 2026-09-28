@@ -1,6 +1,5 @@
 # Options reference: `nix build .#docs` produces options.md, options.html and
-# options.json for services.asterisk (including the Grandstream
-# provisioning module).
+# options.json for services.asterisk.
 {
   pkgs,
   self,
@@ -11,7 +10,6 @@
     inherit (pkgs.stdenv.hostPlatform) system;
     modules = [
       self.nixosModules.default
-      self.nixosModules.grandstream-provisioning
       {
         boot.isContainer = true;
         system.stateVersion = "26.05";

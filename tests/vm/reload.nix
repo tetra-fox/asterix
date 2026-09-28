@@ -10,7 +10,7 @@
 pkgs.testers.runNixOSTest {
   name = "asterisk-reload";
 
-  nodes.pbx = {lib, ...}: {
+  nodes.pbx = {
     imports = [
       self.nixosModules.default
       ../../examples/minimal.nix

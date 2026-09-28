@@ -23,7 +23,7 @@ in rec {
 
   failedAssertions = config: map (a: a.message) (lib.filter (a: !a.assertion) config.assertions);
 
-  placeholder = path: self.lib.secrets.placeholder (self.lib.secret path);
+  placeholderFor = path: self.lib.secrets.placeholderOf (self.lib.secret path);
 
   # Does evaluating `value` (deeply) throw?
   throws = value: !(builtins.tryEval (builtins.deepSeq value value)).success;

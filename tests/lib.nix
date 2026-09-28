@@ -532,7 +532,7 @@ in
       expr = render {} {sections.alice.password = asteriskLib.secret "/run/secrets/alice";};
       expected = ''
         [alice]
-        password = ${secrets.placeholder {_secret = "/run/secrets/alice";}}
+        password = ${secrets.placeholderOf {_secret = "/run/secrets/alice";}}
       '';
     };
 
@@ -548,7 +548,7 @@ in
 
     testSecretPlaceholderIsStableAndDistinct = {
       expr = let
-        p = path: secrets.placeholder (asteriskLib.secret path);
+        p = path: secrets.placeholderOf (asteriskLib.secret path);
       in [
         (p "/a" == p "/a")
         (p "/a" == p "/b")
@@ -749,7 +749,7 @@ in
 
         [alice]
         type = auth
-        password = ${secrets.placeholder {_secret = "/run/secrets/alice";}}
+        password = ${secrets.placeholderOf {_secret = "/run/secrets/alice";}}
       '';
     };
 

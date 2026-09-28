@@ -30,7 +30,6 @@
     mkOption
     optional
     optionalString
-    removeAttrs
     replaceStrings
     sort
     subtractLists
@@ -141,7 +140,7 @@ in rec {
 
   # Render a single (non-list) value to its string form.
   mkValueString = {
-    secretPlaceholder ? secrets.placeholder,
+    secretPlaceholder ? secrets.placeholderOf,
     ctx ? {},
   }: v:
     if isBool v
@@ -248,7 +247,7 @@ in rec {
   renderSection = {
     syntax,
     file ? null,
-    secretPlaceholder ? secrets.placeholder,
+    secretPlaceholder ? secrets.placeholderOf,
   }: id: section: let
     name = section.name or id;
     template = section.template or false;
@@ -361,7 +360,7 @@ in rec {
   render = {
     syntax ? defaultSyntax,
     file ? null,
-    secretPlaceholder ? secrets.placeholder,
+    secretPlaceholder ? secrets.placeholderOf,
     header ? null,
   }: {
     sections ? {},
@@ -400,7 +399,7 @@ in rec {
         then (builtins.head defs).value
         else
           throw "The option `${lib.showOption loc}' has conflicting secret references: ${
-            lib.concatMapStringsSep ", " (def: "${secrets.placeholder def.value} in ${def.file}") defs
+            lib.concatMapStringsSep ", " (def: "${secrets.placeholderOf def.value} in ${def.file}") defs
           }";
     };
 
@@ -476,7 +475,7 @@ in rec {
   format = {pkgs}: {
     file ? null,
     syntax ? {},
-    secretPlaceholder ? secrets.placeholder,
+    secretPlaceholder ? secrets.placeholderOf,
   }: {
     type = types.sections;
     generate = name: value:

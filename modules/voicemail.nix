@@ -115,7 +115,7 @@
 
   pinText = pin:
     if secrets.isSecret pin
-    then secrets.placeholder pin
+    then secrets.placeholderOf pin
     else pin;
 
   mailboxLine = box: let

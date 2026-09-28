@@ -37,17 +37,17 @@
   safePath = p: builtins.match "/[A-Za-z0-9_.+/=-]*" p != null;
   safeName = n: builtins.match "[A-Za-z0-9_.-]+" n != null && n != "." && n != "..";
 
-  withToString = ref: ref // {__toString = placeholder;};
+  withToString = ref: ref // {__toString = placeholderOf;};
 
   placeholderPattern = "@NIX_ASTERISK_SECRET:(file|credential):([^@]*)@";
 
   # Placeholder text for a reference.
-  placeholder = ref:
+  placeholderOf = ref:
     if ref ? _secret
     then "@NIX_ASTERISK_SECRET:file:${ref._secret}@"
     else "@NIX_ASTERISK_SECRET:credential:${ref._credential}@";
 in {
-  inherit placeholder placeholderPattern;
+  inherit placeholderOf placeholderPattern;
 
   # Reference a secret stored in a file. The file is read by systemd
   # (LoadCredential=) as root, so root-only files such as sops-nix's work.

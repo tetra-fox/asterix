@@ -224,7 +224,7 @@
       ${concatMapStringsSep "\n" (
           ref: "substitute ${
             lib.escapeShellArgs [
-              (secrets.placeholder ref)
+              (secrets.placeholderOf ref)
               (secrets.credentialName ref)
               (ref._secret or "credential ${ref._credential}")
             ]

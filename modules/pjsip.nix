@@ -381,11 +381,7 @@
   );
 
   transportType = types.submodule (
-    {
-      name,
-      config,
-      ...
-    }: {
+    {config, ...}: {
       options = {
         protocol = mkOption {
           type = types.enum [

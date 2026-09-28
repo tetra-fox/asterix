@@ -81,7 +81,7 @@ in {
 
   # no unused let bindings, function arguments or inherits
   deadnix = pkgs.runCommand "asterisk-deadnix-check" {nativeBuildInputs = [pkgs.deadnix];} ''
-    deadnix --fail --no-lambda-pattern-names ${nixSources}
+    deadnix --fail ${nixSources}
     touch $out
   '';
 }

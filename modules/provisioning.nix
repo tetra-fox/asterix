@@ -100,7 +100,7 @@
       ref: "substitute ${
         lib.escapeShellArgs ([
             escape
-            (secrets.placeholder ref)
+            (secrets.placeholderOf ref)
             (secrets.credentialName ref)
           ]
           ++ filesFor escape)
@@ -233,7 +233,7 @@ in {
       ]
       ++ map (ref: {
         assertion = !(secrets.isStorePath ref) && secrets.isValidReference ref;
-        message = "services.asterisk.provisioning: invalid secret reference ${secrets.placeholder ref}.";
+        message = "services.asterisk.provisioning: invalid secret reference ${secrets.placeholderOf ref}.";
       })
       secretRefs;
 

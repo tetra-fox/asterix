@@ -118,7 +118,7 @@
   # secrets become placeholders, which the provisioning service XML-escapes
   valueText = v:
     if secrets.isSecret v
-    then secrets.placeholder v
+    then secrets.placeholderOf v
     else if isInt v
     then toString v
     else escapeXml v;

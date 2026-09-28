@@ -216,6 +216,29 @@ let
     lib.concatMap (name: secrets.fromText (phoneXml name cfg.phones.${name})) (attrNames cfg.phones)
   );
 
+  # nginx binds `listenAddress` and fails if it is not configured yet: the
+  # static address of an interface other than the default gateway's is not
+  # ordered before network-online.target. nginx starts after this unit.
+  waitForAddress = pkgs.writeShellScript "grandstream-provisioning-wait" ''
+    waited=0
+    until [ -n "$(${pkgs.iproute2}/bin/ip -o address show to ${lib.escapeShellArg cfg.listenAddress} -tentative)" ]; do
+      if [ "$waited" -eq 0 ]; then
+        echo "grandstream-provisioning: waiting for address ${cfg.listenAddress}"
+      elif [ "$waited" -ge 90 ]; then
+        echo "grandstream-provisioning: address ${cfg.listenAddress} is not configured on this host" >&2
+        exit 1
+      fi
+      ${pkgs.coreutils}/bin/sleep 1
+      waited=$((waited + 1))
+    done
+  '';
+  waitsForAddress =
+    !(builtins.elem cfg.listenAddress [
+      "0.0.0.0"
+      "::"
+      "*"
+    ]);
+
   renderer = pkgs.writeShellApplication {
     name = "grandstream-provisioning-render";
     runtimeInputs = with pkgs; [
@@ -465,6 +488,7 @@ in
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
+        ExecStartPre = lib.optional waitsForAddress "${waitForAddress}";
         ExecStart = "${renderer}/bin/grandstream-provisioning-render";
         User = config.services.nginx.user;
         Group = config.services.nginx.group;
@@ -481,13 +505,17 @@ in
         NoNewPrivileges = true;
         PrivateTmp = true;
         PrivateDevices = true;
-        PrivateNetwork = true;
+        # no IP traffic; netlink only to see whether the address is up
+        IPAddressDeny = "any";
         ProtectSystem = "strict";
         ProtectHome = true;
         ProtectKernelTunables = true;
         ProtectKernelModules = true;
         ProtectControlGroups = true;
-        RestrictAddressFamilies = [ "AF_UNIX" ];
+        RestrictAddressFamilies = [
+          "AF_UNIX"
+          "AF_NETLINK"
+        ];
         SystemCallArchitectures = "native";
         SystemCallFilter = [ "@system-service" ];
       };

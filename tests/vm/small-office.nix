@@ -123,48 +123,38 @@ in
         pbx.wait_for_unit("asterisk.service")
         provider.wait_for_unit("asterisk.service")
 
-        reception = Phone(phones, "201", "201", "pw-201", "10.1.0.10", sip_port=5060, cli_port=2300)
-        sales = Phone(phones, "202", "202", "pw-202", "10.1.0.10", sip_port=5061, cli_port=2301)
+        # the ring group rings without anyone answering
+        reception = Phone(phones, "201", "201", "pw-201", "10.1.0.10", sip_port=5060, cli_port=2300, auto_answer=180)
+        sales = Phone(phones, "202", "202", "pw-202", "10.1.0.10", sip_port=5061, cli_port=2301, auto_answer=180)
         boss = Phone(phones, "203", "203", "pw-203", "10.1.0.10", sip_port=5062, cli_port=2302)
-
-        def invites(phone):
-            return len(phone.received_invites())
-
-        def wait_idle(machine):
-            machine.wait_until_succeeds("asterisk -rx 'core show channels count' | grep -q '^0 active channels'", timeout=180)
 
         with subtest("the trunk registers with the provider"):
             pbx.wait_until_succeeds("asterisk -rx 'pjsip show registrations' | grep -q 'Registered'", timeout=180)
             provider.wait_until_succeeds("asterisk -rx 'pjsip show contacts' | grep -q '5551000/sip:5551000@203.0.113.10'")
 
         with subtest("phones register"):
-            # the ring group rings without anyone answering
-            reception.start("--auto-answer=180")
-            sales.start("--auto-answer=180")
-            boss.start()
+            start_phones([reception, sales, boss])
             for phone in (reception, sales, boss):
                 phone.wait_registered()
 
         with subtest("an inbound call rings the ring group, then goes to voicemail"):
-            before = {p.name: invites(p) for p in (reception, sales, boss)}
+            before = {p.name: p.requests("INVITE") for p in (reception, sales, boss)}
             provider.succeed("asterisk -rx 'channel originate PJSIP/5551000 extension s@feed'")
             for phone in (reception, sales):
-                phone.machine.wait_until_succeeds(
-                    f"test $(grep -c 'RX [0-9]* bytes Request msg INVITE' {phone.log}) -gt {before[phone.name]}",
-                    timeout=120,
-                )
+                phone.wait_request("INVITE", after=before[phone.name], timeout=120)
             pbx.wait_until_succeeds("test -f /var/lib/asterisk/spool/voicemail/default/200/INBOX/msg0000.txt", timeout=240)
-            assert invites(boss) == before["203"], "203 is not in the ring group"
+            assert boss.requests("INVITE") == before["203"], "203 is not in the ring group"
             message = pbx.succeed("cat /var/lib/asterisk/spool/voicemail/default/200/INBOX/msg0000.txt")
             assert "callerid=" in message, message
-            wait_idle(pbx)
+            wait_idle(pbx, timeout=180)
 
         with subtest("an outbound call reaches the provider with the office number"):
             boss.call("95559999")
             provider.wait_until_succeeds("asterisk -rx 'database get calls last' | grep -q 'Value: 5551000:5559999'", timeout=120)
-            wait_for_media_both_ways(pbx, minimum=20)
+            # the provider's leg is the second channel
+            wait_for_media_both_ways(pbx, [boss], minimum=20, count=2)
             boss.hangup()
-            wait_idle(pbx)
+            wait_idle(pbx, timeout=180)
 
         with subtest("two phones join the conference bridge"):
             reception.call("800")
@@ -172,7 +162,7 @@ in
             pbx.wait_until_succeeds("asterisk -rx 'confbridge list' | grep -E '^800 +2 '", timeout=120)
             reception.hangup()
             boss.hangup()
-            wait_idle(pbx)
+            wait_idle(pbx, timeout=180)
 
         with subtest("the support queue has its members"):
             queue = asterisk(pbx, "queue show support")

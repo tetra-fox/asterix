@@ -45,13 +45,13 @@ pkgs.testers.runNixOSTest {
 
       with subtest("101 calls 102"):
           alice.call("102")
-          print(wait_for_media_both_ways(pbx))
+          print(wait_for_media_both_ways(pbx, [alice, bob]))
           alice.hangup()
-          pbx.wait_until_succeeds("asterisk -rx 'core show channels count' | grep -q '^0 active channels'")
+          wait_idle(pbx)
 
       with subtest("102 calls 101"):
           bob.call("101")
-          print(wait_for_media_both_ways(pbx))
+          print(wait_for_media_both_ways(pbx, [alice, bob]))
           bob.hangup()
     '';
 }

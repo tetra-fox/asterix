@@ -1,0 +1,58 @@
+--- a/pjsip-apps/src/pjsua/pjsua_app_cli.c
++++ b/pjsip-apps/src/pjsua/pjsua_app_cli.c
+@@ -702,6 +702,8 @@
+     }
+ }
+ 
++#endif
++
+ static void get_call_id(pj_cli_dyn_choice_param *param)
+ {
+     if (param->cnt < param->max_cnt) {
+@@ -719,7 +721,7 @@
+                 pjsua_call_info call_info;
+ 
+                 if (ids[i] == call)
+-                    return;
++                    continue;
+ 
+                 pjsua_call_get_info(ids[i], &call_info);
+                 pj_ansi_snprintf(call_id, sizeof(call_id), "%d", ids[i]);
+@@ -739,8 +741,6 @@
+     }
+ }
+ 
+-#endif
+-
+ static void get_choice_value(pj_cli_dyn_choice_param *param)
+ {
+     switch (param->arg_id) {
+@@ -757,6 +757,9 @@
+     case DYN_CHOICE_AUDIO_CODEC_ID:
+         get_audio_codec_id(param);
+         break;
++    case DYN_CHOICE_CALL_ID:
++        get_call_id(param);
++        break;
+ #if PJSUA_HAS_VIDEO
+     case DYN_CHOICE_CAP_DEV_ID:
+     case DYN_CHOICE_REN_DEV_ID:
+@@ -774,9 +777,6 @@
+     case DYN_CHOICE_WIN_ID:
+         get_video_window_id(param);
+         break;
+-    case DYN_CHOICE_CALL_ID:
+-        get_call_id(param);
+-        break;
+ #endif
+     default:
+         param->cnt = 0;
+@@ -972,7 +972,7 @@
+         pj_ansi_snprintf(out_str, sizeof(out_str),
+                          "Invalid URI '%s'\n", cval->argv[1].ptr);
+     } else {
+-        pj_bzero(&buddy_cfg, sizeof(pjsua_buddy_config));
++        pjsua_buddy_config_default(&buddy_cfg);
+ 
+         buddy_cfg.uri = pj_str(cval->argv[1].ptr);
+         buddy_cfg.subscribe = PJ_TRUE;

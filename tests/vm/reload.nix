@@ -1,7 +1,7 @@
-# Deploying configuration changes: dialplan and endpoint changes are applied
-# with a reload (same PID, registrations untouched), a changed module list
-# restarts Asterisk, and registrations survive the restart (they live in
-# astdb).
+# Deploying configuration changes: dialplan and endpoint changes and a rotated
+# password are applied with a reload (same PID, registrations untouched, a call
+# in progress keeps its audio), a changed module list restarts Asterisk, which
+# ends the call, and registrations survive the restart (they live in astdb)
 {
   pkgs,
   self,
@@ -60,48 +60,66 @@ pkgs.testers.runNixOSTest {
       def main_pid():
           return pbx.succeed("systemctl show -P MainPID asterisk.service").strip()
 
-      def journal_cursor():
-          return pbx.succeed("journalctl -n 0 --show-cursor | sed -n 's/^-- cursor: //p'").strip()
-
-      def journal_since(cursor):
-          return pbx.succeed(f"journalctl -u asterisk.service --after-cursor='{cursor}'")
-
       def registered():
           return "101/sip:101@127.0.0.1" in asterisk(pbx, "pjsip show contacts")
 
-      phone = Phone(pbx, "alice", "101", "secret-101", "127.0.0.1")
-      phone.start()
-      phone.wait_registered()
+      alice = Phone(pbx, "alice", "101", "secret-101", "127.0.0.1", sip_port=5070, cli_port=2300)
+      bob = Phone(pbx, "bob", "102", "secret-102", "127.0.0.1", sip_port=5071, cli_port=2301)
+
+      start_phones([alice, bob])
+      alice.wait_registered()
+      bob.wait_registered()
       pbx.wait_until_succeeds("asterisk -rx 'pjsip show contacts' | grep -q '101/sip:101@127.0.0.1'")
       pid = main_pid()
 
+      with subtest("a call is up before the changes"):
+          alice.call("102")
+          wait_bridged(pbx, "101", "102")
+          call = wait_for_media_both_ways(pbx, [alice, bob])
+
       with subtest("dialplan change is applied with a reload"):
-          cursor = journal_cursor()
+          cursor = journal_cursor(pbx)
           assert switch("dialplan") == ["reloading"]
           assert main_pid() == pid, "asterisk was restarted"
           pbx.wait_until_succeeds("asterisk -rx 'dialplan show 199@phones' | grep -q 'Answer()'")
-          log = journal_since(cursor)
-          assert "asterisk-config: dialplan reload" in log, log
-          assert "core reload" not in log, log
+          journal = journal_since(pbx, cursor)
+          assert "asterisk-config: dialplan reload" in journal, journal
+          assert "core reload" not in journal, journal
           assert registered()
+          call = wait_calls_continue(pbx, [alice, bob], call)
 
       with subtest("endpoint change is applied with a targeted pjsip reload"):
-          cursor = journal_cursor()
+          cursor = journal_cursor(pbx)
           assert switch("endpoint") == ["reloading"]
           assert main_pid() == pid, "asterisk was restarted"
           pbx.wait_until_succeeds("asterisk -rx 'pjsip show endpoint 102' | grep -q 'Office'")
           pbx.wait_until_succeeds("! asterisk -rx 'dialplan show 199@phones' | grep -q 'Answer()'")
-          log = journal_since(cursor)
-          assert "asterisk-config: module reload res_pjsip.so" in log, log
+          journal = journal_since(pbx, cursor)
+          assert "asterisk-config: module reload res_pjsip.so" in journal, journal
           assert registered()
+          call = wait_calls_continue(pbx, [alice, bob], call)
 
-      with subtest("module list change restarts asterisk, registrations survive"):
+      with subtest("a rotated password is applied with a reload"):
+          # what sops-nix does on a deploy with a changed secret: new file
+          # contents, then `systemctl reload` (reloadUnits in the example)
+          cursor = journal_cursor(pbx)
+          pbx.succeed("printf rotated-102 > /run/secrets/sip-102")
+          pbx.succeed("systemctl reload asterisk.service")
+          assert main_pid() == pid, "asterisk was restarted"
+          assert "rotated-102" in asterisk(pbx, "pjsip show auth 102")
+          assert "asterisk-config: module reload res_pjsip.so" in journal_since(pbx, cursor)
+          call = wait_calls_continue(pbx, [alice, bob], call)
+
+      with subtest("module list change restarts asterisk, which ends the call; registrations survive"):
+          ended = alice.disconnects()
           assert switch("modules") == ["restarting"]
           pbx.wait_for_unit("asterisk.service")
           assert main_pid() != pid, "asterisk was not restarted"
           pbx.wait_until_succeeds("asterisk -rx 'module show like app_system' | grep -q 'app_system.so'")
           # restored from astdb, not re-registered: the phone re-registers every 300s
           assert registered(), asterisk(pbx, "pjsip show contacts")
+          alice.wait_disconnected(after=ended)
+          wait_idle(pbx)
 
       with subtest("switching back restores the original configuration"):
           assert switch() == ["restarting"]

@@ -70,6 +70,22 @@ in {
 
   vm-ht801 = import ./vm/ht801.nix {inherit pkgs self sopsSecrets;};
 
+  vm-calls = import ./vm/calls.nix {inherit pkgs self;};
+
+  vm-transfers = import ./vm/transfers.nix {inherit pkgs self;};
+
+  vm-conference = import ./vm/conference.nix {inherit pkgs self;};
+
+  vm-queues = import ./vm/queues.nix {inherit pkgs self;};
+
+  vm-nat = import ./vm/nat.nix {inherit pkgs self;};
+
+  vm-transports = import ./vm/transports.nix {inherit pkgs self;};
+
+  vm-scale = import ./vm/scale.nix {inherit pkgs self;};
+
+  vm-tenants = import ./vm/tenants.nix {inherit pkgs self;};
+
   # builds the server and runs its unit tests
   provisioning-server = self.packages.${pkgs.stdenv.hostPlatform.system}.provisioning-server;
 

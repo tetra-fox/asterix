@@ -129,9 +129,6 @@ in
         }
         phones = {**ata, **soft}
 
-        def wait_idle():
-            pbx.wait_until_succeeds("asterisk -rx 'core show channels count' | grep -q '^0 active channels'", timeout=120)
-
         with subtest("the host does not route between the VLANs"):
             pbx.succeed("test \"$(sysctl -n net.ipv4.ip_forward)\" = 0")
             pbx.succeed("test \"$(sysctl -n net.ipv6.conf.all.forwarding)\" = 0")
@@ -189,23 +186,22 @@ in
 
         with subtest("an adapter and a softphone call each other across VLANs"):
             soft["201"].call("101")
-            stats = wait_for_media_both_ways(pbx)
-            print(stats)
+            print(wait_for_media_both_ways(pbx, [soft["201"], ata["101"]]))
             # each phone only ever talks to the PBX's address on its own VLAN
             assert "c=IN IP4 10.0.20.10" in ata["101"].log_text()
             assert "c=IN IP4 10.0.10.21" not in ata["101"].log_text()
             assert "c=IN IP4 10.0.10.10" in soft["201"].log_text()
             assert "c=IN IP4 10.0.20.21" not in soft["201"].log_text()
             soft["201"].hangup()
-            wait_idle()
+            wait_idle(pbx)
 
         with subtest("three phones meet in the conference room"):
             for ext in ["101", "201", "202"]:
                 phones[ext].call("800")
             pbx.wait_until_succeeds("asterisk -rx 'confbridge list' | grep -qE '^800 +3 '", timeout=90)
-            print(wait_for_media_both_ways(pbx))
+            print(wait_for_media_both_ways(pbx, [phones[ext] for ext in ["101", "201", "202"]]))
             for ext in ["101", "201", "202"]:
                 phones[ext].hangup()
-            wait_idle()
+            wait_idle(pbx)
       '';
   }

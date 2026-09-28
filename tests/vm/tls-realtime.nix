@@ -110,8 +110,8 @@ pkgs.testers.runNixOSTest {
           bob.wait_registered()
           assert "transport=tls" in asterisk(pbx, "pjsip show contacts").lower()
           alice.call("102")
-          print(wait_for_media_both_ways(pbx))
-          invite = bob.received_invites()[-1]
+          print(wait_for_media_both_ways(pbx, [alice, bob]))
+          invite = bob.received("INVITE")[-1]
           assert "RTP/SAVP" in invite and "a=crypto:" in invite, invite
           alice.hangup()
     '';

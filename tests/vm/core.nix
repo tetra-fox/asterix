@@ -42,7 +42,7 @@ pkgs.testers.runNixOSTest {
     with subtest("secrets reach Asterisk unchanged"):
         auth = ast("pjsip show auth 102")
         assert 'p;w&d\\x"$HOME' in auth, auth
-        random = pbx.succeed("cat /run/agenix/sip-101").strip()
+        random = pbx.succeed("cat /run/test-secrets/sip-101").strip()
         assert random in ast("pjsip show auth 101")
 
     with subtest("secrets never reach the store or the logs"):
@@ -84,7 +84,7 @@ pkgs.testers.runNixOSTest {
         pbx.succeed("asterisk -V")
 
     with subtest("reload re-renders the configuration and rotated secrets"):
-        pbx.succeed("printf 'rotated;pw' > /run/agenix/sip-102")
+        pbx.succeed("printf 'rotated;pw' > /run/test-secrets/sip-102")
         pid = pbx.succeed("systemctl show -P MainPID asterisk.service").strip()
         pbx.succeed("systemctl reload asterisk.service")
         assert pid == pbx.succeed("systemctl show -P MainPID asterisk.service").strip()

@@ -49,7 +49,7 @@ pkgs.testers.runNixOSTest {
           transports.udp = { };
           endpoints."101" = {
             context = "internal";
-            auth.password = secret "/run/agenix/sip-101";
+            auth.password = secret "/run/test-secrets/sip-101";
             mailboxes = [ "101@default" ];
           };
         };
@@ -68,7 +68,7 @@ pkgs.testers.runNixOSTest {
 
         voicemail = {
           mailboxes."101" = {
-            pin = secret "/run/agenix/vm-101";
+            pin = secret "/run/test-secrets/vm-101";
             fullName = "Alice";
             email = "alice@example.org";
           };
@@ -117,7 +117,7 @@ pkgs.testers.runNixOSTest {
         ami = {
           enable = true;
           users.monitor = {
-            secret = secret "/run/agenix/ami";
+            secret = secret "/run/test-secrets/ami";
             write = [ "system" ];
           };
         };
@@ -125,7 +125,7 @@ pkgs.testers.runNixOSTest {
         http.enable = true;
         ari = {
           enable = true;
-          users.app.password = secret "/run/agenix/ari";
+          users.app.password = secret "/run/test-secrets/ari";
         };
 
         cdr = {

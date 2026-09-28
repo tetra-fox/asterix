@@ -528,10 +528,10 @@ lib.runTests {
   # --- secrets ----------------------------------------------------------------
 
   testSecretRendersPlaceholder = {
-    expr = render { } { sections.alice.password = asteriskLib.secret "/run/agenix/alice"; };
+    expr = render { } { sections.alice.password = asteriskLib.secret "/run/secrets/alice"; };
     expected = ''
       [alice]
-      password = ${secrets.placeholder { _secret = "/run/agenix/alice"; }}
+      password = ${secrets.placeholder { _secret = "/run/secrets/alice"; }}
     '';
   };
 
@@ -584,23 +584,23 @@ lib.runTests {
 
   testSecretInterpolatesToPlaceholder = {
     expr = [
-      "${asteriskLib.secret "/run/agenix/vm"},Sales,sales@example.org"
+      "${asteriskLib.secret "/run/secrets/vm"},Sales,sales@example.org"
       "${asteriskLib.credential "pin"}"
     ];
     expected = [
-      "@NIX_ASTERISK_SECRET:file:/run/agenix/vm@,Sales,sales@example.org"
+      "@NIX_ASTERISK_SECRET:file:/run/secrets/vm@,Sales,sales@example.org"
       "@NIX_ASTERISK_SECRET:credential:pin@"
     ];
   };
 
   testSecretsFoundInText = {
     expr = secrets.fromText ''
-      password = @NIX_ASTERISK_SECRET:file:/run/agenix/a@
+      password = @NIX_ASTERISK_SECRET:file:/run/secrets/a@
       200 => @NIX_ASTERISK_SECRET:credential:vm-200@,Sales
-      again = @NIX_ASTERISK_SECRET:file:/run/agenix/a@;x
+      again = @NIX_ASTERISK_SECRET:file:/run/secrets/a@;x
     '';
     expected = [
-      { _secret = "/run/agenix/a"; }
+      { _secret = "/run/secrets/a"; }
       { _credential = "vm-200"; }
     ];
   };
@@ -611,7 +611,7 @@ lib.runTests {
       "/run/with space"
       "/run/semi;colon"
       "/run/at@sign"
-      "/run/agenix/ok-path_1.2"
+      "/run/secrets/ok-path_1.2"
     ];
     expected = [
       true
@@ -671,7 +671,7 @@ lib.runTests {
   testStorePathSecretIsDetected = {
     expr = [
       (secrets.isStorePath (asteriskLib.secret "${builtins.storeDir}/abc-pw"))
-      (secrets.isStorePath (asteriskLib.secret "/run/agenix/pw"))
+      (secrets.isStorePath (asteriskLib.secret "/run/secrets/pw"))
     ];
     expected = [
       true
@@ -780,7 +780,7 @@ lib.runTests {
         file.alice-auth = {
           name = "alice";
           type = "auth";
-          password = asteriskLib.secret "/run/agenix/alice";
+          password = asteriskLib.secret "/run/secrets/alice";
         };
       }
     ];
@@ -793,7 +793,7 @@ lib.runTests {
 
       [alice]
       type = auth
-      password = ${secrets.placeholder { _secret = "/run/agenix/alice"; }}
+      password = ${secrets.placeholder { _secret = "/run/secrets/alice"; }}
     '';
   };
 

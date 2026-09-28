@@ -23,7 +23,7 @@ let
           transports.udp = { };
           endpoints."101" = {
             context = "internal";
-            auth.password = config.lib.asterisk.secret "/run/agenix/101";
+            auth.password = config.lib.asterisk.secret "/run/secrets/101";
           };
         };
         dialplan.contexts.internal.extensions."_1XX" = [ "Dial(PJSIP/\${EXTEN})" ];
@@ -84,7 +84,7 @@ let
           services.asterisk-declarative.pjsip.trunks.provider = {
             host = "sip.example";
             username = "u";
-            password = config.lib.asterisk.secret "/run/agenix/trunk";
+            password = config.lib.asterisk.secret "/run/secrets/trunk";
             context = "internal";
             registration.line = false;
           };
@@ -194,9 +194,9 @@ let
 
     unsafeSecretPath = {
       module.services.asterisk-declarative.pjsip.endpoints."101".auth.password = lib.mkForce {
-        _secret = "/run/agenix/with space";
+        _secret = "/run/secrets/with space";
       };
-      assertion = "secret path `/run/agenix/with space` must be absolute";
+      assertion = "secret path `/run/secrets/with space` must be absolute";
     };
 
     secretInterpolatedIntoValue = {
@@ -204,7 +204,7 @@ let
         { config, ... }:
         {
           services.asterisk-declarative.settings."voicemail.conf".default."200" =
-            "${config.lib.asterisk.secret "/run/agenix/vm-200"},Sales,sales@example.org";
+            "${config.lib.asterisk.secret "/run/secrets/vm-200"},Sales,sales@example.org";
         };
       assertions = [ ];
       warnings = [ ];
@@ -248,7 +248,7 @@ let
           services.asterisk-declarative.pjsip.trunks."101" = {
             host = "sip.example";
             username = "u";
-            password = config.lib.asterisk.secret "/run/agenix/trunk";
+            password = config.lib.asterisk.secret "/run/secrets/trunk";
             context = "internal";
           };
         };
@@ -266,7 +266,7 @@ let
         {
           services.asterisk-declarative.ari = {
             enable = true;
-            users.app.password = config.lib.asterisk.secret "/run/agenix/ari";
+            users.app.password = config.lib.asterisk.secret "/run/secrets/ari";
           };
         };
       assertion = "ari.enable requires services.asterisk-declarative.http.enable";
@@ -298,7 +298,7 @@ let
         { config, ... }:
         {
           services.asterisk-declarative.voicemail.mailboxes."101" = {
-            pin = config.lib.asterisk.secret "/run/agenix/vm";
+            pin = config.lib.asterisk.secret "/run/secrets/vm";
             fullName = "Doe, John";
           };
         };
@@ -310,7 +310,7 @@ let
         { config, ... }:
         {
           services.asterisk-declarative = {
-            voicemail.mailboxes."101".pin = config.lib.asterisk.secret "/run/agenix/vm";
+            voicemail.mailboxes."101".pin = config.lib.asterisk.secret "/run/secrets/vm";
             pjsip.endpoints."101".mailboxes = [ "102@default" ];
           };
         };

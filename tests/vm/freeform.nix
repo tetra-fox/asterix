@@ -22,7 +22,7 @@ let
       name = extension;
       type = "auth";
       username = extension;
-      password = secret "/run/agenix/sip-${extension}";
+      password = secret "/run/test-secrets/sip-${extension}";
     };
     aor = {
       name = extension;

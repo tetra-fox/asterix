@@ -55,7 +55,7 @@ pkgs.testers.runNixOSTest {
             endpoints = lib.genAttrs [ "101" "102" ] (extension: {
               context = "phones";
               transport = "tls";
-              auth.password = config.lib.asterisk.secret "/run/agenix/sip-${extension}";
+              auth.password = config.lib.asterisk.secret "/run/test-secrets/sip-${extension}";
               settings.media_encryption = "sdes";
             });
           };

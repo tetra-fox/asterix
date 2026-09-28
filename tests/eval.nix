@@ -21,7 +21,7 @@ let
           endpoints."101" = {
             context = "internal";
             callerId = ''"Kitchen" <101>'';
-            auth.password = config.lib.asterisk.secret "/run/agenix/101";
+            auth.password = config.lib.asterisk.secret "/run/secrets/101";
           };
         };
         dialplan.contexts.internal.extensions."_1XX" = [ "Dial(PJSIP/\${EXTEN},30)" ];
@@ -47,7 +47,7 @@ lib.runTests {
 
       [101]
       type = auth
-      password = ${placeholder "/run/agenix/101"}
+      password = ${placeholder "/run/secrets/101"}
       username = 101
 
       [101]
@@ -76,7 +76,7 @@ lib.runTests {
                 host = "sip.provider.example";
                 port = 5070;
                 username = "5551000";
-                password = config.lib.asterisk.secret "/run/agenix/trunk";
+                password = config.lib.asterisk.secret "/run/secrets/trunk";
                 context = "from-provider";
                 allow = [ "ulaw" ];
                 registration.contactUser = "5551000";
@@ -114,7 +114,7 @@ lib.runTests {
 
       [provider-outbound]
       type = auth
-      password = ${placeholder "/run/agenix/trunk"}
+      password = ${placeholder "/run/secrets/trunk"}
       username = 5551000
 
       [provider]
@@ -328,7 +328,7 @@ lib.runTests {
       };
     expected = {
       LoadCredential = [
-        "${self.lib.secrets.credentialName (self.lib.secret "/run/agenix/101")}:/run/agenix/101"
+        "${self.lib.secrets.credentialName (self.lib.secret "/run/secrets/101")}:/run/secrets/101"
         "pjsip-tls-cert:/var/lib/acme/pbx/cert.pem"
         "pjsip-tls-key:/var/lib/acme/pbx/key.pem"
       ];
@@ -348,10 +348,10 @@ lib.runTests {
             {
               services.asterisk-declarative = {
                 settings."voicemail.conf".default."200" =
-                  "${config.lib.asterisk.secret "/run/agenix/vm-200"},Sales,sales@example.org";
+                  "${config.lib.asterisk.secret "/run/secrets/vm-200"},Sales,sales@example.org";
                 extraConfig."manager.conf" = ''
                   [admin]
-                  secret = @NIX_ASTERISK_SECRET:file:/run/agenix/ami@
+                  secret = @NIX_ASTERISK_SECRET:file:/run/secrets/ami@
                 '';
               };
             }
@@ -361,9 +361,9 @@ lib.runTests {
         credential = path: "${self.lib.secrets.credentialName (self.lib.secret path)}:${path}";
       in
       map (path: builtins.elem (credential path) loaded) [
-        "/run/agenix/101"
-        "/run/agenix/vm-200"
-        "/run/agenix/ami"
+        "/run/secrets/101"
+        "/run/secrets/vm-200"
+        "/run/secrets/ami"
       ];
     expected = [
       true
@@ -470,12 +470,12 @@ lib.runTests {
             {
               services.asterisk-declarative.voicemail.mailboxes = {
                 "101" = {
-                  pin = config.lib.asterisk.secret "/run/agenix/vm-101";
+                  pin = config.lib.asterisk.secret "/run/secrets/vm-101";
                   fullName = "Alice";
                   email = "alice@example.org";
                   options.attach = true;
                 };
-                "200@sales".pin = config.lib.asterisk.secret "/run/agenix/vm-200";
+                "200@sales".pin = config.lib.asterisk.secret "/run/secrets/vm-200";
               };
             }
           )
@@ -487,9 +487,9 @@ lib.runTests {
     expected = [
       "[general]"
       "[default]"
-      "101 => ${placeholder "/run/agenix/vm-101"},Alice,alice@example.org,,attach=yes"
+      "101 => ${placeholder "/run/secrets/vm-101"},Alice,alice@example.org,,attach=yes"
       "[sales]"
-      "200 => ${placeholder "/run/agenix/vm-200"},200"
+      "200 => ${placeholder "/run/secrets/vm-200"},200"
     ];
   };
 
@@ -505,7 +505,7 @@ lib.runTests {
               users.chair = {
                 admin = true;
                 marked = true;
-                pin = config.lib.asterisk.secret "/run/agenix/conference";
+                pin = config.lib.asterisk.secret "/run/secrets/conference";
               };
               menus.admin_menu = {
                 "*1" = "toggle_mute";
@@ -531,7 +531,7 @@ lib.runTests {
       type = user
       admin = yes
       marked = yes
-      pin = ${placeholder "/run/agenix/conference"}
+      pin = ${placeholder "/run/secrets/conference"}
     '';
   };
 
@@ -603,7 +603,7 @@ lib.runTests {
           {
             services.asterisk-declarative.ami = {
               enable = true;
-              users.monitor.secret = config.lib.asterisk.secret "/run/agenix/ami";
+              users.monitor.secret = config.lib.asterisk.secret "/run/secrets/ami";
             };
           }
         )
@@ -620,7 +620,7 @@ lib.runTests {
       permit = 127.0.0.1/255.255.255.255
       permit = ::1/128
       read = all
-      secret = ${placeholder "/run/agenix/ami"}
+      secret = ${placeholder "/run/secrets/ami"}
     '';
   };
 
@@ -643,7 +643,7 @@ lib.runTests {
                 };
                 ari = {
                   enable = true;
-                  users.app.password = config.lib.asterisk.secret "/run/agenix/ari";
+                  users.app.password = config.lib.asterisk.secret "/run/secrets/ari";
                 };
               };
             }

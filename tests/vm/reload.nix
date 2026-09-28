@@ -1,7 +1,8 @@
 # Deploying configuration changes: dialplan and endpoint changes and a rotated
 # password are applied with a reload (same PID, registrations untouched, a call
 # in progress keeps its audio), a changed module list restarts Asterisk, which
-# ends the call, and registrations survive the restart (they live in astdb)
+# ends the call, registrations survive the restart (they live in astdb), and
+# a reload Asterisk does not apply fails the deploy
 {
   pkgs,
   self,
@@ -34,6 +35,10 @@ pkgs.testers.runNixOSTest {
       };
       modules.configuration = {
         services.asterisk.modules.load = ["app_system.so"];
+      };
+      # voicemail.conf without app_voicemail.so, which has nothing to reload
+      unloaded.configuration = {
+        services.asterisk.settings."voicemail.conf".general.maxmsg = 10;
       };
     };
   };
@@ -83,7 +88,7 @@ pkgs.testers.runNixOSTest {
           assert main_pid() == pid, "asterisk was restarted"
           pbx.wait_until_succeeds("asterisk -rx 'dialplan show 199@phones' | grep -q 'Answer()'")
           journal = journal_since(pbx, cursor)
-          assert "asterisk-config: dialplan reload" in journal, journal
+          assert "asterisk-config: module reload pbx_config.so" in journal, journal
           assert "core reload" not in journal, journal
           assert registered()
           call = wait_calls_continue(pbx, [alice, bob], call)
@@ -127,5 +132,14 @@ pkgs.testers.runNixOSTest {
           pbx.fail("asterisk -rx 'module show like app_system' | grep -q 'app_system.so'")
           pbx.fail("asterisk -rx 'pjsip show endpoint 102' | grep -q 'Office'")
           assert registered()
+
+      with subtest("a reload Asterisk does not apply fails the deploy"):
+          cursor = journal_cursor(pbx)
+          pid = main_pid()
+          status, output = pbx.execute(f"{base}/specialisation/unloaded/bin/switch-to-configuration test 2>&1")
+          assert status == 4 and "Failed to reload asterisk.service" in output, output
+          journal = journal_since(pbx, cursor)
+          assert "module reload app_voicemail.so failed: No such module 'app_voicemail.so'" in journal, journal
+          assert main_pid() == pid, "asterisk was restarted"
     '';
 }

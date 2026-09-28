@@ -17,6 +17,7 @@
   fcfg = cfg.features;
   asteriskLib = import ../lib {inherit lib;};
   inherit (asteriskLib) format;
+  inherit (import ./lib.nix {inherit lib;}) toSection;
 
   applicationType = types.submodule {
     options = {
@@ -95,14 +96,10 @@ in {
   config = mkIf cfg.enable {
     services.asterisk.settings."features.conf" =
       {
-        general = mapAttrs (_: v:
-          if builtins.isList v
-          then v
-          else mkDefault v)
-        fcfg.general;
+        general = toSection fcfg.general;
       }
       // lib.optionalAttrs (fcfg.featureMap != {}) {
-        featuremap = mapAttrs (_: mkDefault) fcfg.featureMap;
+        featuremap = toSection fcfg.featureMap;
       }
       // lib.optionalAttrs (fcfg.applications != {}) {
         applicationmap =

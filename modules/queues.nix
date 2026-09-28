@@ -7,9 +7,6 @@
 }: let
   inherit
     (lib)
-    concatStringsSep
-    filterAttrs
-    isList
     mapAttrs
     mkDefault
     mkIf
@@ -22,6 +19,7 @@
   qcfg = cfg.queues;
   asteriskLib = import ../lib {inherit lib;};
   inherit (asteriskLib) format;
+  inherit (import ./lib.nix {inherit lib;}) toSection;
 
   memberType = types.submodule {
     options = {
@@ -114,8 +112,8 @@
     };
   };
 
-  memberValue = m: let
-    fields = [
+  memberValue = m:
+    format.joinFields [
       m.interface
       (
         if m.penalty == null
@@ -133,12 +131,6 @@
         else m.stateInterface
       )
     ];
-    trim = list:
-      if list != [] && lib.last list == ""
-      then trim (lib.init list)
-      else list;
-  in
-    concatStringsSep "," (trim fields);
 in {
   options.services.asterisk.queues = {
     persistentMembers = mkOption {
@@ -177,18 +169,13 @@ in {
         // mapAttrs (
           _: q:
             mkMerge [
-              (mapAttrs (_: v:
-                if isList v
-                then v
-                else mkDefault v) (
-                filterAttrs (_: v: v != null) {
-                  inherit (q) strategy timeout retry;
-                  wrapuptime = q.wrapupTime;
-                  maxlen = q.maxLength;
-                  musicclass = q.musicOnHoldClass;
-                  member = map memberValue q.members;
-                }
-              ))
+              (toSection {
+                inherit (q) strategy timeout retry;
+                wrapuptime = q.wrapupTime;
+                maxlen = q.maxLength;
+                musicclass = q.musicOnHoldClass;
+                member = map memberValue q.members;
+              })
               q.settings
             ]
         )

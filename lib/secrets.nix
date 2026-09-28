@@ -20,8 +20,6 @@
   inherit
     (lib)
     attrNames
-    attrValues
-    concatMap
     filter
     hasPrefix
     isAttrs
@@ -46,7 +44,7 @@
     if ref ? _secret
     then "@NIX_ASTERISK_SECRET:file:${ref._secret}@"
     else "@NIX_ASTERISK_SECRET:credential:${ref._credential}@";
-in {
+in rec {
   inherit placeholderOf placeholderPattern;
 
   # Reference a secret stored in a file. The file is read by systemd
@@ -82,21 +80,19 @@ in {
   # A reference without its __toString function (comparable with ==).
   normalize = ref: removeAttrs ref ["__toString"];
 
-  # Stable identifier for a reference: changing the path changes the id.
-  secretId = ref:
-    substring 0 32 (
-      builtins.hashString "sha256" (
-        if ref ? _secret
-        then "file:${ref._secret}"
-        else "credential:${ref._credential}"
-      )
-    );
-
   # Name under which the unit receives the secret in $CREDENTIALS_DIRECTORY.
   credentialName = ref:
     if ref ? _secret
     then "secret-${substring 0 32 (builtins.hashString "sha256" "file:${ref._secret}")}"
     else ref._credential;
+
+  # what pkgs/render-secrets reads: a line per reference with its
+  # placeholder, credential name and a description for error messages
+  manifest = refs:
+    lib.concatMapStrings (
+      ref: "${placeholderOf ref}\t${credentialName ref}\t${ref._secret or "credential ${ref._credential}"}\n"
+    )
+    refs;
 
   isValidReference = ref:
     if ref ? _secret
@@ -118,29 +114,4 @@ in {
           else {_credential = builtins.elemAt m 1;}
       ) (filter isList (builtins.split placeholderPattern text))
     );
-
-  # All secret references found anywhere inside a value (attrsets and lists
-  # are walked recursively), without duplicates.
-  collect = value: let
-    isRef = v:
-      isAttrs v
-      && (
-        let
-          names = filter (n: n != "__toString") (attrNames v);
-        in
-          names == ["_secret"] || names == ["_credential"]
-      );
-    go = v:
-      if isRef v
-      then [(removeAttrs v ["__toString"])]
-      else if isAttrs v
-      then
-        if v ? outPath
-        then []
-        else concatMap go (attrValues v)
-      else if isList v
-      then concatMap go v
-      else [];
-  in
-    unique (go value);
 }

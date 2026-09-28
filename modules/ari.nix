@@ -8,8 +8,6 @@
   inherit
     (lib)
     concatStringsSep
-    filterAttrs
-    mapAttrs
     mapAttrs'
     mkDefault
     mkIf
@@ -25,12 +23,7 @@
   acfg = cfg.ari;
   asteriskLib = import ../lib {inherit lib;};
   inherit (asteriskLib) format;
-
-  secretOrString =
-    types.either types.str format.types.secret
-    // {
-      description = "string or secret reference";
-    };
+  inherit (import ./lib.nix {inherit lib;}) toSection;
 
   credentialPath = kind: "${cfg.paths.credentials}/http-tls-${kind}";
 
@@ -98,7 +91,8 @@ in {
         enable = lib.mkEnableOption "the HTTPS listener";
         address = mkOption {
           type = types.str;
-          default = "0.0.0.0";
+          default = hcfg.address;
+          defaultText = lib.literalExpression "config.services.asterisk.http.address";
           description = "Address the HTTPS listener binds to.";
         };
         port = mkOption {
@@ -109,7 +103,11 @@ in {
         certFile = mkOption {
           type = types.nullOr types.str;
           default = null;
-          description = "Certificate chain (PEM), loaded as a systemd credential.";
+          description = ''
+            Certificate chain (PEM), loaded as a systemd credential. From
+            systemd 260 on, a renewed certificate is applied by
+            `systemctl reload asterisk`.
+          '';
         };
         keyFile = mkOption {
           type = types.nullOr types.str;
@@ -147,7 +145,7 @@ in {
           types.submodule {
             options = {
               password = mkOption {
-                type = secretOrString;
+                type = format.types.secretOrString;
                 description = "Password, normally a secret reference.";
               };
               readOnly = mkOption {
@@ -187,26 +185,24 @@ in {
     (mkIf hcfg.enable {
       services.asterisk = {
         settings."http.conf".general = mkMerge [
-          (mapAttrs (_: mkDefault) (
-            filterAttrs (_: v: v != null) (
-              {
-                enabled = true;
-                bindaddr = hcfg.address;
-                bindport = hcfg.port;
-              }
-              // lib.optionalAttrs hcfg.tls.enable {
-                tlsenable = true;
-                tlsbindaddr = "${hcfg.tls.address}:${toString hcfg.tls.port}";
-                tlscertfile =
-                  if hcfg.tls.certFile != null
-                  then credentialPath "cert"
-                  else null;
-                tlsprivatekey =
-                  if hcfg.tls.keyFile != null
-                  then credentialPath "key"
-                  else null;
-              }
-            )
+          (toSection (
+            {
+              enabled = true;
+              bindaddr = hcfg.address;
+              bindport = hcfg.port;
+            }
+            // lib.optionalAttrs hcfg.tls.enable {
+              tlsenable = true;
+              tlsbindaddr = format.hostPort hcfg.tls.address hcfg.tls.port;
+              tlscertfile =
+                if hcfg.tls.certFile != null
+                then credentialPath "cert"
+                else null;
+              tlsprivatekey =
+                if hcfg.tls.keyFile != null
+                then credentialPath "key"
+                else null;
+            }
           ))
           hcfg.settings
         ];

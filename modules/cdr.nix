@@ -43,19 +43,21 @@
     userfield = var "CDR(userfield)";
   };
 
+  # the channel ast_cel_fabricate_channel_from_event makes for each event has
+  # these few variables, everything else is in its channel fields
   celColumns = {
     eventtype = var "eventtype";
     eventtime = var "eventtime";
     cidname = var "CALLERID(name)";
     cidnum = var "CALLERID(num)";
-    exten = var "CEL_EXTEN";
-    context = var "CEL_CONTEXT";
-    channame = var "CEL_CHANNAME";
-    appname = var "CEL_APPNAME";
-    appdata = var "CEL_APPDATA";
-    uniqueid = var "CEL_UNIQUEID";
-    linkedid = var "CEL_LINKEDID";
-    peer = var "CEL_PEER";
+    exten = var "CHANNEL(exten)";
+    context = var "CHANNEL(context)";
+    channame = var "CHANNEL(channame)";
+    appname = var "CHANNEL(appname)";
+    appdata = var "CHANNEL(appdata)";
+    uniqueid = var "CHANNEL(uniqueid)";
+    linkedid = var "CHANNEL(linkedid)";
+    peer = var "BRIDGEPEER";
   };
 
   sqliteSection = table: columns: {

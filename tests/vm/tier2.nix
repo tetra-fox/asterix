@@ -15,9 +15,11 @@ pkgs.testers.runNixOSTest {
   }: let
     inherit (config.lib.asterisk) secret;
 
-    # records every message Asterisk "sends"
+    # records every message Asterisk "sends", and the password an SMTP client
+    # would read from its credential
     fakeSendmail = pkgs.writeShellScript "fake-sendmail" ''
       cat > "/var/lib/asterisk/sent-mail-$(date +%s%N).eml"
+      cat "$CREDENTIALS_DIRECTORY/smtp-password" > /var/lib/asterisk/smtp-password-seen
     '';
 
     officeMusic = pkgs.linkFarm "office-moh" [
@@ -37,6 +39,7 @@ pkgs.testers.runNixOSTest {
           vm-101 = "9876";
           ami = "ami-secret";
           ari = "ari-secret";
+          smtp = "smtp-secret";
         };
       })
     ];
@@ -48,6 +51,8 @@ pkgs.testers.runNixOSTest {
 
     services.asterisk = {
       enable = true;
+
+      credentials.smtp-password = "/run/test-secrets/smtp";
 
       pjsip = {
         transports.udp = {};
@@ -172,6 +177,7 @@ pkgs.testers.runNixOSTest {
           pbx.wait_until_succeeds("ls /var/lib/asterisk/sent-mail-*.eml")
           mail = pbx.succeed("cat /var/lib/asterisk/sent-mail-*.eml")
           assert "alice@example.org" in mail and "pbx@example.org" in mail, mail[:2000]
+          assert pbx.succeed("cat /var/lib/asterisk/smtp-password-seen").strip() == "smtp-secret"
           pbx.fail("grep -R 9876 /etc/asterisk/")
 
       with subtest("AMI accepts its user and rejects a wrong secret"):
@@ -190,8 +196,14 @@ pkgs.testers.runNixOSTest {
       with subtest("CDR and CEL records are written"):
           pbx.wait_until_succeeds("grep -q '\"700\"' /var/log/asterisk/cdr-csv/Master.csv")
           pbx.wait_until_succeeds("sqlite3 /var/log/asterisk/master.db 'select dst from cdr' | grep -qx 700")
-          count = int(pbx.succeed("sqlite3 /var/log/asterisk/master.db 'select count(*) from cel'").strip())
-          assert count > 0
+          # the fields of each event, not only the variables CEL sets
+          start = pbx.succeed(
+              "sqlite3 /var/log/asterisk/master.db "
+              "\"select exten, context, channame, uniqueid, linkedid from cel where eventtype = 'CHAN_START'\""
+          ).strip()
+          assert re.fullmatch(r"700\|internal\|PJSIP/101-[0-9a-f]+\|[0-9.]+\|[0-9.]+", start), start
+          answer = pbx.succeed("sqlite3 /var/log/asterisk/master.db \"select appname from cel where eventtype = 'ANSWER'\"")
+          assert answer.strip() == "Answer", answer
 
       with subtest("conference profiles, queue, music on hold and features are loaded"):
           assert "board" in asterisk(pbx, "confbridge show profile bridges")

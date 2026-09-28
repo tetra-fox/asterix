@@ -17,11 +17,9 @@
     attrNames
     attrValues
     concatLists
-    concatMapStringsSep
     concatStringsSep
     filter
     filterAttrs
-    hasInfix
     imap0
     isString
     mapAttrs
@@ -39,6 +37,7 @@
   dcfg = cfg.dialplan;
   asteriskLib = import ../lib {inherit lib;};
   inherit (asteriskLib) format;
+  inherit (import ./lib.nix {inherit lib;}) toSection;
 
   stepType =
     types.either types.str (
@@ -127,15 +126,10 @@
     };
   };
 
-  argString = arg:
-    if isString arg
-    then arg
-    else toString arg;
-
   stepString = step:
     if isString step
     then step
-    else "${step.app}(${concatMapStringsSep "," argString step.args})";
+    else asteriskLib.dialplan.app step.app step.args;
 
   priority = index: step:
     (
@@ -178,7 +172,6 @@
   # contexts res_parking creates for its parking lots. Included files and AEL
   # or Lua dialplans can define any context.
   dialplan = cfg.settings."extensions.conf" or {};
-  extra = cfg.extraConfig."extensions.conf" or "";
   toList = v:
     if builtins.isList v
     then v
@@ -187,10 +180,7 @@
   loaded = module:
     !(builtins.elem module (toList (modulesConf.noload or [])))
     && (
-      builtins.elem (modulesConf.autoload or false) [
-        true
-        "yes"
-      ]
+      format.isTrue (modulesConf.autoload or false)
       || builtins.elem module (toList (modulesConf.load or []) ++ toList (modulesConf.preload or []))
     );
   parkingLots = filter (lot: lot.name != "general") (attrValues (cfg.settings."res_parking.conf" or {}));
@@ -198,32 +188,21 @@
     map (lot: lot.context or "parkedcalls") parkingLots
     # res_parking adds a lot called `default` when there is none
     ++ optional (!(builtins.any (lot: lot.name == "default") parkingLots)) "parkedcalls";
-  knowable =
-    (cfg.includes."extensions.conf" or [])
-    == []
-    && !(builtins.any (directive: hasInfix directive extra) [
-      "#include"
-      "#tryinclude"
-      "#exec"
-    ])
-    && !(builtins.any (file: cfg.settings ? ${file} || cfg.extraConfig ? ${file}) [
-      "extensions.ael"
-      "extensions.lua"
-    ]);
+  dialplanSections = format.sectionNames {
+    sections = dialplan;
+    includes = cfg.includes."extensions.conf" or [];
+    extraConfig = cfg.extraConfig."extensions.conf" or "";
+  };
   knownContexts =
-    if knowable
-    then
-      map (s: s.name) (attrValues dialplan)
-      ++ lib.concatMap (
-        line: let
-          m = builtins.match "[[:space:]]*[[]([^]]+)[]].*" line;
-        in
-          if m == null
-          then []
-          else m
-      ) (lib.splitString "\n" extra)
-      ++ lib.optionals (loaded "res_parking.so") parkingContexts
-    else null;
+    if
+      dialplanSections
+      == null
+      || builtins.any (file: cfg.settings ? ${file} || cfg.extraConfig ? ${file}) [
+        "extensions.ael"
+        "extensions.lua"
+      ]
+    then null
+    else dialplanSections ++ lib.optionals (loaded "res_parking.so") parkingContexts;
 
   danglingIncludes = lib.concatMap (
     s:
@@ -346,18 +325,14 @@ in {
             {
               order = 0;
             }
-            // mapAttrs (_: v:
-              if builtins.isList v
-              then v
-              else mkDefault v)
-            dcfg.general;
+            // toSection dcfg.general;
         }
         // lib.optionalAttrs (dcfg.globals != {}) {
           globals =
             {
               order = 1;
             }
-            // mapAttrs (_: mkDefault) (filterAttrs (_: v: v != null) dcfg.globals);
+            // toSection dcfg.globals;
         }
         // mapAttrs contextSection dcfg.contexts;
 

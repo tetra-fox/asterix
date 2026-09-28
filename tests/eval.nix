@@ -307,7 +307,7 @@ in
         key = builtins.filter (lib.hasPrefix "priv_key_file") (
           lib.splitString "\n" config.services.asterisk.renderedFiles."pjsip.conf"
         );
-        # Asterisk's default is TLS 1.0, which OpenSSL 3 clients refuse
+        # negotiated, so TLS 1.3 works: Asterisk's default is TLS 1.0 only
         method = builtins.filter (lib.hasPrefix "method") (
           lib.splitString "\n" config.services.asterisk.renderedFiles."pjsip.conf"
         );
@@ -322,7 +322,7 @@ in
           "pjsip-tls-key:/var/lib/acme/pbx/key.pem"
         ];
         key = ["priv_key_file = /run/credentials/asterisk.service/pjsip-tls-key"];
-        method = ["method = tlsv1_2"];
+        method = ["method = sslv23"];
         ca = ["ca_list_file = ${(evalConfig [phone]).security.pki.caBundle}"];
       };
     };
@@ -601,7 +601,6 @@ in
           deny = ::/0
           permit = 127.0.0.1/255.255.255.255
           permit = ::1/128
-          read = all
           secret = ${placeholderFor "/run/secrets/ami"}
         '';
     };
@@ -663,6 +662,41 @@ in
       };
     };
 
+    # the HTTPS listener binds where the plain one does, unless told otherwise
+    testHttpsListensWithHttp = {
+      expr =
+        map
+        (
+          address: let
+            http =
+              lib.splitString "\n"
+              (rendered [
+                phone
+                {
+                  services.asterisk.http = {
+                    enable = true;
+                    inherit address;
+                    tls = {
+                      enable = true;
+                      certFile = "/var/lib/acme/pbx/cert.pem";
+                      keyFile = "/var/lib/acme/pbx/key.pem";
+                    };
+                  };
+                }
+              ])."http.conf";
+          in
+            builtins.filter (lib.hasPrefix "tlsbindaddr") http
+        )
+        [
+          "127.0.0.1"
+          "::1"
+        ];
+      expected = [
+        ["tlsbindaddr = 127.0.0.1:8089"]
+        ["tlsbindaddr = [::1]:8089"]
+      ];
+    };
+
     testWebsocketTransportLoadsModules = {
       expr =
         lib.hasInfix "load => res_pjsip_transport_websocket.so"
@@ -676,6 +710,56 @@ in
           }
         ])."modules.conf";
       expected = true;
+    };
+
+    # the `security` level only exists while res_security_log is loaded
+    testSecurityLevelLoadsItsModule = {
+      expr =
+        map
+        (
+          levels:
+            lib.hasInfix "load => res_security_log.so"
+            (rendered [
+              phone
+              {services.asterisk.logger.channels.security = levels;}
+            ])."modules.conf"
+        )
+        [
+          ["security"]
+          ["notice" "warning"]
+        ];
+      expected = [
+        true
+        false
+      ];
+    };
+
+    # an adapter registers as the endpoint (and its aor) and authenticates
+    # with the auth user name, which may differ
+    testHt801UserIdIsTheEndpoint = {
+      expr = let
+        config = evalConfig [
+          phone
+          {
+            services.asterisk.pjsip.endpoints."101".auth.username = "kitchen";
+            services.asterisk.provisioning = {
+              listenAddress = "10.0.20.10";
+              allowedNetworks = ["10.0.20.0/24"];
+              grandstream.ht801 = {
+                enable = true;
+                devices."101".mac = "c0:74:ad:00:01:01";
+              };
+            };
+          }
+        ];
+      in
+        builtins.filter (line: builtins.match " *<P3[56]>.*" line != null) (
+          lib.splitString "\n" config.services.asterisk.provisioning.files."cfgc074ad000101.xml".text
+        );
+      expected = [
+        "    <P35>101</P35>"
+        "    <P36>kitchen</P36>"
+      ];
     };
 
     # cdr_csv writes to <astlogdir>/cdr-csv but does not create it

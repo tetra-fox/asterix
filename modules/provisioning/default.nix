@@ -16,7 +16,6 @@
     (lib)
     attrNames
     attrValues
-    concatMapStringsSep
     concatStrings
     filterAttrs
     literalExpression
@@ -31,7 +30,8 @@
 
   cfg = config.services.asterisk.provisioning;
   asteriskLib = import ../../lib {inherit lib;};
-  inherit (asteriskLib) secrets;
+  inherit (asteriskLib) format secrets;
+  moduleLib = import ../lib.nix {inherit lib;};
 
   runtimeDir = "/run/asterisk-provisioning";
 
@@ -41,11 +41,6 @@
   manifest = pkgs.writeText "asterisk-provisioning-manifest" (
     concatStrings (mapAttrsToList (name: file: "${name}${optionalString (file.allowedAddress != null) " ${file.allowedAddress}"}\n") cfg.files)
   );
-
-  listenStream =
-    if lib.hasInfix ":" cfg.listenAddress
-    then "[${cfg.listenAddress}]:${toString cfg.port}"
-    else "${cfg.listenAddress}:${toString cfg.port}";
 
   fileType = types.submodule {
     options = {
@@ -85,67 +80,33 @@
     cfg.files
   );
 
-  # secret references per escaping, so one secret used in files with
-  # different formats is substituted correctly in each
-  refsFor = escape:
-    unique (lib.concatMap (file: secrets.fromText file.text) (
-      attrValues (filterAttrs (_: file: file.escape == escape) cfg.files)
-    ));
-  secretRefs = unique (refsFor "none" ++ refsFor "xml");
+  secretRefs = unique (lib.concatMap (file: secrets.fromText file.text) (attrValues cfg.files));
+  secretManifest = pkgs.writeText "asterisk-provisioning-secrets" (secrets.manifest secretRefs);
 
-  filesFor = escape: attrNames (filterAttrs (_: file: file.escape == escape) cfg.files);
-
-  substituteCalls = escape:
-    concatMapStringsSep "\n" (
-      ref: "substitute ${
-        lib.escapeShellArgs ([
-            escape
-            (secrets.placeholderOf ref)
-            (secrets.credentialName ref)
-          ]
-          ++ filesFor escape)
-      }"
-    ) (refsFor escape);
+  # files with secrets, by how their values are escaped
+  filesFor = escape: attrNames (filterAttrs (_: file: file.escape == escape && secrets.fromText file.text != []) cfg.files);
 
   renderer = pkgs.writeShellApplication {
     name = "asterisk-provisioning-render";
     runtimeInputs = with pkgs; [
       coreutils
       gnugrep
+      (callPackage ../../pkgs/render-secrets/package.nix {})
     ];
     text = ''
-      shopt -u patsub_replacement 2>/dev/null || true
       shopt -s nullglob
       umask 0077
-      amp='&amp;' lt='&lt;' gt='&gt;' quot='&quot;' apos='&apos;'
 
       # the runtime directory is new on every start of the unit
       for template in ${templates}/*; do
         cp -L --no-preserve=mode,ownership "$template" ${runtimeDir}/
       done
 
-      # substitute ESCAPE PLACEHOLDER CREDENTIAL FILE...
-      substitute() {
-        local escape=$1 placeholder=$2 credential=$3 value file content
-        shift 3
-        value=$(< "$CREDENTIALS_DIRECTORY/$credential")
-        value=''${value%$'\r'}
-        if [ "$escape" = xml ]; then
-          value=''${value//&/"$amp"}
-          value=''${value//</"$lt"}
-          value=''${value//>/"$gt"}
-          value=''${value//\"/"$quot"}
-          value=''${value//\'/"$apos"}
-        fi
-        for file in "$@"; do
-          content=$(< "${runtimeDir}/$file")
-          printf '%s\n' "''${content//"$placeholder"/"$value"}" > "${runtimeDir}/$file"
-        done
-      }
-
-      ${substituteCalls "none"}
-      ${substituteCalls "xml"}
-
+      cd ${runtimeDir}
+      ${lib.concatMapStrings (escape:
+        lib.optionalString (filesFor escape != []) ''
+          render-secrets ${escape} ${secretManifest} ${lib.escapeShellArgs (filesFor escape)}
+        '') ["none" "xml"]}
       if grep -rqF '@NIX_ASTERISK_SECRET:' ${runtimeDir}; then
         echo "asterisk-provisioning: unresolved secret placeholder" >&2
         exit 1
@@ -242,7 +203,7 @@ in {
     systemd.sockets.asterisk-provisioning = {
       description = "Phone provisioning";
       wantedBy = ["sockets.target"];
-      listenStreams = [listenStream];
+      listenStreams = [(format.hostPort cfg.listenAddress cfg.port)];
       socketConfig = {
         FreeBind = true;
         IPAddressDeny = "any";
@@ -303,13 +264,6 @@ in {
       };
     };
 
-    networking.firewall = let
-      ports.allowedTCPPorts = [cfg.port];
-    in
-      mkIf cfg.openFirewall (
-        if cfg.firewallInterfaces == []
-        then ports
-        else {interfaces = lib.genAttrs cfg.firewallInterfaces (_: ports);}
-      );
+    networking.firewall = mkIf cfg.openFirewall (moduleLib.firewallOn cfg.firewallInterfaces {allowedTCPPorts = [cfg.port];});
   };
 }

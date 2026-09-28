@@ -17,6 +17,16 @@
     ;
 
   cfg = config.services.asterisk;
+  inherit (import ../lib {inherit lib;}) format;
+
+  # the `security` level only exists once res_security_log registers it
+  logsSecurity =
+    builtins.any (
+      levels: builtins.elem "security" (map (level: lib.toLower (lib.trim level)) (lib.splitString "," levels))
+    )
+    (builtins.filter builtins.isString (builtins.attrValues (
+      removeAttrs (cfg.settings."logger.conf".logfiles or {}) format.metaAttrs
+    )));
 in {
   options.services.asterisk.logger = {
     channels = mkOption {
@@ -43,10 +53,11 @@ in {
       description = ''
         Log channels (the `[logfiles]` section), mapping a channel to its
         levels (`debug`, `notice`, `warning`, `error`, `verbose`, `dtmf`,
-        `fax`, `security`). `console` is standard output, which goes to the
-        journal; `syslog.<facility>` logs to syslog; any other name is a file
-        in {file}`/var/log/asterisk`. `console` defaults to
-        `notice,warning,error`; set a channel to `[ ]` to remove it.
+        `fax`, `security`; `security` loads res_security_log.so). `console`
+        is standard output, which goes to the journal; `syslog.<facility>`
+        logs to syslog; any other name is a file in {file}`/var/log/asterisk`.
+        `console` defaults to `notice,warning,error`; set a channel to `[ ]`
+        to remove it.
       '';
     };
 
@@ -65,6 +76,8 @@ in {
 
   config = mkIf cfg.enable {
     services.asterisk = {
+      modules.load = mkIf logsSecurity ["res_security_log.so"];
+
       logger.channels.console = mkDefault [
         "notice"
         "warning"

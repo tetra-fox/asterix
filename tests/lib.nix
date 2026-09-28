@@ -159,6 +159,61 @@ in
       '';
     };
 
+    testTrueValuesAsAsteriskReadsThem = {
+      expr = map format.isTrue [
+        true
+        "yes"
+        "On"
+        "T"
+        1
+        "1"
+        false
+        "no"
+        2
+        null
+        (asteriskLib.secret "/run/secrets/x")
+      ];
+      expected = [
+        true
+        true
+        true
+        true
+        true
+        true
+        false
+        false
+        false
+        false
+        false
+      ];
+    };
+
+    testHostPortBracketsIPv6 = {
+      expr = [
+        (format.hostPort "10.0.0.1" 5060)
+        (format.hostPort "::" 5061)
+        (format.hostPort "sip.example" null)
+      ];
+      expected = [
+        "10.0.0.1:5060"
+        "[::]:5061"
+        "sip.example"
+      ];
+    };
+
+    testJoinFieldsDropsEmptyTrailingFields = {
+      expr = [
+        (format.joinFields ["1234" "Alice" "" "" ""])
+        (format.joinFields ["PJSIP/101" "" "" "PJSIP/201"])
+        (format.joinFields [""])
+      ];
+      expected = [
+        "1234,Alice"
+        "PJSIP/101,,,PJSIP/201"
+        ""
+      ];
+    };
+
     # --- keys -------------------------------------------------------------
 
     testKeyOrderTypeDisallowAllowFirst = {
@@ -526,6 +581,30 @@ in
       expected = "\n";
     };
 
+    testSectionNamesOfSettingsAndRawText = {
+      expr = [
+        (format.sectionNames {
+          sections = {
+            a = {};
+            b.name = "renamed";
+          };
+          extraConfig = "[raw]\nexten => 1,1,Answer()\n  [indented](template)\n; [commented]\n";
+        })
+        (format.sectionNames {includes = ["local.conf"];})
+        (format.sectionNames {extraConfig = "#tryinclude \"local.conf\"\n[raw]\n";})
+      ];
+      expected = [
+        [
+          "a"
+          "renamed"
+          "raw"
+          "indented"
+        ]
+        null
+        null
+      ];
+    };
+
     # --- secrets ----------------------------------------------------------------
 
     testSecretRendersPlaceholder = {
@@ -631,24 +710,6 @@ in
         false
         true
         true
-      ];
-    };
-
-    testCollectSecretsDeduplicates = {
-      expr = secrets.collect {
-        a.b = [
-          (asteriskLib.secret "/s1")
-          "plain"
-        ];
-        c = asteriskLib.secret "/s1";
-        d = asteriskLib.credential "c1";
-        e = {
-          outPath = "/nix/store/x";
-        };
-      };
-      expected = [
-        {_secret = "/s1";}
-        {_credential = "c1";}
       ];
     };
 

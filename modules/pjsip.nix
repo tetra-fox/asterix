@@ -28,10 +28,8 @@
     concatStringsSep
     filter
     filterAttrs
-    hasInfix
     isList
     isString
-    mapAttrs
     mapAttrsToList
     mapAttrs'
     mkDefault
@@ -41,7 +39,6 @@
     nameValuePair
     optional
     optionalAttrs
-    optionalString
     splitString
     types
     unique
@@ -51,30 +48,9 @@
   pcfg = cfg.pjsip;
   asteriskLib = import ../lib {inherit lib;};
   inherit (asteriskLib) format;
-
-  secretOrString =
-    types.either types.str format.types.secret
-    // {
-      description = "string or secret reference";
-    };
-
-  settingsOption = what:
-    mkOption {
-      type = types.attrsOf format.types.value;
-      default = {};
-      description = ''
-        Additional keys for the generated ${what} section. They take
-        precedence over single values generated from the typed options and
-        extend generated lists.
-      '';
-    };
-
-  # Scalars become defaults, lists stay regular definitions, nulls are dropped.
-  toSection = attrs:
-    mapAttrs (_: v:
-      if isList v
-      then v
-      else mkDefault v) (filterAttrs (_: v: v != null) attrs);
+  inherit (format) hostPort;
+  inherit (format.types) secretOrString;
+  inherit (import ./lib.nix {inherit lib;}) settingsOption toSection;
 
   section = {
     name,
@@ -92,14 +68,6 @@
       )
       extra
     ];
-
-  hostPort = host: port:
-    (
-      if hasInfix ":" host
-      then "[${host}]"
-      else host
-    )
-    + optionalString (port != null) ":${toString port}";
 
   # --- submodule types ----------------------------------------------------
 
@@ -439,7 +407,9 @@
             default = null;
             description = ''
               Certificate chain (PEM). Loaded as a systemd credential, so it may
-              be readable by root only.
+              be readable by root only. From systemd 260 on, a renewed
+              certificate is applied by `systemctl reload asterisk`, which with
+              security.acme is `reloadServices = [ "asterisk.service" ]`.
             '';
           };
           keyFile = mkOption {
@@ -467,12 +437,14 @@
                 "sslv23"
               ]
             );
-            default = "tlsv1_2";
-            example = "sslv23";
+            default = "sslv23";
+            example = "tlsv1_3";
             description = ''
-              TLS protocol version (pjsip `method`); `sslv23` negotiates the
-              highest version both sides support. Asterisk's own default (used
-              with `null`) is TLS 1.0, which current OpenSSL refuses to talk to.
+              TLS protocol version (pjsip `method`). `sslv23` negotiates the
+              highest version both sides support, TLS 1.2 or 1.3 with current
+              OpenSSL, which refuses older versions; any other value allows
+              that version only. Asterisk's own default (used with `null`) is
+              TLS 1.0.
             '';
           };
           verifyClient = mkOption {
@@ -795,6 +767,17 @@
   objects = filter (s: !(s.template or false)) (attrValues sip);
   namesOfType = type: map (s: s.name) (filter (s: (s.type or null) == type) objects);
 
+  # sections of the raw text (of unknown type), or null when objects can also
+  # come from included files or other sorcery backends
+  rawSections =
+    if builtins.any (lib.hasPrefix "res_pjsip") (attrNames (cfg.settings."sorcery.conf" or {}))
+    then null
+    else
+      format.sectionNames {
+        includes = cfg.includes."pjsip.conf" or [];
+        extraConfig = cfg.extraConfig."pjsip.conf" or "";
+      };
+
   refList = v:
     if isString v
     then filter (x: x != "") (map lib.trim (splitString "," v))
@@ -805,7 +788,7 @@
   danglingRefs = let
     check = s: key: type:
       map (ref: "[${s.name}] (type=${s.type}) ${key} = ${ref}: no ${type} named `${ref}`") (
-        filter (ref: !(builtins.elem ref (namesOfType type))) (refList (s.${key} or null))
+        filter (ref: !(builtins.elem ref (namesOfType type ++ rawSections))) (refList (s.${key} or null))
       );
     checksFor = s:
       {
@@ -824,7 +807,9 @@
       } or [
       ];
   in
-    lib.concatMap checksFor objects;
+    if rawSections == null
+    then []
+    else lib.concatMap checksFor objects;
 
   duplicateObjects = let
     keys = map (s: "${s.type or "?"} ${s.name}") (filter (s: s ? type) objects);
@@ -838,15 +823,7 @@
         (s.type or null)
         == "registration"
         && (s.endpoint or null) != null
-        && !(builtins.elem (s.line or false) [
-          true
-          "yes"
-          "true"
-          "on"
-          "y"
-          "t"
-          "1"
-        ])
+        && !(format.isTrue (s.line or false))
     )
     objects
   );

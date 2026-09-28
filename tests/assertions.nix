@@ -68,6 +68,47 @@
       assertion = "outbound_auth = missing: no auth named `missing`";
     };
 
+    # sections of the raw text count, by name only
+    authInExtraConfig = {
+      module.services.asterisk = {
+        pjsip.endpoints."101".settings.outbound_auth = "shared";
+        extraConfig."pjsip.conf" = ''
+          [shared]
+          type = auth
+          username = x
+          password = y
+        '';
+      };
+      assertions = [];
+    };
+
+    danglingRefBesideExtraConfig = {
+      module.services.asterisk = {
+        pjsip.endpoints."101".settings.outbound_auth = "nope";
+        extraConfig."pjsip.conf" = ''
+          [shared]
+          type = auth
+        '';
+      };
+      assertion = "outbound_auth = nope: no auth named `nope`";
+    };
+
+    includedFilesDisableReferenceChecks = {
+      module.services.asterisk = {
+        pjsip.endpoints."101".settings.outbound_auth = "elsewhere";
+        includes."pjsip.conf" = ["pjsip-local.conf"];
+      };
+      assertions = [];
+    };
+
+    sorceryBackendsDisableReferenceChecks = {
+      module.services.asterisk = {
+        pjsip.endpoints."101".settings.outbound_auth = "elsewhere";
+        settings."sorcery.conf".res_pjsip.auth = "astdb,auths";
+      };
+      assertions = [];
+    };
+
     registrationEndpointWithoutLine = {
       module.services.asterisk.settings."pjsip.conf".reg = {
         type = "registration";
@@ -76,6 +117,17 @@
         endpoint = "101";
       };
       assertion = "registration(s) reg set `endpoint` without `line = yes`";
+    };
+
+    registrationLineAsInteger = {
+      module.services.asterisk.settings."pjsip.conf".reg = {
+        type = "registration";
+        server_uri = "sip:sip.example";
+        client_uri = "sip:1@sip.example";
+        endpoint = "101";
+        line = 1;
+      };
+      assertions = [];
     };
 
     trunkWithoutLineIsValid = {
@@ -200,6 +252,14 @@
         to = 10000;
       };
       assertion = "`from` (20000) must be lower than `to` (10000)";
+    };
+
+    rtpRangeFromSettings = {
+      module.services.asterisk.settings."rtp.conf".general = {
+        rtpstart = 10000;
+        rtpend = 10000;
+      };
+      assertion = "`from` (10000) must be lower than `to` (10000)";
     };
 
     chanSip = {
@@ -328,6 +388,29 @@
       assertion = "names and e-mail addresses cannot contain commas (101@default)";
     };
 
+    voicemailEmailWithoutCommand = {
+      module = {config, ...}: {
+        services.asterisk.voicemail.mailboxes."101" = {
+          pin = config.lib.asterisk.secret "/run/secrets/vm";
+          email = "alice@example.org";
+        };
+      };
+      assertion = "mailboxes with an e-mail address (101@default) need voicemail.email.command";
+    };
+
+    voicemailEmailWithCommand = {
+      module = {config, ...}: {
+        services.asterisk.voicemail = {
+          mailboxes."101" = {
+            pin = config.lib.asterisk.secret "/run/secrets/vm";
+            email = "alice@example.org";
+          };
+          email.command = "/run/current-system/sw/bin/msmtp -t";
+        };
+      };
+      assertions = [];
+    };
+
     mwiForUndefinedMailbox = {
       module = {config, ...}: {
         services.asterisk = {
@@ -352,6 +435,22 @@
       warning = "ht801.adminPassword is a plain string";
     };
 
+    # the adapter sends one user name, for the endpoint and its aor
+    ht801EndpointWithRenamedAor = {
+      module.services.asterisk = {
+        pjsip.endpoints."101".aor.name = "kitchen";
+        provisioning = {
+          listenAddress = "10.0.20.10";
+          allowedNetworks = ["10.0.20.0/24"];
+          grandstream.ht801 = {
+            enable = true;
+            devices."101".mac = "c0:74:ad:00:01:01";
+          };
+        };
+      };
+      assertion = "an `aor` named like the endpoint";
+    };
+
     voicemailPlainPinWarns = {
       module.services.asterisk.voicemail.mailboxes."101".pin = "1234";
       assertions = [];
@@ -367,6 +466,12 @@
       module.services.asterisk.pjsip.endpoints."101".auth.password = lib.mkForce "hunter2";
       assertions = [];
       warning = ''settings."pjsip.conf"."auth:101".password is a plain string'';
+    };
+
+    confbridgePlainPinWarns = {
+      module.services.asterisk.confbridge.users.guest.pin = "1234";
+      assertions = [];
+      warning = ''settings."confbridge.conf"."user:guest".pin is a plain string'';
     };
 
     sameKeyWarns = {

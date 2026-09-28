@@ -5,9 +5,6 @@
 }: let
   inherit
     (lib)
-    filterAttrs
-    mapAttrs
-    mkDefault
     mkIf
     mkOption
     types
@@ -17,6 +14,7 @@
   rcfg = cfg.rtp;
   asteriskLib = import ../lib {inherit lib;};
   inherit (asteriskLib) format;
+  inherit (import ./lib.nix {inherit lib;}) toSection;
 in {
   options.services.asterisk.rtp = {
     portRange = {
@@ -70,7 +68,7 @@ in {
         description = "TURN user name.";
       };
       password = mkOption {
-        type = types.nullOr (types.either types.str format.types.secret);
+        type = types.nullOr format.types.secretOrString;
         default = null;
         description = "TURN password, normally a secret reference.";
       };
@@ -87,27 +85,19 @@ in {
   };
 
   config = mkIf cfg.enable {
+    # the range is checked on the final rtp.conf, in asterisk.nix
     services.asterisk.settings."rtp.conf".general = lib.mkMerge [
-      (mapAttrs (_: mkDefault) (
-        filterAttrs (_: v: v != null) {
-          rtpstart = rcfg.portRange.from;
-          rtpend = rcfg.portRange.to;
-          strictrtp = rcfg.strictRtp;
-          icesupport = rcfg.ice;
-          stunaddr = rcfg.stunServer;
-          turnaddr = rcfg.turn.server;
-          turnusername = rcfg.turn.username;
-          turnpassword = rcfg.turn.password;
-        }
-      ))
+      (toSection {
+        rtpstart = rcfg.portRange.from;
+        rtpend = rcfg.portRange.to;
+        strictrtp = rcfg.strictRtp;
+        icesupport = rcfg.ice;
+        stunaddr = rcfg.stunServer;
+        turnaddr = rcfg.turn.server;
+        turnusername = rcfg.turn.username;
+        turnpassword = rcfg.turn.password;
+      })
       rcfg.settings
-    ];
-
-    assertions = [
-      {
-        assertion = rcfg.portRange.from < rcfg.portRange.to;
-        message = "services.asterisk.rtp.portRange: `from` (${toString rcfg.portRange.from}) must be lower than `to` (${toString rcfg.portRange.to}).";
-      }
     ];
   };
 }

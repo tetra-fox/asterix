@@ -110,7 +110,25 @@ in {
           extensions = {
             "_20X" = [
               "Dial(PJSIP/\${EXTEN},20)"
+              "GotoIf($[\"\${DIALSTATUS}\" = \"BUSY\"]?busy)"
               "VoiceMail(\${EXTEN}@default,u)"
+              "Hangup()"
+              {
+                label = "busy";
+                app = "VoiceMail";
+                args = [
+                  "\${EXTEN}@default"
+                  "b"
+                ];
+              }
+              "Hangup()"
+            ];
+            # dialed without the 9 (`_9X.` would take it off), and reception is
+            # called at the same time, showing the caller: both required in the US
+            "911" = [
+              "Originate(PJSIP/201,app,SayDigits,\${CALLERID(num)},,30,acn)"
+              "Set(CALLERID(num)=\${MAIN_NUMBER})"
+              "Dial(PJSIP/911@provider)"
               "Hangup()"
             ];
             "600" = [

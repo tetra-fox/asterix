@@ -9,8 +9,8 @@
     (lib)
     attrNames
     attrValues
+    concatLists
     concatMap
-    concatMapStringsSep
     concatStringsSep
     filter
     filterAttrs
@@ -31,6 +31,7 @@
   cfg = config.services.asterisk;
   asteriskLib = import ../lib {inherit lib;};
   inherit (asteriskLib) format secrets;
+  moduleLib = import ./lib.nix {inherit lib;};
 
   paths = {
     template = "/etc/asterisk";
@@ -89,13 +90,17 @@
 
   # Every secret placeholder in the generated files, including secrets
   # interpolated into strings and placeholders written in extraConfig.
-  secretRefs = unique (concatMap (file: secrets.fromText cfg.renderedFiles.${file}) fileNames);
+  refsByFile = lib.genAttrs fileNames (file: secrets.fromText cfg.renderedFiles.${file});
+  secretRefs = unique (concatLists (attrValues refsByFile));
+  filesWithSecrets = attrNames (filterAttrs (_: refs: refs != []) refsByFile);
+  secretManifest = pkgs.writeText "asterisk-secrets" (secrets.manifest secretRefs);
 
   # Keys that hold credentials; a plain string there lands in the store.
   secretKeys = [
     "password"
     "password_digest"
     "md5_cred"
+    "pin"
     "secret"
     "turnpassword"
   ];
@@ -128,13 +133,14 @@
   );
 
   # Files whose change is applied by a targeted reload; any other file falls
-  # back to `core reload`.
+  # back to `core reload`. Only `module reload` reports whether it worked, so
+  # every targeted reload is one.
   reloadCommands = {
-    "extensions.conf" = "dialplan reload";
+    "extensions.conf" = "module reload pbx_config.so";
     "pjsip.conf" = "module reload res_pjsip.so";
     "pjsip_notify.conf" = "module reload res_pjsip_notify.so";
     "rtp.conf" = "module reload res_rtp_asterisk.so";
-    "logger.conf" = "logger reload";
+    "logger.conf" = "module reload logger";
     "voicemail.conf" = "module reload app_voicemail.so";
     "confbridge.conf" = "module reload app_confbridge.so";
     "queues.conf" = "module reload app_queue.so";
@@ -162,6 +168,14 @@
 
   asteriskBin = "${cfg.package}/bin/asterisk";
 
+  # files that name a credential Asterisk reads itself (a TLS key, ...), by
+  # credential: a changed credential counts as a change of these files
+  credentialFiles =
+    lib.mapAttrs (
+      name: _: filter (file: lib.hasInfix "${paths.credentials}/${name}" cfg.renderedFiles.${file}) fileNames
+    )
+    cfg.credentials;
+
   # Renders /etc/asterisk (store, placeholders) into /run/asterisk/config
   # (tmpfs, secrets substituted). Runs as the asterisk user inside the
   # sandbox; secrets arrive as systemd credentials.
@@ -172,16 +186,15 @@
       diffutils
       findutils
       gnugrep
+      (callPackage ../pkgs/render-secrets/package.nix {})
     ];
     text = ''
-      shopt -u patsub_replacement 2>/dev/null || true
       umask 0077
 
       mode=''${1:-start}
       template=${paths.template}
       runtime=${paths.runtime}
       current=${paths.config}
-      escaped_semicolon='\;'
 
       new=$(mktemp -d "$runtime/.config.XXXXXXXX")
       cleanup() {
@@ -194,44 +207,9 @@
 
       cp -rL --no-preserve=mode,ownership,timestamps "$template/." "$new/"
       chmod -R u+w "$new"
-
-      substitute() {
-        local placeholder=$1 credential=$2 source=$3 value file content
-        local path="''${CREDENTIALS_DIRECTORY:-/nonexistent}/$credential"
-        if [ ! -f "$path" ]; then
-          echo "asterisk-config: secret $source (credential $credential) is not available" >&2
-          return 1
-        fi
-        value=$(< "$path")
-        value=''${value%$'\r'}
-        case $value in
-          *$'\n'* | *$'\r'*)
-            echo "asterisk-config: secret $source contains a line break" >&2
-            return 1
-            ;;
-          [[:space:]]* | *[[:space:]])
-            echo "asterisk-config: secret $source has leading or trailing whitespace, which Asterisk config files cannot represent" >&2
-            return 1
-            ;;
-        esac
-        value=''${value//;/"$escaped_semicolon"}
-        while IFS= read -r -d "" file; do
-          content=$(< "$file")
-          printf '%s\n' "''${content//"$placeholder"/"$value"}" > "$file"
-        done < <(grep -rlFZ -- "$placeholder" "$new" || true)
-      }
-
-      ${concatMapStringsSep "\n" (
-          ref: "substitute ${
-            lib.escapeShellArgs [
-              (secrets.placeholderOf ref)
-              (secrets.credentialName ref)
-              (ref._secret or "credential ${ref._credential}")
-            ]
-          }"
-        )
-        secretRefs}
-
+      ${lib.optionalString (filesWithSecrets != []) ''
+        (cd "$new" && render-secrets asterisk ${secretManifest} ${lib.escapeShellArgs filesWithSecrets})
+      ''}
       if grep -rqF '@NIX_ASTERISK_SECRET:' "$new"; then
         echo "asterisk-config: unresolved secret placeholder in:" >&2
         grep -rlF '@NIX_ASTERISK_SECRET:' "$new" >&2
@@ -252,7 +230,19 @@
           [ -e "$new/$rel" ] || changed+=("$rel")
         done < <(find "$current/" -type f -print0)
       fi
-
+      ${lib.optionalString (cfg.credentials != {}) ''
+        sums=$runtime/credentials.sha256
+        (cd "$CREDENTIALS_DIRECTORY" && sha256sum -- ${lib.escapeShellArgs (attrNames cfg.credentials)}) > "$sums.new"
+        if [ -f "$sums" ]; then
+          while read -r _ name; do
+            case $name in
+              ${concatStringsSep "\n" (
+          mapAttrsToList (name: files: "${lib.escapeShellArg name}) changed+=(${lib.escapeShellArgs files}) ;;") credentialFiles
+        )}
+            esac
+          done < <(grep -vxFf "$sums" "$sums.new" || true)
+        fi
+      ''}
       # Atomically point $current at the new tree, then drop older trees.
       ln -sfn "$(basename "$new")" "$runtime/.config.link"
       mv -Tf "$runtime/.config.link" "$current"
@@ -263,6 +253,7 @@
         fi
       done
       new=""
+      ${lib.optionalString (cfg.credentials != {}) ''mv "$sums.new" "$sums"''}
 
       case $mode in
         start)
@@ -289,10 +280,23 @@
           if [ -n "''${commands[core reload]:-}" ]; then
             commands=(["core reload"]=1)
           fi
+          # asterisk -rx exits 0 whatever the command did; module reload says
+          # whether it worked, core reload says nothing
+          failed=0
           for command in "''${!commands[@]}"; do
             echo "asterisk-config: $command"
-            ${asteriskBin} -C "$current/asterisk.conf" -rx "$command"
+            output=$(${asteriskBin} -C "$current/asterisk.conf" -rx "$command")
+            case $command in
+              "module reload "*)
+                module=''${command#module reload }
+                if ! grep -qxF "Module '$module' reloaded successfully." <<< "$output"; then
+                  echo "asterisk-config: $command failed: $output" >&2
+                  failed=1
+                fi
+                ;;
+            esac
           done
+          exit "$failed"
           ;;
       esac
     '';
@@ -314,6 +318,8 @@
     done
   '';
 
+  # nixpkgs builds asterisk without libsystemd, so its READY=1 is never sent
+  # TODO: Type = "notify" instead, once https://github.com/NixOS/nixpkgs/blob/master/pkgs/servers/asterisk/default.nix has systemd in buildInputs
   waitForBoot = pkgs.writeShellScript "asterisk-wait-for-boot" ''
     for _ in $(seq 1 600); do
       [ -S ${paths.runtime}/asterisk.ctl ] && break
@@ -387,19 +393,17 @@
 
   # Ports Asterisk binds itself (not only the ones opened in the firewall);
   # anything below 1024 needs CAP_NET_BIND_SERVICE.
-  truthy = v: v == true || v == "yes";
   httpGeneral = cfg.settings."http.conf".general or {};
   managerGeneral = cfg.settings."manager.conf".general or {};
   boundPorts =
     map (t: t.port) transportPorts
     ++ [rtpRange.from]
-    ++ optional (truthy (httpGeneral.enabled or false)) (toPort (httpGeneral.bindport or 8088))
-    ++ optional (truthy (httpGeneral.tlsenable or false)) (
+    ++ optional (format.isTrue (httpGeneral.enabled or false)) (toPort (httpGeneral.bindport or 8088))
+    ++ optional (format.isTrue (httpGeneral.tlsenable or false)) (
       parseBindPort (toString (httpGeneral.tlsbindaddr or "0.0.0.0")) 8089
     )
-    ++ optional (truthy (managerGeneral.enabled or false)) (toPort (managerGeneral.port or 5038))
-    ++ cfg.firewall.tcpPorts
-    ++ cfg.firewall.udpPorts;
+    ++ optional (format.isTrue (managerGeneral.enabled or false)) (toPort (managerGeneral.port or 5038))
+    ++ cfg.firewall.tcpPorts;
   needsLowPorts = builtins.any (port: port < 1024) boundPorts;
 
   # Specific addresses Asterisk binds (not wildcard or loopback). With
@@ -430,11 +434,11 @@
     )
     (
       mapAttrsToList (_: t: bindHost (toString (t.bind or "0.0.0.0"))) pjsipTransports
-      ++ optional (truthy (httpGeneral.enabled or false)) (toString (httpGeneral.bindaddr or "0.0.0.0"))
-      ++ optional (truthy (httpGeneral.tlsenable or false)) (
+      ++ optional (format.isTrue (httpGeneral.enabled or false)) (toString (httpGeneral.bindaddr or "0.0.0.0"))
+      ++ optional (format.isTrue (httpGeneral.tlsenable or false)) (
         bindHost (toString (httpGeneral.tlsbindaddr or "0.0.0.0"))
       )
-      ++ optional (truthy (managerGeneral.enabled or false)) (
+      ++ optional (format.isTrue (managerGeneral.enabled or false)) (
         toString (managerGeneral.bindaddr or "0.0.0.0")
       )
     )
@@ -442,7 +446,7 @@
 
   firewallPorts = {
     allowedUDPPorts = unique (
-      map (t: t.port) (filter (t: t.protocol == "udp") transportPorts) ++ cfg.firewall.udpPorts
+      map (t: t.port) (filter (t: t.protocol == "udp") transportPorts)
     );
     allowedTCPPorts = unique (
       map (t: t.port) (
@@ -457,7 +461,7 @@
       )
       ++ cfg.firewall.tcpPorts
     );
-    allowedUDPPortRanges = [rtpRange] ++ cfg.firewall.udpPortRanges;
+    allowedUDPPortRanges = [rtpRange];
   };
 
   includeType = types.coercedTo types.str (file: {inherit file;}) (
@@ -504,19 +508,6 @@
       };
     }
   );
-
-  portRangeType = types.submodule {
-    options = {
-      from = mkOption {
-        type = types.port;
-        description = "First port of the range.";
-      };
-      to = mkOption {
-        type = types.port;
-        description = "Last port of the range.";
-      };
-    };
-  };
 
   managedDirectories = {
     astetcdir = paths.config;
@@ -580,8 +571,9 @@ in {
       default = {};
       description = ''
         Raw text appended to a configuration file, keyed by file name. It is
-        not escaped and cannot contain secret references. Start it with a
-        section header, otherwise it continues the last generated section.
+        not escaped, but secret references interpolated into it are
+        substituted like in `settings`. Start it with a section header,
+        otherwise it continues the last generated section.
       '';
       example = literalExpression ''
         {
@@ -704,18 +696,6 @@ in {
         internal = true;
         description = "Additional TCP ports to open, contributed by typed modules.";
       };
-      udpPorts = mkOption {
-        type = types.listOf types.port;
-        default = [];
-        internal = true;
-        description = "Additional UDP ports to open, contributed by typed modules.";
-      };
-      udpPortRanges = mkOption {
-        type = types.listOf portRangeType;
-        default = [];
-        internal = true;
-        description = "Additional UDP port ranges to open, contributed by typed modules.";
-      };
     };
 
     renderedFiles = mkOption {
@@ -791,11 +771,13 @@ in {
           message = "services.asterisk.credentials: invalid or reserved credential name `${name}`.";
         })
         cfg.credentials
-        ++ map (range: {
-          assertion = range.from <= range.to;
-          message = "services.asterisk: invalid UDP port range ${toString range.from}-${toString range.to}.";
-        })
-        firewallPorts.allowedUDPPortRanges;
+        ++ [
+          {
+            # otherwise res_rtp_asterisk uses 5000-31000, which the firewall does not open
+            assertion = rtpRange.from < rtpRange.to;
+            message = "services.asterisk.rtp.portRange (rtpstart and rtpend in rtp.conf): `from` (${toString rtpRange.from}) must be lower than `to` (${toString rtpRange.to}).";
+          }
+        ];
 
       warnings =
         map (
@@ -995,11 +977,7 @@ in {
           };
       };
 
-      networking.firewall = mkIf cfg.openFirewall (
-        if cfg.firewallInterfaces == []
-        then firewallPorts
-        else {interfaces = lib.genAttrs cfg.firewallInterfaces (_: firewallPorts);}
-      );
+      networking.firewall = mkIf cfg.openFirewall (moduleLib.firewallOn cfg.firewallInterfaces firewallPorts);
     })
   ];
 }

@@ -10,8 +10,7 @@
 #   * `#include` and `#tryinclude` are directives,
 #   * `;` starts a comment anywhere unless escaped as `\;`.
 #
-# Everything here is pure (it only needs `lib`); `format` wraps it in the
-# `pkgs.formats` shape ({ type, generate }).
+# Everything here is pure: it only needs `lib`.
 {lib}: let
   inherit
     (lib)
@@ -21,6 +20,7 @@
     elem
     filter
     foldl'
+    hasInfix
     isBool
     isFloat
     isInt
@@ -133,6 +133,31 @@ in rec {
 
   # Asterisk values cannot contain line breaks, and `;` must be escaped.
   escapeValue = replaceStrings [";"] ["\\;"];
+
+  # whether Asterisk reads a value as true (ast_true in main/utils.c)
+  isTrue = v:
+    v
+    == true
+    || ((isString v || isInt v) && elem (lib.toLower (toString v)) ["yes" "true" "y" "t" "1" "on"]);
+
+  # `host:port`, with an IPv6 address in brackets
+  hostPort = host: port:
+    (
+      if hasInfix ":" host
+      then "[${host}]"
+      else host
+    )
+    + optionalString (port != null) ":${toString port}";
+
+  # comma-separated positional fields, such as a mailbox or a queue member,
+  # without empty fields at the end
+  joinFields = fields: let
+    trim = list:
+      if list != [] && lib.last list == ""
+      then trim (lib.init list)
+      else list;
+  in
+    concatStringsSep "," (trim fields);
 
   isValidKey = k: isString k && builtins.match "[^][;=#[:space:]]([^;=\n\r]*[^;=[:space:]])?" k != null;
 
@@ -352,6 +377,27 @@ in rec {
     then throw "asterisk config: include path contains a line break"
     else ''${directive} "${i.file}"'';
 
+  # names of a file's sections at runtime: the ones in `sections` and the
+  # section headers in its raw text, or null when it includes other files,
+  # which can define any section
+  sectionNames = {
+    sections ? {},
+    includes ? [],
+    extraConfig ? "",
+  }:
+    if includes != [] || builtins.any (directive: hasInfix directive extraConfig) ["#include" "#tryinclude" "#exec"]
+    then null
+    else
+      lib.mapAttrsToList (id: section: section.name or id) sections
+      ++ concatMap (
+        line: let
+          m = builtins.match "[[:space:]]*[[]([^]]+)[]].*" line;
+        in
+          if m == null
+          then []
+          else m
+      ) (lib.splitString "\n" extraConfig);
+
   # Render a whole file.
   #
   #   sections    : attrset of id -> section (see `types.section`)
@@ -402,6 +448,12 @@ in rec {
             lib.concatMapStringsSep ", " (def: "${secrets.placeholderOf def.value} in ${def.file}") defs
           }";
     };
+
+    secretOrString =
+      lib.types.either lib.types.str secret
+      // {
+        description = "string or secret reference";
+      };
 
     atom =
       lib.types.nullOr (
@@ -469,27 +521,5 @@ in rec {
     );
 
     sections = lib.types.attrsOf section;
-  };
-
-  # A `pkgs.formats`-style format: `(format { inherit pkgs; } { file = "pjsip.conf"; }).generate`.
-  format = {pkgs}: {
-    file ? null,
-    syntax ? {},
-    secretPlaceholder ? secrets.placeholderOf,
-  }: {
-    type = types.sections;
-    generate = name: value:
-      pkgs.writeText name (
-        render {
-          syntax =
-            (
-              if file != null
-              then syntaxFor file
-              else defaultSyntax
-            )
-            // syntax;
-          inherit file secretPlaceholder;
-        } {sections = value;}
-      );
   };
 }

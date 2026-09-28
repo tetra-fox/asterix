@@ -8,9 +8,7 @@
 }: let
   inherit
     (lib)
-    filterAttrs
     mapAttrs
-    mkDefault
     mkIf
     mkMerge
     mkOption
@@ -21,6 +19,7 @@
   mcfg = cfg.musicOnHold;
   asteriskLib = import ../lib {inherit lib;};
   inherit (asteriskLib) format;
+  inherit (import ./lib.nix {inherit lib;}) toSection;
 
   classType = types.submodule {
     options = {
@@ -100,18 +99,16 @@ in {
       mapAttrs (
         _: c:
           mkMerge [
-            (mapAttrs (_: mkDefault) (
-              filterAttrs (_: v: v != null) {
-                inherit
-                  (c)
-                  mode
-                  directory
-                  sort
-                  application
-                  ;
-              }
-            ))
-            {entry = c.entries;}
+            (toSection {
+              inherit
+                (c)
+                mode
+                directory
+                sort
+                application
+                ;
+              entry = c.entries;
+            })
             c.settings
           ]
       )

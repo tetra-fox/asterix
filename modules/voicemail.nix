@@ -17,7 +17,6 @@
     hasInfix
     isBool
     isString
-    mapAttrs
     mapAttrsToList
     mkDefault
     mkIf
@@ -32,12 +31,7 @@
   vcfg = cfg.voicemail;
   asteriskLib = import ../lib {inherit lib;};
   inherit (asteriskLib) format secrets;
-
-  secretOrString =
-    types.either types.str format.types.secret
-    // {
-      description = "string or secret reference";
-    };
+  inherit (import ./lib.nix {inherit lib;}) toSection;
 
   mailboxType = types.submodule (
     {name, ...}: let
@@ -60,7 +54,7 @@
           description = "Voicemail context the mailbox belongs to.";
         };
         pin = mkOption {
-          type = secretOrString;
+          type = format.types.secretOrString;
           example = lib.literalExpression "config.lib.asterisk.secret config.sops.secrets.vm-101.path";
           description = ''
             Mailbox PIN, normally a secret reference. A plain string is stored in
@@ -118,8 +112,8 @@
     then secrets.placeholderOf pin
     else pin;
 
-  mailboxLine = box: let
-    fields = [
+  mailboxLine = box:
+    format.joinFields [
       (pinText box.pin)
       box.fullName
       (
@@ -134,13 +128,6 @@
       )
       (concatStringsSep "|" (mapAttrsToList (k: v: "${k}=${optionValue v}") box.options))
     ];
-    # drop empty trailing fields
-    trim = list:
-      if list != [] && lib.last list == ""
-      then trim (lib.init list)
-      else list;
-  in
-    concatStringsSep "," (trim fields);
 
   mailboxes = attrValues vcfg.mailboxes;
   contexts = unique (map (box: box.context) mailboxes);
@@ -178,6 +165,26 @@
     )
     cfg.pjsip.endpoints
   );
+
+  # mailboxes of the final voicemail.conf with an e-mail or pager address
+  mailedBoxes = lib.concatLists (
+    mapAttrsToList (
+      _: section:
+        lib.optionals (!(builtins.elem section.name ["general" "zonemessages"])) (
+          mapAttrsToList (box: _: "${box}@${section.name}") (
+            filterAttrs (
+              _: line: let
+                fields = splitString "," line;
+              in
+                isString line && builtins.any (i: builtins.length fields > i && lib.trim (elemAt fields i) != "") [2 3]
+            ) (removeAttrs section format.metaAttrs)
+          )
+        )
+    )
+    voicemailConf
+  );
+  # raw text or included files may set mailcmd
+  mailCommandKnown = (cfg.extraConfig."voicemail.conf" or "") == "" && (cfg.includes."voicemail.conf" or []) == [];
 in {
   options.services.asterisk.voicemail = {
     enable = mkOption {
@@ -237,10 +244,14 @@ in {
         example = lib.literalExpression ''"''${pkgs.msmtp}/bin/msmtp --read-envelope-from -t"'';
         description = ''
           Command that sends notification e-mails, reading the message on
-          standard input (`mailcmd`); `null` sends no e-mail. It runs inside
-          Asterisk's sandbox (NoNewPrivileges), so setuid or setgid sendmail
-          wrappers such as {file}`/run/wrappers/bin/sendmail` do not work; use an
-          SMTP client such as msmtp.
+          standard input (`mailcmd`). Mailboxes with an e-mail address need
+          it: without it Asterisk runs {file}`/usr/sbin/sendmail`, which NixOS
+          does not have. It runs inside Asterisk's sandbox (NoNewPrivileges),
+          so setuid or setgid sendmail wrappers such as
+          {file}`/run/wrappers/bin/sendmail` do not work; use an SMTP client
+          such as msmtp. Its password can be a credential
+          ({option}`services.asterisk.credentials`), which the command reads
+          from {file}`$CREDENTIALS_DIRECTORY/<name>`.
         '';
       };
       fromAddress = mkOption {
@@ -281,17 +292,15 @@ in {
         [
           {
             general = mkMerge [
-              (mapAttrs (_: mkDefault) (
-                filterAttrs (_: v: v != null) {
-                  format = concatStringsSep "|" vcfg.format;
-                  maxmsg = vcfg.maxMessages;
-                  maxsecs = vcfg.maxSeconds;
-                  mailcmd = vcfg.email.command;
-                  serveremail = vcfg.email.fromAddress;
-                  fromstring = vcfg.email.fromName;
-                  attach = vcfg.email.attach;
-                }
-              ))
+              (toSection {
+                format = concatStringsSep "|" vcfg.format;
+                maxmsg = vcfg.maxMessages;
+                maxsecs = vcfg.maxSeconds;
+                mailcmd = vcfg.email.command;
+                serveremail = vcfg.email.fromAddress;
+                fromstring = vcfg.email.fromName;
+                attach = vcfg.email.attach;
+              })
               vcfg.settings
             ];
           }
@@ -319,6 +328,10 @@ in {
       {
         assertion = !(builtins.elem "general" contexts || builtins.elem "zonemessages" contexts);
         message = "services.asterisk.voicemail.mailboxes: `general` and `zonemessages` cannot be used as voicemail contexts.";
+      }
+      {
+        assertion = !mailCommandKnown || mailedBoxes == [] || (voicemailConf.general.mailcmd or null) != null;
+        message = "services.asterisk.voicemail: mailboxes with an e-mail address (${concatStringsSep ", " mailedBoxes}) need voicemail.email.command; without it Asterisk runs /usr/sbin/sendmail, which NixOS does not have.";
       }
       {
         assertion = missingMailboxes == [];

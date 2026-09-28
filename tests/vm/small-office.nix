@@ -131,6 +131,11 @@ in
         with subtest("the trunk registers with the provider"):
             pbx.wait_until_succeeds("asterisk -rx 'pjsip show registrations' | grep -q 'Registered'", timeout=180)
             provider.wait_until_succeeds("asterisk -rx 'pjsip show contacts' | grep -q '5551000/sip:5551000@203.0.113.10'")
+            # calls only go to a reachable contact; an OPTIONS sent while the
+            # provider was still booting is only retried a minute later
+            pbx.wait_until_succeeds(
+                "asterisk -rx 'pjsip show contacts' | grep -q 'provider/sip:sip.provider.example .* Avail'", timeout=180
+            )
 
         with subtest("phones register"):
             start_phones([reception, sales, boss])
@@ -153,6 +158,16 @@ in
             provider.wait_until_succeeds("asterisk -rx 'database get calls last' | grep -q 'Value: 5551000:5559999'", timeout=120)
             # the provider's leg is the second channel
             wait_for_media_both_ways(pbx, [boss], minimum=20, count=2)
+            boss.hangup()
+            wait_idle(pbx, timeout=180)
+
+        with subtest("911 reaches the provider without the 9, and reception is called"):
+            before = reception.requests("INVITE")
+            boss.call("911")
+            provider.wait_until_succeeds("asterisk -rx 'database get calls last' | grep -q 'Value: 5551000:911'", timeout=120)
+            reception.wait_request("INVITE", after=before, timeout=60)
+            invite = reception.received("INVITE")[-1]
+            assert '"Boss" <sip:203@' in invite, invite
             boss.hangup()
             wait_idle(pbx, timeout=180)
 

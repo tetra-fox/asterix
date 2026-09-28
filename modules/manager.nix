@@ -1,6 +1,7 @@
 # AMI is off by default. When enabled it listens on the loopback address; users are
-# restricted to the loopback network unless `permit` says otherwise, and the
-# firewall is only opened when `openFirewall` is set.
+# restricted to the loopback network unless `permit` says otherwise, receive
+# no events and may run no actions unless `read` and `write` list them, and
+# the firewall is only opened when `openFirewall` is set.
 {
   config,
   lib,
@@ -23,26 +24,24 @@
   asteriskLib = import ../lib {inherit lib;};
   inherit (asteriskLib) format;
 
-  secretOrString =
-    types.either types.str format.types.secret
-    // {
-      description = "string or secret reference";
-    };
-
   userType = types.submodule {
     options = {
       secret = mkOption {
-        type = secretOrString;
+        type = format.types.secretOrString;
         description = "Password, normally a secret reference.";
       };
       read = mkOption {
         type = types.listOf types.str;
-        default = ["all"];
+        default = [];
         example = [
           "system"
           "call"
         ];
-        description = "Event classes the user receives (`read`).";
+        description = ''
+          Event classes the user receives (`read`); none by default. `all`
+          includes `dtmf`, every key pressed in any call, voicemail and
+          conference PINs among them.
+        '';
       };
       write = mkOption {
         type = types.listOf types.str;

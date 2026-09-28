@@ -107,7 +107,9 @@
     commonSettings
     // {
       P271 = 1; # account active
-      P35 = auth.username; # SIP user ID
+      # SIP user ID, sent as the user of From and To: Asterisk looks up the
+      # endpoint by the From user and its aor by the To user
+      P35 = device.endpoint;
       P36 = auth.username; # authentication ID
       P34 = auth.password; # authentication password
     }
@@ -217,9 +219,11 @@ in {
           message = "services.asterisk.provisioning.grandstream.ht801: settings keys must be P-values such as P1362.";
         }
       ]
-      ++ mapAttrsToList (name: device: {
-        assertion = endpointOf device != null && (endpointOf device).auth != null;
-        message = "services.asterisk.provisioning.grandstream.ht801.devices.${name}: endpoint `${device.endpoint}` must exist in pjsip.endpoints and have `auth` set.";
+      ++ mapAttrsToList (name: device: let
+        endpoint = endpointOf device;
+      in {
+        assertion = endpoint != null && endpoint.auth != null && endpoint.aor != null && endpoint.aor.name == device.endpoint;
+        message = "services.asterisk.provisioning.grandstream.ht801.devices.${name}: endpoint `${device.endpoint}` must exist in pjsip.endpoints, have `auth` set and an `aor` named like the endpoint, since the adapter registers with one user name for both.";
       })
       cfg.devices;
 

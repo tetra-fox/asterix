@@ -6,11 +6,7 @@
 }: let
   inherit
     (lib)
-    filterAttrs
-    isList
-    mapAttrs
     mapAttrs'
-    mkDefault
     mkIf
     mkMerge
     mkOption
@@ -22,19 +18,7 @@
   ccfg = cfg.confbridge;
   asteriskLib = import ../lib {inherit lib;};
   inherit (asteriskLib) format;
-
-  secretOrString =
-    types.either types.str format.types.secret
-    // {
-      description = "string or secret reference";
-    };
-
-  settingsOption = what:
-    mkOption {
-      type = types.attrsOf format.types.value;
-      default = {};
-      description = "Additional keys of the ${what} section.";
-    };
+  inherit (import ./lib.nix {inherit lib;}) settingsOption toSection;
 
   optionalBool = description:
     mkOption {
@@ -70,9 +54,12 @@
       admin = optionalBool "Users with this profile are administrators.";
       marked = optionalBool "Users with this profile are marked users.";
       pin = mkOption {
-        type = types.nullOr secretOrString;
+        type = types.nullOr format.types.secretOrString;
         default = null;
-        description = "PIN required to join, normally a secret reference.";
+        description = ''
+          PIN required to join, normally a secret reference. A plain string is
+          stored in the world-readable Nix store and triggers a warning.
+        '';
       };
       waitMarked = optionalBool "Wait (with music) until a marked user joins (`wait_marked`).";
       endMarked = optionalBool "Leave when the last marked user leaves (`end_marked`).";
@@ -83,13 +70,6 @@
       settings = settingsOption "user profile";
     };
   };
-
-  # Scalars become defaults, lists stay definitions, nulls are dropped.
-  toSection = attrs:
-    mapAttrs (_: v:
-      if isList v
-      then v
-      else mkDefault v) (filterAttrs (_: v: v != null) attrs);
 
   profiles = kind: attrs: toValues:
     mapAttrs' (

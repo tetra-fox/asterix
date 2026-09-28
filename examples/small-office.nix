@@ -131,6 +131,9 @@ in {
               "Dial(PJSIP/911@provider)"
               "Hangup()"
             ];
+            # with the 9 out of habit, which `_9X.` would dial without calling
+            # reception
+            "9911" = ["Goto(911,1)"];
             "600" = [
               "Answer()"
               "Queue(support,,,,120)"

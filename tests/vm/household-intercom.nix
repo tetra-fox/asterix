@@ -195,6 +195,15 @@ in
             soft["201"].hangup()
             wait_idle(pbx)
 
+        with subtest("911 says that it cannot be called, then hangs up"):
+            before = ata["101"].disconnects()
+            ata["101"].call("911")
+            wait_channel(pbx, "101", app="Playback", state="Up")
+            # audio arrives, so the recording exists
+            print(wait_for_media_both_ways(pbx, [ata["101"]]))
+            ata["101"].wait_disconnected(after=before, timeout=60)
+            wait_idle(pbx)
+
         with subtest("three phones meet in the conference room"):
             for ext in ["101", "201", "202"]:
                 phones[ext].call("800")

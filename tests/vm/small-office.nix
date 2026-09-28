@@ -161,15 +161,17 @@ in
             boss.hangup()
             wait_idle(pbx, timeout=180)
 
-        with subtest("911 reaches the provider without the 9, and reception is called"):
-            before = reception.requests("INVITE")
-            boss.call("911")
-            provider.wait_until_succeeds("asterisk -rx 'database get calls last' | grep -q 'Value: 5551000:911'", timeout=120)
-            reception.wait_request("INVITE", after=before, timeout=60)
-            invite = reception.received("INVITE")[-1]
-            assert '"Boss" <sip:203@' in invite, invite
-            boss.hangup()
-            wait_idle(pbx, timeout=180)
+        for number in ["911", "9911"]:
+            with subtest(f"{number} reaches the provider as 911, and reception is called"):
+                provider.succeed("asterisk -rx 'database del calls last'")
+                before = reception.requests("INVITE")
+                boss.call(number)
+                provider.wait_until_succeeds("asterisk -rx 'database get calls last' | grep -q 'Value: 5551000:911$'", timeout=120)
+                reception.wait_request("INVITE", after=before, timeout=60)
+                invite = reception.received("INVITE")[-1]
+                assert '"Boss" <sip:203@' in invite, invite
+                boss.hangup()
+                wait_idle(pbx, timeout=180)
 
         with subtest("two phones join the conference bridge"):
             reception.call("800")

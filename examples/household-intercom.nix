@@ -21,9 +21,17 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }: let
   inherit (config.lib.asterisk) secret;
+
+  # what someone who dials 911 on these phones hears
+  noEmergencyCalls = pkgs.runCommand "sounds-no-emergency-calls" {nativeBuildInputs = [pkgs.flite];} ''
+    mkdir -p $out/sounds/en/custom
+    flite -voice slt -o $out/sounds/en/custom/no-emergency-calls.wav16 \
+      -t "This phone cannot call nine one one. Use a cell phone."
+  '';
 
   site = {
     trusted = {
@@ -115,6 +123,8 @@ in {
         phones;
     };
 
+    sounds.packages = [noEmergencyCalls];
+
     dialplan.contexts.intercom = {
       hints = lib.mapAttrs (extension: _: "PJSIP/${extension}") phones;
 
@@ -129,6 +139,13 @@ in {
           "800" = [
             "Answer()"
             "ConfBridge(800)"
+            "Hangup()"
+          ];
+          # there is no line out, so say that instead of an error tone
+          "911" = [
+            "Answer()"
+            "Playback(custom/no-emergency-calls)"
+            "Playback(custom/no-emergency-calls)"
             "Hangup()"
           ];
         };

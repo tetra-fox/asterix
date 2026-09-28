@@ -50,6 +50,8 @@ in {
 
   examples = reportFailures "asterisk-examples-eval" examples.problems;
 
+  config-check = import ./check.nix {inherit pkgs self;};
+
   examples-config-minimal = examples.derivations.minimal;
   examples-config-household-intercom = examples.derivations.household-intercom;
   examples-config-small-office = examples.derivations.small-office;

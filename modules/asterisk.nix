@@ -60,7 +60,7 @@
     then removeAttrs cfg.syntax.${file} ["_module"]
     else format.syntaxFor file;
 
-  renderFile = file:
+  renderWith = file: sections:
     format.render
     {
       syntax = syntaxFor file;
@@ -71,22 +71,79 @@
         else null;
     }
     {
-      sections = cfg.settings.${file} or {};
+      inherit sections;
       includes = cfg.includes.${file} or [];
       extraConfig = cfg.extraConfig.${file} or "";
     };
+  renderFile = file: renderWith file (cfg.settings.${file} or {});
+
+  configFile = file: pkgs.writeText "asterisk-${lib.replaceStrings ["/"] ["-"] file}";
 
   generatedConfig = pkgs.linkFarm "asterisk-config" (
     map (file: {
       name = file;
-      path =
-        pkgs.writeText "asterisk-${
-          lib.replaceStrings ["/"] ["-"] file
-        }"
-        cfg.renderedFiles.${file};
+      path = configFile file cfg.renderedFiles.${file};
     })
     fileNames
   );
+
+  # the configuration the build-time check starts Asterisk with (see
+  # pkgs/config-check): what it writes goes below @root@, it logs errors and
+  # warnings to one file, and each credential is a throwaway certificate
+  checkAsteriskConf = let
+    conf = cfg.settings."asterisk.conf";
+  in
+    renderWith "asterisk.conf" (
+      conf
+      // {
+        directories =
+          conf.directories
+          // lib.mapAttrs (_: dir: "@root@/${dir}") {
+            astetcdir = "config";
+            astrundir = "run";
+            astvarlibdir = "lib";
+            astdbdir = "lib";
+            astkeydir = "lib";
+            astspooldir = "lib/spool";
+            astagidir = "lib/agi-bin";
+            astlogdir = "log";
+          };
+        # the check runs as whoever builds it, where the asterisk user does
+        # not exist
+        options = removeAttrs (conf.options or {}) ["runuser" "rungroup"];
+      }
+    );
+  # a certificate and its key in one file, so it works for any TLS file:
+  # OpenSSL reads the part it needs
+  checkCertificate = pkgs.runCommand "asterisk-check-certificate" {nativeBuildInputs = [pkgs.openssl];} ''
+    openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -noenc -days 36500 \
+      -subj /CN=asterisk-config-check -keyout key.pem -out cert.pem
+    cat cert.pem key.pem > $out
+  '';
+  checkTree = pkgs.linkFarm "asterisk-check-config" (
+    mapAttrsToList (file: text: {
+      name = "config/${file}";
+      path = configFile file (lib.replaceStrings ["${paths.credentials}/"] ["@root@/credentials/"] text);
+    }) (
+      cfg.renderedFiles
+      // {
+        "asterisk.conf" = checkAsteriskConf;
+        "logger.conf" = format.render {syntax = syntaxFor "logger.conf";} {sections.logfiles.check = "error,warning";};
+      }
+    )
+    ++ map (name: {
+      name = "credentials/${name}";
+      path = checkCertificate;
+    }) (attrNames cfg.credentials)
+  );
+  configCheck = pkgs.runCommand "asterisk-config-check" {} ''
+    ${lib.getExe (pkgs.callPackage ../pkgs/config-check/package.nix {})} \
+      ${asteriskBin} ${checkTree} ${lib.escapeShellArgs bindAddresses} || {
+      echo "(services.asterisk.checkConfig = false turns this check off)" >&2
+      exit 1
+    }
+    touch $out
+  '';
 
   # Every secret placeholder in the generated files, including secrets
   # interpolated into strings and placeholders written in extraConfig.
@@ -135,8 +192,8 @@
   );
 
   # Files whose change is applied by a targeted reload; any other file falls
-  # back to `core reload`. Only `module reload` reports whether it worked, so
-  # every targeted reload is one.
+  # back to `core reload`. Only `module reload` reports a result, so every
+  # targeted reload is one.
   reloadCommands = {
     "extensions.conf" = "module reload pbx_config.so";
     "pjsip.conf" = "module reload res_pjsip.so";
@@ -283,7 +340,7 @@
             commands=(["core reload"]=1)
           fi
           # asterisk -rx exits 0 whatever the command did; module reload says
-          # whether it worked, core reload says nothing
+          # whether the reload failed as a whole, core reload says nothing
           failed=0
           for command in "''${!commands[@]}"; do
             echo "asterisk-config: $command"
@@ -628,10 +685,26 @@ in {
       default = true;
       description = ''
         Apply configuration changes on `nixos-rebuild switch` with a reload
-        (targeted `module reload` / `dialplan reload` commands, falling back
-        to `core reload`) instead of a restart. Changes to the package,
+        (targeted `module reload` commands, falling back to `core reload`)
+        instead of a restart. Changes to the package,
         {file}`asterisk.conf`, {file}`modules.conf`, PJSIP transports or the
         set of secrets always restart the service.
+      '';
+    };
+
+    checkConfig = mkOption {
+      type = types.bool;
+      default = pkgs.stdenv.buildPlatform.canExecute pkgs.stdenv.hostPlatform;
+      defaultText = literalExpression "pkgs.stdenv.buildPlatform.canExecute pkgs.stdenv.hostPlatform";
+      description = ''
+        Start Asterisk with the generated configuration when the system is
+        built, and fail the build if Asterisk logs an error or a warning
+        while loading it, or if the dialplan uses an application or function
+        that no loaded module provides. Secrets are replaced by zeros and
+        credentials by a throwaway certificate; Asterisk runs in a network
+        namespace that has the addresses it binds, which needs unprivileged
+        user namespaces on the machine that builds the system. Files outside
+        the Nix store that the configuration names do not exist there.
       '';
     };
 
@@ -853,6 +926,8 @@ in {
       };
 
       environment.etc.asterisk.source = generatedConfig;
+
+      system.checks = optional cfg.checkConfig configCheck;
 
       environment.systemPackages = [
         cliWrapper

@@ -34,6 +34,20 @@
 
     packages = forAllSystems (pkgs: {
       docs = import ./docs {inherit pkgs self;};
+      provisioning-server = pkgs.callPackage ./pkgs/provisioning-server/package.nix {};
+    });
+
+    # the same toolchain that builds the package, plus the tools to work on it
+    devShells = forAllSystems (pkgs: {
+      default = pkgs.mkShell {
+        inputsFrom = [self.packages.${pkgs.stdenv.hostPlatform.system}.provisioning-server];
+        packages = [
+          pkgs.clippy
+          pkgs.rust-analyzer
+          pkgs.rustfmt
+        ];
+        RUST_SRC_PATH = pkgs.rustPlatform.rustLibSrc;
+      };
     });
 
     # `nix fmt` formats the whole tree; the `formatting` check runs the same config

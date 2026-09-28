@@ -70,6 +70,9 @@ in {
 
   vm-ht801 = import ./vm/ht801.nix {inherit pkgs self sopsSecrets;};
 
+  # builds the server and runs its unit tests
+  provisioning-server = self.packages.${pkgs.stdenv.hostPlatform.system}.provisioning-server;
+
   # every option has a description and the reference builds
   docs = import ../docs {inherit pkgs self;};
 

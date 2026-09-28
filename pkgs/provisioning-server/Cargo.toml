@@ -1,0 +1,16 @@
+[package]
+name = "provisioning-server"
+version = "0.1.0"
+edition = "2024"
+description = "Serves phone provisioning files to the addresses allowed to fetch them"
+publish = false
+
+[dependencies]
+http-body-util = "0.1"
+hyper = { version = "1", features = ["http1", "server"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+tokio = { version = "1", features = ["net", "rt", "sync", "time"] }
+
+[profile.release]
+codegen-units = 1
+lto = true

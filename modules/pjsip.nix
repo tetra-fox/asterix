@@ -862,32 +862,7 @@
     objects
   );
 
-  # Dialplan contexts, where they can be known: sections of extensions.conf
-  # and section headers in its extraConfig, unless files are included.
-  dialplanExtra = cfg.extraConfig."extensions.conf" or "";
-  dialplanKnown =
-    (cfg.settings ? "extensions.conf" || dialplanExtra != "")
-    && !(builtins.any (file: cfg.settings ? ${file} || cfg.extraConfig ? ${file}) [
-      "extensions.ael"
-      "extensions.lua"
-    ])
-    && (cfg.includes."extensions.conf" or []) == []
-    && !(builtins.any (directive: hasInfix directive dialplanExtra) [
-      "#include"
-      "#tryinclude"
-      "#exec"
-    ]);
-  dialplanContexts =
-    map (s: s.name) (attrValues (cfg.settings."extensions.conf" or {}))
-    ++ lib.concatMap (
-      line: let
-        m = builtins.match "[[:space:]]*[[]([^]]+)[]].*" line;
-      in
-        if m == null
-        then []
-        else m
-    ) (splitString "\n" dialplanExtra);
-  missingContexts = filter (s: !(builtins.elem s.context dialplanContexts)) (
+  missingContexts = filter (s: !(builtins.elem s.context cfg.dialplan.knownContexts)) (
     filter (s: (s.type or null) == "endpoint" && isString (s.context or null)) objects
   );
 in {
@@ -1033,7 +1008,7 @@ in {
         message = "services.asterisk: TLS transport(s) ${concatStringsSep ", " tlsWithoutKeys} need a certificate and a private key (pjsip.transports.<name>.tls.certFile and tls.keyFile, or cert_file and priv_key_file).";
       }
       {
-        assertion = !dialplanKnown || missingContexts == [];
+        assertion = cfg.dialplan.knownContexts == null || missingContexts == [];
         message = ''
           services.asterisk: PJSIP endpoints use dialplan contexts that are not defined:
             ${concatStringsSep "\n  " (map (s: "[${s.name}] context = ${s.context}") missingContexts)}

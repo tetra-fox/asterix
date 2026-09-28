@@ -173,36 +173,63 @@
     )
   );
 
-  # Validation of `include =>` targets, where all contexts are known.
+  # Every context that exists at runtime, where that can be known: the
+  # sections of extensions.conf, section headers in its raw text and the
+  # contexts res_parking creates for its parking lots. Included files and AEL
+  # or Lua dialplans can define any context.
   dialplan = cfg.settings."extensions.conf" or {};
   extra = cfg.extraConfig."extensions.conf" or "";
-  known =
+  toList = v:
+    if builtins.isList v
+    then v
+    else [v];
+  modulesConf = cfg.settings."modules.conf".modules or {};
+  loaded = module:
+    !(builtins.elem module (toList (modulesConf.noload or [])))
+    && (
+      builtins.elem (modulesConf.autoload or false) [
+        true
+        "yes"
+      ]
+      || builtins.elem module (toList (modulesConf.load or []) ++ toList (modulesConf.preload or []))
+    );
+  parkingLots = filter (lot: lot.name != "general") (attrValues (cfg.settings."res_parking.conf" or {}));
+  parkingContexts =
+    map (lot: lot.context or "parkedcalls") parkingLots
+    # res_parking adds a lot called `default` when there is none
+    ++ optional (!(builtins.any (lot: lot.name == "default") parkingLots)) "parkedcalls";
+  knowable =
     (cfg.includes."extensions.conf" or [])
     == []
     && !(builtins.any (directive: hasInfix directive extra) [
       "#include"
       "#tryinclude"
       "#exec"
+    ])
+    && !(builtins.any (file: cfg.settings ? ${file} || cfg.extraConfig ? ${file}) [
+      "extensions.ael"
+      "extensions.lua"
     ]);
-  contexts =
-    map (s: s.name) (attrValues dialplan)
-    ++ lib.concatMap (
-      line: let
-        m = builtins.match "[[:space:]]*[[]([^]]+)[]].*" line;
-      in
-        if m == null
-        then []
-        else m
-    ) (lib.splitString "\n" extra);
-  toList = v:
-    if builtins.isList v
-    then v
-    else [v];
+  knownContexts =
+    if knowable
+    then
+      map (s: s.name) (attrValues dialplan)
+      ++ lib.concatMap (
+        line: let
+          m = builtins.match "[[:space:]]*[[]([^]]+)[]].*" line;
+        in
+          if m == null
+          then []
+          else m
+      ) (lib.splitString "\n" extra)
+      ++ lib.optionals (loaded "res_parking.so") parkingContexts
+    else null;
+
   danglingIncludes = lib.concatMap (
     s:
       map (target: "[${s.name}] include => ${target}") (
         filter (
-          target: isString target && !(builtins.elem (lib.head (lib.splitString "," target)) contexts)
+          target: isString target && !(builtins.elem (lib.head (lib.splitString "," target)) knownContexts)
         ) (toList (s.include or []))
       )
   ) (attrValues dialplan);
@@ -220,7 +247,7 @@
       lib.concatMap (
         line:
           map (target: "[${s.name}] ${target} (in: ${line})") (
-            filter (target: !(builtins.elem target contexts)) (gosubTargets line)
+            filter (target: !(builtins.elem target knownContexts)) (gosubTargets line)
           )
       ) (filter isString (toList (s.exten or [])))
   ) (attrValues dialplan);
@@ -290,10 +317,23 @@ in {
       '';
       description = "Dialplan contexts.";
     };
+
+    knownContexts = mkOption {
+      type = types.nullOr (types.listOf types.str);
+      readOnly = true;
+      internal = true;
+      description = ''
+        Every context of the dialplan at runtime, for checking references to
+        contexts, or null when included files or an AEL or Lua dialplan make
+        that unknowable.
+      '';
+    };
   };
 
   config = mkIf cfg.enable {
     services.asterisk = {
+      dialplan.knownContexts = knownContexts;
+
       dialplan.general = {
         static = mkDefault true;
         writeprotect = mkDefault true;
@@ -326,14 +366,14 @@ in {
 
     assertions = [
       {
-        assertion = !known || danglingIncludes == [];
+        assertion = knownContexts == null || danglingIncludes == [];
         message = ''
           services.asterisk: dialplan includes contexts that are not defined:
             ${concatStringsSep "\n  " danglingIncludes}
         '';
       }
       {
-        assertion = !known || danglingSubroutines == [];
+        assertion = knownContexts == null || danglingSubroutines == [];
         message = ''
           services.asterisk: pre-dial subroutines refer to contexts that are not defined:
             ${concatStringsSep "\n  " danglingSubroutines}

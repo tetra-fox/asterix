@@ -154,6 +154,41 @@
       assertions = [];
     };
 
+    aelDisablesContextChecks = {
+      module.services.asterisk = {
+        dialplan.contexts.internal.includes = ["from-ael"];
+        extraConfig."extensions.ael" = "context from-ael { 1 => Answer(); };";
+      };
+      assertions = [];
+    };
+
+    # res_parking creates the contexts of its parking lots at runtime
+    includeOfParkingLot = {
+      module.services.asterisk = {
+        modules.load = ["res_parking"];
+        settings."res_parking.conf".sales.context = "sales-parking";
+        dialplan.contexts.internal.includes = [
+          "parkedcalls"
+          "sales-parking"
+        ];
+      };
+      assertions = [];
+    };
+
+    includeOfParkingLotWithoutModule = {
+      module.services.asterisk.dialplan.contexts.internal.includes = ["parkedcalls"];
+      assertion = "[internal] include => parkedcalls";
+    };
+
+    renamedDefaultParkingLot = {
+      module.services.asterisk = {
+        modules.load = ["res_parking.so"];
+        settings."res_parking.conf".default.context = "parking";
+        dialplan.contexts.internal.includes = ["parkedcalls"];
+      };
+      assertion = "[internal] include => parkedcalls";
+    };
+
     tlsWithoutKeys = {
       module.services.asterisk.pjsip.transports.tls.protocol = "tls";
       assertion = "TLS transport(s) tls need a certificate and a private key";

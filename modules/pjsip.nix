@@ -112,7 +112,7 @@ let
           type = secretOrString;
           description = ''
             Password, normally a secret reference such as
-            `config.lib.asterisk.secret "/run/agenix/alice"`. A plain string
+            `config.lib.asterisk.secret config.sops.secrets.alice.path`. A plain string
             ends up in the world-readable Nix store and triggers a warning.
           '';
         };
@@ -905,7 +905,7 @@ in
           "101" = {
             context = "internal";
             callerId = '''"Kitchen" <101>''';
-            auth.password = config.lib.asterisk.secret "/run/agenix/sip-101";
+            auth.password = config.lib.asterisk.secret config.sops.secrets.sip-101.path;
           };
         }
       '';
@@ -925,7 +925,7 @@ in
           provider = {
             host = "sip.provider.example";
             username = "5551000";
-            password = config.lib.asterisk.secret "/run/agenix/trunk";
+            password = config.lib.asterisk.secret config.sops.secrets.trunk.path;
             context = "from-provider";
             identify.match = [ "203.0.113.0/24" ];
           };

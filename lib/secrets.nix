@@ -3,16 +3,16 @@
 # Any configuration value (typed or freeform) may be a secret reference instead
 # of a literal:
 #
-#   { _secret = "/run/agenix/alice"; }    # a file, e.g. from agenix or sops-nix
+#   { _secret = "/run/secrets/alice"; }   # a file, e.g. from sops-nix
 #   { _credential = "alice-password"; }   # a systemd credential the unit loads
 #
 # The `_secret` attribute follows the convention of nixpkgs'
 # `utils.genJqSecretsReplacement`. References made with `secret` and
 # `credential` can also be interpolated into strings, for values that contain
-# a secret next to other text: "${secret "/run/agenix/vm-200"},Sales,s@x.org".
+# a secret next to other text: "${secret "/run/secrets/vm-200"},Sales,s@x.org".
 #
 # The generated configuration only contains a placeholder naming the
-# reference (`@NIX_ASTERISK_SECRET:file:/run/agenix/alice@`). The module finds
+# reference (`@NIX_ASTERISK_SECRET:file:/run/secrets/alice@`). The module finds
 # placeholders in the generated files, passes each secret to the service as a
 # systemd credential and substitutes it at service start into a tmpfs, so
 # secret contents never reach the Nix store.
@@ -53,7 +53,7 @@ in
   inherit placeholder placeholderPattern;
 
   # Reference a secret stored in a file. The file is read by systemd
-  # (LoadCredential=) as root, so root-only files from agenix or sops-nix work.
+  # (LoadCredential=) as root, so root-only files such as sops-nix's work.
   secret =
     path:
     let

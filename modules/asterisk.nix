@@ -542,7 +542,7 @@ in
         several sections can share a name), `order`, `template` and
         `inherits`; every other attribute is a key. Lists render as repeated
         keys, booleans as `yes`/`no`, and any value can be a secret reference
-        (`config.lib.asterisk.secret "/run/agenix/foo"`).
+        (`config.lib.asterisk.secret config.sops.secrets.foo.path`).
 
         The typed options (`pjsip`, `dialplan`, ...) write into this option,
         so everything they generate can be extended or overridden here.
@@ -567,7 +567,7 @@ in
               name = "alice";
               type = "auth";
               username = "alice";
-              password = config.lib.asterisk.secret "/run/agenix/alice";
+              password = config.lib.asterisk.secret config.sops.secrets.alice.path;
             };
             alice-aor = {
               name = "alice";
@@ -778,8 +778,8 @@ in
         assertion = !(secrets.isStorePath ref);
         message = ''
           services.asterisk-declarative: the secret file ${ref._secret} is in the
-          Nix store, where every user can read it. Use agenix, sops-nix or
-          another file outside the store.
+          Nix store, where every user can read it. Use sops-nix, or any other
+          file outside the store.
         '';
       }) fileSecrets
       ++ map (ref: {

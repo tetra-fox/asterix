@@ -121,7 +121,7 @@ in
       example = lib.literalExpression ''
         {
           chair = { admin = true; marked = true; };
-          guest = { waitMarked = true; endMarked = true; pin = config.lib.asterisk.secret "/run/agenix/conf-pin"; };
+          guest = { waitMarked = true; endMarked = true; pin = config.lib.asterisk.secret config.sops.secrets.conf-pin.path; };
         }
       '';
       description = ''

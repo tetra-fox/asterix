@@ -100,9 +100,9 @@ in
       default = { };
       example = lib.literalExpression ''
         {
-          monitoring.secret = config.lib.asterisk.secret "/run/agenix/ami-monitoring";
+          monitoring.secret = config.lib.asterisk.secret config.sops.secrets.ami-monitoring.path;
           dialer = {
-            secret = config.lib.asterisk.secret "/run/agenix/ami-dialer";
+            secret = config.lib.asterisk.secret config.sops.secrets.ami-dialer.path;
             write = [ "originate" "call" ];
           };
         }

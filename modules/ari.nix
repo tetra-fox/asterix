@@ -155,7 +155,7 @@ in
         );
         default = { };
         example = lib.literalExpression ''
-          { app.password = config.lib.asterisk.secret "/run/agenix/ari-app"; }
+          { app.password = config.lib.asterisk.secret config.sops.secrets.ari-app.path; }
         '';
         description = "ARI users (HTTP basic authentication).";
       };

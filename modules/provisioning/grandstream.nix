@@ -418,7 +418,7 @@ in
     adminPassword = mkOption {
       type = types.nullOr valueType;
       default = null;
-      example = literalExpression ''config.lib.asterisk.secret "/run/agenix/phone-admin"'';
+      example = literalExpression "config.lib.asterisk.secret config.sops.secrets.phone-admin.path";
       description = "Password of the phones' web interface (P2), normally a secret reference.";
     };
 

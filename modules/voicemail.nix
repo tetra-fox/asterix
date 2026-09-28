@@ -56,7 +56,7 @@ let
         };
         pin = mkOption {
           type = secretOrString;
-          example = lib.literalExpression ''config.lib.asterisk.secret "/run/agenix/vm-101"'';
+          example = lib.literalExpression "config.lib.asterisk.secret config.sops.secrets.vm-101.path";
           description = ''
             Mailbox PIN, normally a secret reference. A plain string is stored in
             the world-readable Nix store and triggers a warning.
@@ -165,9 +165,9 @@ in
           "101" = {
             fullName = "Alice";
             email = "alice@example.org";
-            pin = config.lib.asterisk.secret "/run/agenix/vm-101";
+            pin = config.lib.asterisk.secret config.sops.secrets.vm-101.path;
           };
-          "200@sales".pin = config.lib.asterisk.secret "/run/agenix/vm-200";
+          "200@sales".pin = config.lib.asterisk.secret config.sops.secrets.vm-200.path;
         }
       '';
       description = ''

@@ -829,6 +829,31 @@ lib.runTests {
     };
   };
 
+  # static addresses of interfaces other than the default gateway's may come
+  # up after network-online.target; a transport bound to one must wait
+  testWaitsForSpecificBindAddresses = {
+    expr =
+      map
+        (
+          bind:
+          builtins.length
+            (unitOf [
+              phone
+              { services.asterisk-declarative.pjsip.transports.udp.address = lib.mkIf (bind != null) bind; }
+            ]).serviceConfig.ExecStartPre
+        )
+        [
+          null
+          "127.0.0.1"
+          "10.0.20.10"
+        ];
+    expected = [
+      1
+      1
+      2
+    ];
+  };
+
   testChanSipAlwaysNoloaded = {
     expr = lib.hasInfix "noload => chan_sip.so" (rendered [ phone ])."modules.conf";
     expected = true;

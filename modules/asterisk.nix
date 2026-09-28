@@ -301,6 +301,22 @@ let
     '';
   };
 
+  waitForAddresses = pkgs.writeShellScript "asterisk-wait-for-addresses" ''
+    for address in ${lib.escapeShellArgs bindAddresses}; do
+      waited=0
+      until [ -n "$(${pkgs.iproute2}/bin/ip -o address show to "$address" -tentative)" ]; do
+        if [ "$waited" -eq 0 ]; then
+          echo "asterisk-config: waiting for address $address"
+        elif [ "$waited" -ge 90 ]; then
+          echo "asterisk-config: address $address is not configured on this host" >&2
+          exit 1
+        fi
+        sleep 1
+        waited=$((waited + 1))
+      done
+    done
+  '';
+
   waitForBoot = pkgs.writeShellScript "asterisk-wait-for-boot" ''
     for _ in $(seq 1 600); do
       [ -S ${paths.runtime}/asterisk.ctl ] && break
@@ -384,6 +400,47 @@ let
     ++ cfg.firewall.tcpPorts
     ++ cfg.firewall.udpPorts;
   needsLowPorts = builtins.any (port: port < 1024) boundPorts;
+
+  # Specific addresses Asterisk binds (not wildcard or loopback). With
+  # scripted networking, static addresses of interfaces other than the default
+  # gateway's are not ordered before network-online.target, and a transport
+  # that fails to bind at startup stays down: the service waits for them.
+  bindHost =
+    bind:
+    let
+      bracketed = builtins.match "[[]([^]]+)[]](:[0-9]+)?" bind;
+      ipv4 = builtins.match "([0-9.]+)(:[0-9]+)?" bind;
+    in
+    if bracketed != null then
+      builtins.head bracketed
+    else if ipv4 != null then
+      builtins.head ipv4
+    else
+      bind;
+  isAddress = a: builtins.match "[0-9.]+" a != null || lib.hasInfix ":" a;
+  bindAddresses = unique (
+    filter
+      (
+        a:
+        isAddress a
+        && !(builtins.elem a [
+          "0.0.0.0"
+          "::"
+          "127.0.0.1"
+          "::1"
+        ])
+      )
+      (
+        mapAttrsToList (_: t: bindHost (toString (t.bind or "0.0.0.0"))) pjsipTransports
+        ++ optional (truthy (httpGeneral.enabled or false)) (toString (httpGeneral.bindaddr or "0.0.0.0"))
+        ++ optional (truthy (httpGeneral.tlsenable or false)) (
+          bindHost (toString (httpGeneral.tlsbindaddr or "0.0.0.0"))
+        )
+        ++ optional (truthy (managerGeneral.enabled or false)) (
+          toString (managerGeneral.bindaddr or "0.0.0.0")
+        )
+      )
+  );
 
   firewallPorts = {
     allowedUDPPorts = unique (
@@ -857,7 +914,9 @@ in
           Type = "exec";
           User = "asterisk";
           Group = "asterisk";
-          ExecStartPre = "${configTool}/bin/asterisk-config start";
+          ExecStartPre = optional (bindAddresses != [ ]) "${waitForAddresses}" ++ [
+            "${configTool}/bin/asterisk-config start"
+          ];
           ExecStart = utils.escapeSystemdExecArgs (
             [
               asteriskBin

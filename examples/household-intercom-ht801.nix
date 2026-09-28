@@ -11,9 +11,15 @@
 #
 # Point each adapter at http://10.0.20.10 once, with DHCP option 66 or its web
 # interface.
-{config, ...}: {
-  # the files are rendered again when the password changes
-  sops.secrets.ht801-admin.restartUnits = ["ht801-provisioning.service"];
+{
+  config,
+  lib,
+  ...
+}: {
+  # the files embed these passwords: render them again when one changes
+  sops.secrets = lib.genAttrs ["ht801-admin" "sip-101" "sip-102"] (_: {
+    restartUnits = ["ht801-provisioning.service"];
+  });
 
   services.asterisk.ht801 = {
     enable = true;

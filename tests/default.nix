@@ -28,10 +28,12 @@
 
   examples = import ./examples.nix {inherit pkgs self sopsSecrets;};
 
-  nixSources = lib.fileset.toSource {
-    root = ../.;
-    fileset = lib.fileset.fileFilter (file: file.hasExt "nix") ../.;
-  };
+  sources = extensions:
+    lib.fileset.toSource {
+      root = ../.;
+      fileset = lib.fileset.fileFilter (file: builtins.any file.hasExt extensions) ../.;
+    };
+  nixSources = sources ["nix"];
 in {
   lib-unit = reportFailures "asterisk-lib-unit-tests" (
     import ./lib.nix {
@@ -72,10 +74,7 @@ in {
   docs = import ../docs {inherit pkgs self;};
 
   # the same formatter `nix fmt` runs
-  formatting = pkgs.runCommand "asterisk-format-check" {} ''
-    ${lib.getExe self.formatter.${pkgs.stdenv.hostPlatform.system}} --check ${nixSources}
-    touch $out
-  '';
+  formatting = self.formatter.${pkgs.stdenv.hostPlatform.system}.check (sources ["nix" "rs"]);
 
   # no unused let bindings, function arguments or inherits
   deadnix = pkgs.runCommand "asterisk-deadnix-check" {nativeBuildInputs = [pkgs.deadnix];} ''

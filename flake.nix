@@ -36,6 +36,26 @@
       docs = import ./docs {inherit pkgs self;};
     });
 
-    formatter = forAllSystems (pkgs: pkgs.alejandra);
+    # `nix fmt` formats the whole tree; the `formatting` check runs the same config
+    formatter = forAllSystems (pkgs:
+      pkgs.treefmt.withConfig {
+        runtimeInputs = [
+          pkgs.alejandra
+          pkgs.rustfmt
+        ];
+        settings = {
+          tree-root-file = "flake.nix";
+          on-unmatched = "info";
+          formatter.alejandra = {
+            command = "alejandra";
+            includes = ["*.nix"];
+          };
+          formatter.rustfmt = {
+            command = "rustfmt";
+            options = ["--edition" "2024"];
+            includes = ["*.rs"];
+          };
+        };
+      });
   };
 }

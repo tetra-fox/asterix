@@ -117,9 +117,11 @@
 
   # Parts of the configuration that Asterisk only reads at startup. Changing
   # them restarts the service; everything else is applied with a reload.
-  pjsipTransports = filterAttrs (_: s: (s.type or null) == "transport") (
-    cfg.settings."pjsip.conf" or {}
-  );
+  pjsipTransports =
+    filter (s: (s.type or null) == "transport")
+    (
+      format.resolveInheritance (cfg.settings."pjsip.conf" or {})
+    ).sections;
   restartOnlyConfig = builtins.hashString "sha256" (
     concatStringsSep "\n" (
       map renderFile (
@@ -128,7 +130,7 @@
           "modules.conf"
         ]
       )
-      ++ [(format.render {} {sections = pjsipTransports;})]
+      ++ [(format.render {} {sections = lib.listToAttrs (map (t: lib.nameValuePair t.name t) pjsipTransports);})]
     )
   );
 
@@ -366,8 +368,8 @@
     else default;
 
   transportPorts =
-    mapAttrsToList (
-      _: t: let
+    map (
+      t: let
         protocol = t.protocol or "udp";
       in {
         inherit protocol;
@@ -433,7 +435,7 @@
         ])
     )
     (
-      mapAttrsToList (_: t: bindHost (toString (t.bind or "0.0.0.0"))) pjsipTransports
+      map (t: bindHost (toString (t.bind or "0.0.0.0"))) pjsipTransports
       ++ optional (format.isTrue (httpGeneral.enabled or false)) (toString (httpGeneral.bindaddr or "0.0.0.0"))
       ++ optional (format.isTrue (httpGeneral.tlsenable or false)) (
         bindHost (toString (httpGeneral.tlsbindaddr or "0.0.0.0"))

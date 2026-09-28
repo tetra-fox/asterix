@@ -930,6 +930,43 @@ in
       ];
     };
 
+    # a transport that inherits its type opens its port and is waited for;
+    # the template itself is no transport
+    testTransportFromTemplate = {
+      expr = let
+        config = evalConfig [
+          phone
+          {
+            services.asterisk = {
+              openFirewall = true;
+              settings."pjsip.conf" = {
+                transport = {
+                  template = true;
+                  type = "transport";
+                  protocol = "udp";
+                  bind = "0.0.0.0:5099";
+                };
+                lan = {
+                  inherits = ["transport"];
+                  bind = "10.0.10.10:5070";
+                };
+              };
+            };
+          }
+        ];
+      in {
+        inherit (config.networking.firewall) allowedUDPPorts;
+        startPre = builtins.length config.systemd.services.asterisk.serviceConfig.ExecStartPre;
+      };
+      expected = {
+        allowedUDPPorts = [
+          5060
+          5070
+        ];
+        startPre = 2;
+      };
+    };
+
     testChanSipAlwaysNoloaded = {
       expr = lib.hasInfix "noload => chan_sip.so" (rendered [phone])."modules.conf";
       expected = true;

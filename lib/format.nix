@@ -398,6 +398,47 @@ in rec {
           else m
       ) (lib.splitString "\n" extraConfig);
 
+  # non-template sections with the keys they inherit, resolved like Asterisk:
+  # a parent is the first earlier section of that name, and its keys come
+  # first. `type` comes from the first source, as sorcery matches it, every
+  # other key from the last, so repeated keys such as `allow` are not merged.
+  # Sections with a parent that is not rendered before them are left out and
+  # listed in `unresolved` as { name, inherits }.
+  resolveInheritance = sections: let
+    # what the renderer writes: null values and empty lists are left out
+    renderedKeys = section:
+      lib.filterAttrs (_: v: v != null && v != []) (
+        lib.mapAttrs (_: v:
+          if isList v
+          then filter (x: x != null) v
+          else v) (removeAttrs section metaAttrs)
+      );
+    merge = earlier: later: earlier // later // lib.optionalAttrs (earlier ? type) {inherit (earlier) type;};
+    step = acc: id: let
+      section = sections.${id};
+      name = section.name or id;
+      parents = map (parent: acc.byName.${parent} or null) (section.inherits or []);
+      entry = {
+        inherit name;
+        inherits = section.inherits or [];
+        template = section.template or false;
+        known = builtins.all (parent: parent != null && parent.known) parents;
+        keys = foldl' merge {} (map (parent: parent.keys) (filter (parent: parent != null) parents) ++ [(renderedKeys section)]);
+      };
+    in {
+      byName = {${name} = entry;} // acc.byName;
+      entries = acc.entries ++ [entry];
+    };
+    entries =
+      (foldl' step {
+        byName = {};
+        entries = [];
+      } (sortSections sections)).entries;
+  in {
+    sections = map (entry: entry.keys // {inherit (entry) name;}) (filter (entry: entry.known && !entry.template) entries);
+    unresolved = map (entry: {inherit (entry) name inherits;}) (filter (entry: !entry.known) entries);
+  };
+
   # Render a whole file.
   #
   #   sections    : attrset of id -> section (see `types.section`)

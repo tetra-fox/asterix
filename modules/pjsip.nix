@@ -23,7 +23,6 @@
   inherit
     (lib)
     attrNames
-    attrValues
     concatLists
     concatStringsSep
     filter
@@ -763,8 +762,8 @@
 
   # --- validation on the final (layer 1) pjsip.conf ---------------------------
 
-  sip = cfg.settings."pjsip.conf" or {};
-  objects = filter (s: !(s.template or false)) (attrValues sip);
+  resolved = format.resolveInheritance (cfg.settings."pjsip.conf" or {});
+  objects = resolved.sections;
   namesOfType = type: map (s: s.name) (filter (s: (s.type or null) == type) objects);
 
   # sections of the raw text (of unknown type), or null when objects can also
@@ -778,6 +777,13 @@
         extraConfig = cfg.extraConfig."pjsip.conf" or "";
       };
 
+  # without included files a parent can only be a section rendered earlier:
+  # the raw text comes after all of them
+  missingParents =
+    if rawSections == null
+    then []
+    else map (s: "[${s.name}](${concatStringsSep "," s.inherits})") resolved.unresolved;
+
   refList = v:
     if isString v
     then filter (x: x != "") (map lib.trim (splitString "," v))
@@ -788,7 +794,9 @@
   danglingRefs = let
     check = s: key: type:
       map (ref: "[${s.name}] (type=${s.type}) ${key} = ${ref}: no ${type} named `${ref}`") (
-        filter (ref: !(builtins.elem ref (namesOfType type ++ rawSections))) (refList (s.${key} or null))
+        filter (ref: !(builtins.elem ref (namesOfType type ++ rawSections ++ map (u: u.name) resolved.unresolved))) (
+          refList (s.${key} or null)
+        )
       );
     checksFor = s:
       {
@@ -967,6 +975,13 @@ in {
         message = ''
           services.asterisk: pjsip.conf references objects that do not exist:
             ${concatStringsSep "\n  " danglingRefs}
+        '';
+      }
+      {
+        assertion = missingParents == [];
+        message = ''
+          services.asterisk: pjsip.conf sections inherit from sections that are not rendered before them, so Asterisk would not load the file:
+            ${concatStringsSep "\n  " missingParents}
         '';
       }
       {

@@ -605,6 +605,99 @@ in
       ];
     };
 
+    # parents' keys come first and later sources win, except for `type`; a
+    # null value is not rendered, so it does not hide an inherited one
+    testResolveInheritanceMergesInOrder = {
+      expr = format.resolveInheritance {
+        phone = {
+          template = true;
+          type = "endpoint";
+          context = "a";
+          transport = "udp";
+        };
+        office = {
+          template = true;
+          type = "aor";
+          context = "b";
+        };
+        "101" = {
+          inherits = [
+            "phone"
+            "office"
+          ];
+          type = "identify";
+          aors = "101";
+          transport = null;
+        };
+      };
+      expected = {
+        sections = [
+          {
+            name = "101";
+            type = "endpoint";
+            context = "b";
+            transport = "udp";
+            aors = "101";
+          }
+        ];
+        unresolved = [];
+      };
+    };
+
+    # a parent is the first section of that name rendered earlier
+    testResolveInheritanceLooksParentsUpEarlier = {
+      expr = format.resolveInheritance {
+        "aor:101" = {
+          name = "101";
+          type = "aor";
+          max_contacts = 1;
+        };
+        "endpoint:101" = {
+          name = "101";
+          type = "endpoint";
+        };
+        copy.inherits = ["101"];
+        # rendered first, before its parent
+        early = {
+          order = 0;
+          inherits = ["late"];
+        };
+        late = {
+          template = true;
+          type = "auth";
+        };
+        orphan.inherits = ["elsewhere"];
+      };
+      expected = {
+        sections = [
+          {
+            name = "101";
+            type = "aor";
+            max_contacts = 1;
+          }
+          {
+            name = "copy";
+            type = "aor";
+            max_contacts = 1;
+          }
+          {
+            name = "101";
+            type = "endpoint";
+          }
+        ];
+        unresolved = [
+          {
+            name = "early";
+            inherits = ["late"];
+          }
+          {
+            name = "orphan";
+            inherits = ["elsewhere"];
+          }
+        ];
+      };
+    };
+
     # --- secrets ----------------------------------------------------------------
 
     testSecretRendersPlaceholder = {

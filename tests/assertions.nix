@@ -93,6 +93,75 @@
       assertion = "outbound_auth = nope: no auth named `nope`";
     };
 
+    # the type and keys a section inherits count
+    endpointFromTemplate = {
+      module.services.asterisk.settings."pjsip.conf" = {
+        phone = {
+          template = true;
+          type = "endpoint";
+          context = "internal";
+        };
+        gate = {
+          inherits = ["phone"];
+          aors = "gate";
+        };
+        "aor:gate" = {
+          name = "gate";
+          type = "aor";
+          contact = "sip:10.0.0.5";
+        };
+        "identify:gate" = {
+          name = "gate";
+          type = "identify";
+          endpoint = "gate";
+          match = ["10.0.0.5"];
+        };
+      };
+      assertions = [];
+    };
+
+    danglingRefFromTemplate = {
+      module.services.asterisk.settings."pjsip.conf" = {
+        phone = {
+          template = true;
+          type = "endpoint";
+          context = "internal";
+          outbound_auth = "missing";
+        };
+        gate.inherits = ["phone"];
+      };
+      assertion = "[gate] (type=endpoint) outbound_auth = missing: no auth named `missing`";
+    };
+
+    registrationLineFromTemplate = {
+      module.services.asterisk.settings."pjsip.conf" = {
+        registration = {
+          template = true;
+          type = "registration";
+          line = true;
+        };
+        reg = {
+          inherits = ["registration"];
+          server_uri = "sip:sip.example";
+          client_uri = "sip:1@sip.example";
+          endpoint = "101";
+        };
+      };
+      assertions = [];
+    };
+
+    # the raw text comes after every generated section
+    parentInExtraConfig = {
+      module.services.asterisk = {
+        settings."pjsip.conf".gate.inherits = ["raw-phone"];
+        extraConfig."pjsip.conf" = ''
+          [raw-phone](!)
+          type = endpoint
+        '';
+      };
+      assertion = "[gate](raw-phone)";
+    };
+
     includedFilesDisableReferenceChecks = {
       module.services.asterisk = {
         pjsip.endpoints."101".settings.outbound_auth = "elsewhere";

@@ -473,8 +473,9 @@ in
         LoadCredential = map (ref: "${secrets.credentialName ref}:${ref._secret}") (
           lib.filter (ref: ref ? _secret) secretRefs
         );
+        # owner only: nginx serves the files, the renderer (same user) writes them
         RuntimeDirectory = "grandstream-provisioning";
-        RuntimeDirectoryMode = "0500";
+        RuntimeDirectoryMode = "0700";
         RuntimeDirectoryPreserve = true;
         CapabilityBoundingSet = [ "" ];
         NoNewPrivileges = true;

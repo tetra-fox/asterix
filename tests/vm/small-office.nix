@@ -2,7 +2,7 @@
 # plays the SIP provider (configured with this module as well).
 #
 #   pbx       lan (VLAN 1) 10.1.0.10, wan (VLAN 2) 203.0.113.10
-#   provider  wan 203.0.113.5, known to the pbx as sip.provider.example
+#   provider  wan 203.0.113.5, sip.provider.example in its own DNS server
 #   phones    lan 10.1.0.21, runs 201 and 202 (ring without answering) and 203
 { pkgs, self }:
 let
@@ -45,7 +45,9 @@ pkgs.testers.runNixOSTest {
         lan.vlan = 1;
         wan.vlan = 2;
       };
-      networking.hosts."203.0.113.5" = [ "sip.provider.example" ];
+      # Asterisk resolves SIP hosts with DNS only (not /etc/hosts): use the
+      # provider's name server
+      networking.nameservers = [ "203.0.113.5" ];
     };
 
     provider =
@@ -58,6 +60,16 @@ pkgs.testers.runNixOSTest {
           (onlyAddress "eth1" "203.0.113.5")
         ];
         virtualisation.vlans = [ 2 ];
+
+        # DNS for the provider's host name
+        services.dnsmasq = {
+          enable = true;
+          settings = {
+            no-resolv = true;
+            address = "/sip.provider.example/203.0.113.5";
+          };
+        };
+        networking.firewall.allowedUDPPorts = [ 53 ];
 
         services.asterisk-declarative = {
           enable = true;

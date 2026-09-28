@@ -38,6 +38,8 @@ let
           shift 6
           echo "$cli_port" > "/run/sip-phone/$name.port"
           rm -f "/tmp/sip-phone-$name.log"
+          # --log-append: pjsua reopens its log file when the CLI starts,
+          # which would truncate a registration logged before that
           systemd-run --unit="sip-phone-$name" --collect \
             pjsua \
               --id="sip:$user@$server" --registrar="sip:$server" \
@@ -45,7 +47,7 @@ let
               --null-audio --no-vad --no-tcp --local-port="$sip_port" \
               --auto-answer=200 --auto-loop \
               --use-cli --cli-telnet-port="$cli_port" --no-cli-console \
-              --log-file="/tmp/sip-phone-$name.log" --log-level=5 --app-log-level=3 \
+              --log-file="/tmp/sip-phone-$name.log" --log-append --log-level=5 --app-log-level=3 \
               "$@"
           ;;
         cli)

@@ -13,17 +13,37 @@
 #
 # Keys without a typed option can be set through the `settings` attribute of
 # typed objects or through `services.asterisk-declarative.settings`.
-{ config, ... }:
+# Passwords and PINs come from sops-nix (set sops.defaultSopsFile in the host's
+# configuration).
+{ config, lib, ... }:
 let
-  inherit (config.lib.asterisk) secret;
-
   phones = {
     "201" = "Reception";
     "202" = "Sales";
     "203" = "Boss";
   };
+
+  sopsSecret = name: config.lib.asterisk.secret config.sops.secrets.${name}.path;
 in
 {
+  # root-only files are fine: asterisk.service reads them as credentials, and
+  # a reload picks up a changed password
+  sops.secrets =
+    lib.genAttrs
+      (
+        [
+          "sip-trunk"
+          "vm-200"
+        ]
+        ++ lib.concatMap (extension: [
+          "sip-${extension}"
+          "vm-${extension}"
+        ]) (lib.attrNames phones)
+      )
+      (_: {
+        reloadUnits = [ "asterisk.service" ];
+      });
+
   services.asterisk-declarative = {
     enable = true;
 
@@ -51,7 +71,7 @@ in
       trunks.provider = {
         host = "sip.provider.example";
         username = "5551000";
-        password = secret "/run/agenix/sip-trunk";
+        password = sopsSecret "sip-trunk";
         context = "from-provider";
         allow = [
           "g722"
@@ -68,7 +88,7 @@ in
       endpoints = builtins.mapAttrs (extension: name: {
         context = "office";
         callerId = ''"${name}" <${extension}>'';
-        auth.password = secret "/run/agenix/sip-${extension}";
+        auth.password = sopsSecret "sip-${extension}";
         mailboxes = [ "${extension}@default" ];
       }) phones;
     };
@@ -126,12 +146,12 @@ in
       mailboxes = {
         "200" = {
           fullName = "Sales team";
-          pin = secret "/run/agenix/vm-200";
+          pin = sopsSecret "vm-200";
         };
       }
       // builtins.mapAttrs (extension: name: {
         fullName = name;
-        pin = secret "/run/agenix/vm-${extension}";
+        pin = sopsSecret "vm-${extension}";
       }) phones;
       maxMessages = 100;
       maxSeconds = 300;

@@ -4,7 +4,11 @@
 #   pbx       lan (VLAN 1) 10.1.0.10, wan (VLAN 2) 203.0.113.10
 #   provider  wan 203.0.113.5, sip.provider.example in its own DNS server
 #   phones    lan 10.1.0.21, runs 201 and 202 (ring without answering) and 203
-{ pkgs, self }:
+{
+  pkgs,
+  self,
+  sopsSecrets,
+}:
 let
   inherit (pkgs) lib;
 
@@ -37,7 +41,7 @@ pkgs.testers.runNixOSTest {
         self.nixosModules.default
         ../../examples/small-office.nix
         ./common.nix
-        (import ./secrets.nix { fixed = secrets; })
+        (sopsSecrets secrets)
         (onlyAddress "lan" "10.1.0.10")
         (onlyAddress "wan" "203.0.113.10")
       ];
@@ -79,7 +83,7 @@ pkgs.testers.runNixOSTest {
             # the office's account; the endpoint name is its user name
             endpoints."5551000" = {
               context = "carrier";
-              auth.password = config.lib.asterisk.secret "/run/agenix/customer";
+              auth.password = config.lib.asterisk.secret "/run/test-secrets/customer";
               allow = [
                 "alaw"
                 "ulaw"

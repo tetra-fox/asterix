@@ -1,6 +1,10 @@
 # Every example evaluates to a complete system without failed assertions or
 # warnings, and its generated configuration builds.
-{ pkgs, self }:
+{
+  pkgs,
+  self,
+  sopsSecrets,
+}:
 let
   inherit (pkgs) lib;
   inherit (import ./eval-lib.nix { inherit pkgs self; }) evalConfig failedAssertions;
@@ -17,7 +21,8 @@ let
     ];
   };
 
-  configs = lib.mapAttrs (_: evalConfig) examples;
+  # the examples take their secrets from sops-nix; nothing is decrypted here
+  configs = lib.mapAttrs (_: modules: evalConfig ([ (sopsSecrets { }) ] ++ modules)) examples;
 in
 {
   # evaluation of the whole system, without building it

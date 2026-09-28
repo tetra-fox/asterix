@@ -17,7 +17,9 @@
 #   120      page upstairs
 #
 # Everything here uses the generic module; the paging helpers come from
-# `config.lib.asterisk.dialplan`. Adapt the `site` block to your network.
+# `config.lib.asterisk.dialplan`. Passwords come from sops-nix (set
+# sops.defaultSopsFile in the host's configuration). Adapt the `site` block to
+# your network.
 { config, lib, ... }:
 let
   inherit (config.lib.asterisk) secret;
@@ -80,6 +82,12 @@ in
     "net.ipv6.conf.all.forwarding" = false;
   };
 
+  # root-only files are fine: asterisk.service reads them as credentials, and
+  # a reload picks up a changed password
+  sops.secrets = lib.mapAttrs' (
+    extension: _: lib.nameValuePair "sip-${extension}" { reloadUnits = [ "asterisk.service" ]; }
+  ) phones;
+
   services.asterisk-declarative = {
     enable = true;
 
@@ -112,7 +120,7 @@ in
         context = "intercom";
         transport = phone.network;
         callerId = ''"${phone.name}" <${extension}>'';
-        auth.password = secret "/run/agenix/sip-${extension}";
+        auth.password = secret config.sops.secrets."sip-${extension}".path;
         # Only accept registrations from the phone's own network.
         settings = {
           contact_deny = "0.0.0.0/0.0.0.0";

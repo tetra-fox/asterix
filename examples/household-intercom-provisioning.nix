@@ -3,8 +3,8 @@
 # the `grandstream-provisioning` module:
 #
 #   imports = [
-#     nix-asterisk.nixosModules.default
-#     nix-asterisk.nixosModules.grandstream-provisioning
+#     asterix.nixosModules.default
+#     asterix.nixosModules.grandstream-provisioning
 #     ./household-intercom.nix
 #     ./household-intercom-provisioning.nix
 #   ];
@@ -15,6 +15,9 @@
 # cloud or firmware servers.
 { config, ... }:
 {
+  # the phones' files are rendered again when the password changes
+  sops.secrets.phone-admin.restartUnits = [ "grandstream-provisioning.service" ];
+
   services.asterisk-declarative.provisioning.grandstream = {
     enable = true;
     listenAddress = "10.0.20.10";
@@ -25,7 +28,7 @@
     # the VoIP VLAN has no internet access: serve NTP from this host
     ntp.serve = true;
     timeZone = "CET-1CEST-2,M3.5.0/02:00:00,M10.5.0/03:00:00";
-    adminPassword = config.lib.asterisk.secret "/run/agenix/phone-admin";
+    adminPassword = config.lib.asterisk.secret config.sops.secrets.phone-admin.path;
 
     phones = {
       kitchen = {

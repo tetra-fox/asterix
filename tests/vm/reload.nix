@@ -2,7 +2,11 @@
 # with a reload (same PID, registrations untouched), a changed module list
 # restarts Asterisk, and registrations survive the restart (they live in
 # astdb).
-{ pkgs, self }:
+{
+  pkgs,
+  self,
+  sopsSecrets,
+}:
 pkgs.testers.runNixOSTest {
   name = "asterisk-reload";
 
@@ -14,11 +18,9 @@ pkgs.testers.runNixOSTest {
         ../../examples/minimal.nix
         ./common.nix
         ./phone.nix
-        (import ./secrets.nix {
-          fixed = {
-            sip-101 = "secret-101";
-            sip-102 = "secret-102";
-          };
+        (sopsSecrets {
+          sip-101 = "secret-101";
+          sip-102 = "secret-102";
         })
       ];
 

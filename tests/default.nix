@@ -1,8 +1,14 @@
 # All flake checks. VM tests are nixosTest derivations; the rest are cheap
 # evaluation/build checks.
-{ pkgs, self }:
+{
+  pkgs,
+  self,
+  sops-nix,
+}:
 let
   inherit (pkgs) lib;
+
+  sopsSecrets = import ./sops.nix { inherit pkgs sops-nix; };
 
   # Build-time failure with a readable report instead of an evaluation error,
   # so `nix flake check` still evaluates every other check.
@@ -22,7 +28,7 @@ let
         touch $out
       '';
 
-  examples = import ./examples.nix { inherit pkgs self; };
+  examples = import ./examples.nix { inherit pkgs self sopsSecrets; };
 
   nixSources = lib.fileset.toSource {
     root = ../.;
@@ -51,17 +57,17 @@ in
 
   vm-core = import ./vm/core.nix { inherit pkgs self; };
 
-  vm-reload = import ./vm/reload.nix { inherit pkgs self; };
+  vm-reload = import ./vm/reload.nix { inherit pkgs self sopsSecrets; };
 
-  vm-minimal = import ./vm/minimal.nix { inherit pkgs self; };
+  vm-minimal = import ./vm/minimal.nix { inherit pkgs self sopsSecrets; };
 
-  vm-household-intercom = import ./vm/household-intercom.nix { inherit pkgs self; };
+  vm-household-intercom = import ./vm/household-intercom.nix { inherit pkgs self sopsSecrets; };
 
-  vm-small-office = import ./vm/small-office.nix { inherit pkgs self; };
+  vm-small-office = import ./vm/small-office.nix { inherit pkgs self sopsSecrets; };
 
   vm-tier2 = import ./vm/tier2.nix { inherit pkgs self; };
 
-  vm-grandstream = import ./vm/grandstream.nix { inherit pkgs self; };
+  vm-grandstream = import ./vm/grandstream.nix { inherit pkgs self sopsSecrets; };
 
   vm-tls-realtime = import ./vm/tls-realtime.nix { inherit pkgs self; };
 

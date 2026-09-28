@@ -1,6 +1,10 @@
 # examples/minimal.nix: two phones register and call each other, with media
 # relayed by Asterisk in both directions.
-{ pkgs, self }:
+{
+  pkgs,
+  self,
+  sopsSecrets,
+}:
 pkgs.testers.runNixOSTest {
   name = "asterisk-minimal";
 
@@ -10,11 +14,9 @@ pkgs.testers.runNixOSTest {
         self.nixosModules.default
         ../../examples/minimal.nix
         ./common.nix
-        (import ./secrets.nix {
-          fixed = {
-            sip-101 = "secret-101";
-            sip-102 = "secret-102";
-          };
+        (sopsSecrets {
+          sip-101 = "secret-101";
+          sip-102 = "secret-102";
         })
       ];
     };

@@ -2,7 +2,11 @@
 # on the VoIP address only, carry the endpoints' credentials (rendered at
 # runtime, XML-escaped), respect per-phone address restrictions, and the
 # host serves NTP to the VoIP VLAN.
-{ pkgs, self }:
+{
+  pkgs,
+  self,
+  sopsSecrets,
+}:
 let
   address = interface: address: {
     networking.interfaces.${interface}.ipv4.addresses = pkgs.lib.mkForce [
@@ -24,15 +28,13 @@ pkgs.testers.runNixOSTest {
         ../../examples/household-intercom.nix
         ../../examples/household-intercom-provisioning.nix
         ./common.nix
-        (import ./secrets.nix {
-          fixed = {
-            sip-101 = "desk-101-pw";
-            sip-102 = "desk-102-pw";
-            sip-103 = "desk-103-pw";
-            sip-201 = "soft-201-pw";
-            sip-202 = "soft-202-pw";
-            phone-admin = ''a&b<c>"d'e'';
-          };
+        (sopsSecrets {
+          sip-101 = "desk-101-pw";
+          sip-102 = "desk-102-pw";
+          sip-103 = "desk-103-pw";
+          sip-201 = "soft-201-pw";
+          sip-202 = "soft-202-pw";
+          phone-admin = ''a&b<c>"d'e'';
         })
         (address "lan" "10.0.10.10")
         (address "voip" "10.0.20.10")
@@ -43,8 +45,6 @@ pkgs.testers.runNixOSTest {
       };
       # the kitchen phone has a static lease
       services.asterisk-declarative.provisioning.grandstream.phones.kitchen.allowedAddress = "10.0.20.21";
-      systemd.services.grandstream-provisioning.after = [ "provision-test-secrets.service" ];
-      systemd.services.grandstream-provisioning.requires = [ "provision-test-secrets.service" ];
     };
 
     deskphone = {

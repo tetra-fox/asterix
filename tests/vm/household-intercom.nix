@@ -8,7 +8,11 @@
 # The pbx is also on the servers VLAN (the host's main network in the
 # example), so the intruder can actually reach the host and the firewall and
 # the SIP ACL are both exercised.
-{ pkgs, self }:
+{
+  pkgs,
+  self,
+  sopsSecrets,
+}:
 let
   passwords = {
     "101" = "desk-101-pw";
@@ -36,9 +40,7 @@ pkgs.testers.runNixOSTest {
         self.nixosModules.default
         ../../examples/household-intercom.nix
         ./common.nix
-        (import ./secrets.nix {
-          fixed = pkgs.lib.mapAttrs' (ext: pw: pkgs.lib.nameValuePair "sip-${ext}" pw) passwords;
-        })
+        (sopsSecrets (pkgs.lib.mapAttrs' (ext: pw: pkgs.lib.nameValuePair "sip-${ext}" pw) passwords))
         (address "servers" "10.0.1.10")
         (address "lan" "10.0.10.10")
         (address "voip" "10.0.20.10")

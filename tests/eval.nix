@@ -687,6 +687,17 @@ lib.runTests {
     expected = true;
   };
 
+  # cdr_csv declines to load when [csv] has no keys
+  testCdrCsvSectionIsNeverEmpty = {
+    expr =
+      lib.hasInfix "[csv]\naccountlogs = yes\nloguniqueid = no\n"
+        (rendered [
+          phone
+          { services.asterisk-declarative.cdr.csv.enable = true; }
+        ])."cdr.conf";
+    expected = true;
+  };
+
   testCdrSqliteUsesArrows = {
     expr = builtins.head (
       builtins.filter (lib.hasPrefix "table") (

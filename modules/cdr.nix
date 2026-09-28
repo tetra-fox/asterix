@@ -153,7 +153,15 @@ in
     }
 
     (mkIf ccfg.csv.enable {
-      services.asterisk-declarative.settings."cdr.conf".csv = ccfg.csv.settings;
+      # cdr_csv declines to load when [csv] has no keys: write its defaults
+      services.asterisk-declarative.settings."cdr.conf".csv = {
+        accountlogs = mkDefault true;
+        usegmtime = mkDefault false;
+        loguniqueid = mkDefault false;
+        loguserfield = mkDefault false;
+        newcdrcolumns = mkDefault false;
+      }
+      // ccfg.csv.settings;
     })
 
     (mkIf ccfg.sqlite.enable {

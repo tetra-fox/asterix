@@ -699,6 +699,19 @@ lib.runTests {
     expected = true;
   };
 
+  # cdr_csv writes to <astlogdir>/cdr-csv but does not create it
+  testCdrCsvDirectoryIsCreated = {
+    expr =
+      (unitOf [
+        phone
+        { services.asterisk-declarative.cdr.csv.enable = true; }
+      ]).serviceConfig.LogsDirectory;
+    expected = [
+      "asterisk"
+      "asterisk/cdr-csv"
+    ];
+  };
+
   # cdr_csv declines to load when [csv] has no keys
   testCdrCsvSectionIsNeverEmpty = {
     expr =

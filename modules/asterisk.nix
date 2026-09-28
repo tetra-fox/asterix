@@ -941,7 +941,8 @@ in
           RuntimeDirectoryMode = "0750";
           StateDirectory = "asterisk";
           StateDirectoryMode = "0750";
-          LogsDirectory = "asterisk";
+          # a list: modules add subdirectories (cdr-csv); Asterisk creates none
+          LogsDirectory = [ "asterisk" ];
           LogsDirectoryMode = "0750";
           UMask = "0027";
           LimitNOFILE = 65536;

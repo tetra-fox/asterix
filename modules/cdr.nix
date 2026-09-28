@@ -153,6 +153,9 @@ in
     }
 
     (mkIf ccfg.csv.enable {
+      # cdr_csv writes to <astlogdir>/cdr-csv but does not create it
+      systemd.services.asterisk.serviceConfig.LogsDirectory = [ "asterisk/cdr-csv" ];
+
       # cdr_csv declines to load when [csv] has no keys: write its defaults
       services.asterisk-declarative.settings."cdr.conf".csv = {
         accountlogs = mkDefault true;

@@ -19,11 +19,13 @@
     ./confbridge.nix
     ./dialplan.nix
     ./features.nix
+    ./ht801.nix
     ./logger.nix
     ./manager.nix
     ./modules-conf.nix
     ./musiconhold.nix
     ./pjsip.nix
+    ./provisioning.nix
     ./queues.nix
     ./rtp.nix
     ./voicemail.nix

@@ -1,6 +1,7 @@
-# HT801 provisioning for the household intercom: files are served on the VoIP
-# address only, carry the endpoints' credentials (rendered at runtime,
-# XML-escaped) and respect per-device address restrictions.
+# HT801 provisioning for the household intercom, and the provisioning service
+# under it: files are served on the VoIP address only, carry the endpoints'
+# credentials (rendered at runtime, escaped per file format) and respect
+# per-device address restrictions.
 {
   pkgs,
   self,
@@ -19,10 +20,9 @@ in
     name = "asterisk-ht801-provisioning";
 
     nodes = {
-      pbx = {
+      pbx = {config, ...}: {
         imports = [
           self.nixosModules.default
-          self.nixosModules.ht801
           ../../examples/household-intercom.nix
           ../../examples/household-intercom-ht801.nix
           ./common.nix
@@ -40,8 +40,12 @@ in
           lan.vlan = 1;
           voip.vlan = 2;
         };
-        # adapter 101 has a static lease
-        services.asterisk.provisioning.ht801.devices."101".allowedAddress = "10.0.20.21";
+        services.asterisk.provisioning = {
+          # adapter 101 has a static lease
+          ht801.devices."101".allowedAddress = "10.0.20.21";
+          # a hand-written file with the admin password, which is not escaped here
+          files."notes.txt".text = "admin=${config.lib.asterisk.secret config.sops.secrets.ht801-admin.path}";
+        };
       };
 
       adapters = {
@@ -76,7 +80,7 @@ in
 
     testScript = ''
       start_all()
-      pbx.wait_for_unit("ht801-provisioning.service")
+      pbx.wait_for_unit("asterisk-provisioning.service")
       pbx.wait_for_unit("nginx.service")
       # nothing on the adapters node waits for network-online.target: wait for its addresses
       adapters.wait_until_succeeds("ip -o address show to 10.0.20.22 -tentative | grep -q .")
@@ -107,14 +111,19 @@ in
               assert expected in xml, f"{expected} missing from {xml}"
 
       with subtest("secrets are only in the runtime copy"):
-          renderer = pbx.succeed("systemctl cat ht801-provisioning.service | grep -o '/nix/store/[^ ]*-ht801-provisioning-render' | head -1").strip()
+          renderer = pbx.succeed("systemctl cat asterisk-provisioning.service | grep -o '/nix/store/[^ ]*-asterisk-provisioning-render' | head -1").strip()
           # the renderer, the file templates it copies and the linkFarm of them
-          paths = [p for p in pbx.succeed(f"nix-store -qR {renderer}").split() if "ht801" in p or "-cfg" in p]
+          paths = [p for p in pbx.succeed(f"nix-store -qR {renderer}").split() if "provisioning" in p or "-cfg" in p or "-notes.txt" in p]
           assert any(p.endswith("-cfgc074ad000101.xml") for p in paths), paths
           # exit status 1: searched everything, no match
           status, output = pbx.execute(f"grep -rl ata-101-pw {' '.join(paths)} 2>&1")
           assert status == 1, f"grep exited with {status}: {output}"
-          pbx.succeed("test \"$(stat -c '%U %a' /run/ht801-provisioning/cfgc074ad000101.xml)\" = 'nginx 400'")
+          pbx.succeed("test \"$(stat -c '%U %a' /run/asterisk-provisioning/cfgc074ad000101.xml)\" = 'nginx 400'")
+
+      with subtest("a hand-written file gets the same secret unescaped"):
+          assert fetch("notes.txt") == "200"
+          notes = adapters.succeed("cat /tmp/notes.txt").strip()
+          assert notes == "admin=a&b<c>\"d'e", notes
 
       with subtest("files are restricted to the adapter's address and unknown paths"):
           assert fetch("cfgc074ad000101.xml", source="10.0.20.22") == "403"

@@ -28,8 +28,6 @@
     nixosModules = {
       default = self.nixosModules.asterisk;
       asterisk = ./modules;
-      # optional: provisioning for Grandstream HT801 adapters
-      ht801 = ./modules/ht801.nix;
     };
 
     checks = forAllSystems (pkgs: import ./tests {inherit pkgs self sops-nix;});

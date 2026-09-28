@@ -1,5 +1,4 @@
-# Two SIP phones that call each other by dialing 101 and 102. Passwords come
-# from sops-nix (set sops.defaultSopsFile in the host's configuration).
+# Two phones that call each other (see README.md)
 {
   config,
   lib,

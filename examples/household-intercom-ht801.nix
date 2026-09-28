@@ -1,8 +1,4 @@
-# Add-on for household-intercom.nix: provisions the two HT801 adapters from
-# this host. Import it next to the intercom example.
-#
-# Point each adapter at http://10.0.20.10 once, with DHCP option 66 or its web
-# interface.
+# Provisioning for the HT801 adapters of the household intercom (see README.md)
 {
   config,
   lib,

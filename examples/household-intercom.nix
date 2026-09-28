@@ -1,23 +1,4 @@
-# Household intercom on a multi-homed host: phones call each other directly,
-# and three or more can meet in a conference room.
-#
-#   servers VLAN  10.0.1.0/24   the host's main network (SSH, WAN); no SIP here
-#   trusted LAN   10.0.10.0/24  softphones on Wi-Fi
-#   VoIP VLAN     10.0.20.0/24  analog phones on Grandstream HT801 adapters, no
-#                               WAN access
-#
-# The host does not route between the VLANs; Asterisk bridges calls and
-# relays their media (direct_media = no), so phones on different VLANs never
-# talk to each other directly. SIP and RTP are only reachable from the
-# trusted LAN and the VoIP VLAN (firewall per interface, SIP ACL per subnet,
-# transports bound to those two addresses only).
-#
-#   101-102  analog phones (HT801)
-#   201-202  softphones
-#   800      conference room
-#
-# Passwords come from sops-nix (set sops.defaultSopsFile in the host's
-# configuration). Adapt the `site` block to your network.
+# Intercom on a host with several networks (see README.md)
 {
   config,
   lib,
@@ -33,6 +14,7 @@
       -t "This phone cannot call nine one one. Use a cell phone."
   '';
 
+  # adapt to your network
   site = {
     trusted = {
       interface = "lan";

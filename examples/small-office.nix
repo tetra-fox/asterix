@@ -1,20 +1,4 @@
-# Small office PBX with a SIP trunk.
-#
-#   lan  10.1.0.0/24     desk phones and softphones
-#   wan  203.0.113.0/24  the provider's network (here: directly attached)
-#
-#   201-203       phones, busy/unavailable -> personal voicemail
-#   5551000       the office's number (DID): rings 201 and 202 for 15 s,
-#                 then the sales voicemail box 200
-#   9 + number    outbound calls through the provider, presenting 5551000
-#   600           support queue (201, 202)
-#   800           conference bridge
-#   *97           voicemail menu
-#
-# Keys without a typed option can be set through the `settings` attribute of
-# typed objects or through `services.asterisk.settings`.
-# Passwords and PINs come from sops-nix (set sops.defaultSopsFile in the host's
-# configuration).
+# Small office PBX with a SIP trunk (see README.md)
 {
   config,
   lib,

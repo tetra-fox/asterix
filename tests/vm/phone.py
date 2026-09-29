@@ -395,11 +395,15 @@ def wait_contacts(machine, count, timeout=180):
 
 
 def journal_cursor(machine):
-    return machine.succeed("journalctl -n 0 --show-cursor | sed -n 's/^-- cursor: //p'").strip()
+    """The journal's position after everything logged so far. journald reads
+    what services log in its own time; `journalctl --sync` returns once it
+    has read what was logged before."""
+    return machine.succeed("journalctl --sync && journalctl -n 0 --show-cursor | sed -n 's/^-- cursor: //p'").strip()
 
 
 def journal_since(machine, cursor):
-    return machine.succeed(f"journalctl -u asterisk.service --after-cursor={shlex.quote(cursor)}")
+    """Asterisk's journal after `cursor`, with everything logged so far."""
+    return machine.succeed(f"journalctl --sync && journalctl -u asterisk.service --after-cursor={shlex.quote(cursor)}")
 
 
 def wait_journal(machine, cursor, pattern, count=1, timeout=90):

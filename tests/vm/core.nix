@@ -39,6 +39,8 @@ pkgs.testers.runNixOSTest {
         pbx.succeed("ss -Hlun 'sport = :5060' | grep -q 5060")
 
     with subtest("default modules load without errors"):
+        # a line journald has not read yet is not in the journal
+        pbx.succeed("journalctl --sync")
         pbx.fail("journalctl -u asterisk.service | grep -E 'ERROR|WARNING|Error loading module|declined to load|not permitted'")
         modules = ast("module show like pjsip")
         assert "chan_pjsip.so" in modules, modules
@@ -59,6 +61,7 @@ pkgs.testers.runNixOSTest {
         pbx.fail(f"grep -rlF {shlex.quote(random)} {' '.join(closure)}")
         pbx.fail(f"grep -rlF 'p;w&d' {' '.join(closure)}")
         pbx.succeed(f"grep -q '@NIX_ASTERISK_SECRET:' {template}/pjsip.conf")
+        pbx.succeed("journalctl --sync")
         pbx.fail(f"journalctl -b | grep -F {shlex.quote(random)}")
         pbx.fail(f"grep -rF {shlex.quote(random)} /var/log/asterisk /var/lib/asterisk")
 

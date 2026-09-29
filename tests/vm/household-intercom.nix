@@ -163,7 +163,7 @@ in
             moved.start()
             moved.wait_registration_failed("Credential failed to authenticate")
             moved.stop()
-            journal = pbx.succeed("journalctl -u asterisk.service")
+            journal = pbx.succeed("journalctl --sync && journalctl -u asterisk.service")
             assert re.search(
                 r"from '<sip:102@10\.0\.10\.10>' failed for '10\.0\.10\.21:5070' .* - Not match Endpoint Contact ACL", journal
             ), "102 was not rejected by its contact ACL"

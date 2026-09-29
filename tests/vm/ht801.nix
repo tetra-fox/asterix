@@ -129,7 +129,7 @@ in
           assert fetch("cfgc074ad000102.xml", source="10.0.20.22") == "200"
           assert fetch("cfgc074ad999999.xml") == "404"
           assert fetch("") == "404"
-          journal = pbx.succeed("journalctl -u asterisk-provisioning.service")
+          journal = pbx.succeed("journalctl --sync && journalctl -u asterisk-provisioning.service")
           assert "10.0.20.22 GET /cfgc074ad000101.xml 403" in journal, journal
 
       with subtest("nothing is served on the trusted LAN address"):

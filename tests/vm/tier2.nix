@@ -152,6 +152,7 @@ pkgs.testers.runNixOSTest {
     builtins.readFile ./phone.py
     + ''
       pbx.wait_for_unit("asterisk.service")
+      pbx.succeed("journalctl --sync")
       pbx.fail("journalctl -u asterisk.service | grep -E 'ERROR|Error loading module|declined to load'")
 
       def ami(username, secret):

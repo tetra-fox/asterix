@@ -1,11 +1,11 @@
-# Calls between phones: busy, unanswered and unreachable callees send the
-# caller to voicemail with the matching greeting, the mailbox owner learns
-# about the message and deletes it after entering a PIN from a secret as DTMF,
-# a hint lights a busy lamp, a ring group cancels the phones that did not
-# answer, one extension rings on two devices, call forwarding is kept in astdb
-# across a restart, a ringing call is picked up from another phone, an IVR
-# reads RFC 4733 and SIP INFO DTMF, codecs with different sample rates are
-# transcoded and a call is recorded to the spool
+# Calls between phones, which hear each other: busy, unanswered and
+# unreachable callees send the caller to voicemail with the matching greeting,
+# the mailbox owner learns about the message and deletes it after entering a
+# PIN from a secret as DTMF, a hint lights a busy lamp, a ring group cancels
+# the phones that did not answer, one extension rings on two devices, call
+# forwarding is kept in astdb across a restart, a ringing call is picked up
+# from another phone, an IVR reads RFC 4733 and SIP INFO DTMF, codecs with
+# different sample rates are transcoded and a call is recorded to the spool
 {
   pkgs,
   self,
@@ -185,8 +185,11 @@ in
       };
     };
 
+    extraPythonPackages = p: [p.numpy];
+
     testScript =
       builtins.readFile ./phone.py
+      + builtins.readFile ./tones.py
       + ''
         start_all()
         pbx.wait_for_unit("asterisk.service")
@@ -220,12 +223,14 @@ in
             # a busy lamp for 202 on 201
             phone["201"].watch("202")
 
-        with subtest("the callee sees the caller's name and number"):
+        with subtest("the callee sees the caller's name and number, and they hear each other"):
             phone["201"].call("202")
             wait_bridged(pbx, "201", "202")
             invite = phone["202"].received("INVITE")[-1]
             assert 'From: "Anna" <sip:201@' in invite, invite
             print(wait_for_media_both_ways(pbx, [phone["201"], phone["202"]]))
+            wait_hears(phone["201"], [phone["202"].tone])
+            wait_hears(phone["202"], [phone["201"].tone])
             phone["201"].hangup()
             wait_idle(pbx)
 
@@ -340,6 +345,8 @@ in
             stats = wait_for_media_both_ways(pbx, [phone["207"], phone["208"]])
             codecs = {endpoint_of(channel): s["codec"] for channel, s in stats.items()}
             assert codecs == {"207": "alaw", "208": "g722"}, codecs
+            wait_hears(phone["207"], [phone["208"].tone])
+            wait_hears(phone["208"], [phone["207"].tone])
             phone["207"].hangup()
             wait_idle(pbx)
 

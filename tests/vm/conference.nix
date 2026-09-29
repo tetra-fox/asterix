@@ -1,7 +1,8 @@
 # ConfBridge rooms built from the typed profiles: eight phones in a recorded
-# room hear each other; guests wait muted for a chair, who kicks the last guest
-# with a DTMF menu and ends the meeting by leaving; a room behind a PIN from a
-# secret turns away a wrong PIN and, once full, further callers
+# room hear each other and never themselves; guests wait muted for a chair,
+# who kicks the last guest with a DTMF menu and ends the meeting by leaving; a
+# room behind a PIN from a secret turns away a wrong PIN and, once full,
+# further callers
 {
   pkgs,
   self,
@@ -102,8 +103,11 @@ in
       };
     };
 
+    extraPythonPackages = p: [p.numpy];
+
     testScript =
       builtins.readFile ./phone.py
+      + builtins.readFile ./tones.py
       + ''
         start_all()
         pbx.wait_for_unit("asterisk.service")
@@ -140,10 +144,12 @@ in
             start_phones(list(phone.values()))
             wait_contacts(pbx, len(extensions))
 
-        with subtest("eight phones in a recorded conference hear each other"):
+        with subtest("eight phones in a recorded conference hear each other and never themselves"):
             cli_parallel([(p, f"call new {p.uri('800')}") for p in phone.values()])
             wait_members("800", {ext: "" for ext in extensions})
             print(wait_for_media_both_ways(pbx, list(phone.values())))
+            for p in phone.values():
+                wait_hears(p, [other.tone for other in phone.values() if other is not p])
             cli_parallel([(p, "call hangup_all") for p in phone.values()])
             wait_idle(pbx)
             pbx.succeed("find /var/lib/asterisk/spool/monitor -name 'confbridge-800-*.wav' -size +10k | grep -q .")

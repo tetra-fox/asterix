@@ -1,15 +1,23 @@
 # Helpers for driving `sip-phone` (tests/vm/phone.nix) from test scripts.
+import itertools
 import re
 import shlex
 import time
+
+# Each phone sends its own tone. From 400 Hz in steps of 60 Hz, halving or
+# doubling one, as a file played at the wrong sample rate would, never gives
+# another phone's tone.
+PHONE_TONES = [400 + 60 * i for i in range(31)]
+phones_made = itertools.count()
 
 
 class Phone:
     """A pjsua instance registered as `user`. It answers incoming calls with
     the SIP status `auto_answer`: 200 picks up, 180 rings until told
-    otherwise, 486 is busy."""
+    otherwise, 486 is busy. It sends a sine of `tone` Hz and records what it
+    hears (tones.py)."""
 
-    def __init__(self, machine, name, user, password, server, sip_port=5070, cli_port=2300, auto_answer=200):
+    def __init__(self, machine, name, user, password, server, sip_port=5070, cli_port=2300, auto_answer=200, tone=None):
         self.machine = machine
         self.name = name
         self.user = user
@@ -18,7 +26,9 @@ class Phone:
         self.sip_port = sip_port
         self.cli_port = cli_port
         self.auto_answer = auto_answer
+        self.tone = PHONE_TONES[next(phones_made) % len(PHONE_TONES)] if tone is None else tone
         self.log = f"/tmp/sip-phone-{name}.log"
+        self.recording = f"/tmp/sip-phone-{name}.wav"
 
     def start_command(self, extra=""):
         flags = [f"--auto-answer={self.auto_answer}"]
@@ -33,7 +43,7 @@ class Phone:
         flags.append(f"--rtp-port={20000 + 8 * (self.sip_port - 5000)}")
         return (
             f"sip-phone start {self.name} {self.user} {shlex.quote(self.password)} "
-            f"{shlex.quote(self.server)} {self.sip_port} {self.cli_port} {' '.join(flags)} {extra}"
+            f"{shlex.quote(self.server)} {self.sip_port} {self.cli_port} {self.tone} {' '.join(flags)} {extra}"
         )
 
     def start(self, extra=""):

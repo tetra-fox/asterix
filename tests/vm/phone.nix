@@ -1,14 +1,16 @@
 # SIP test client for VM tests: pjsua (from pjproject) run as a transient
 # systemd unit, controlled through pjsua's telnet CLI by `sip-phone`.
 #
-#   sip-phone start NAME USER PASSWORD SERVER SIP_PORT CLI_PORT [pjsua args]
+#   sip-phone start NAME USER PASSWORD SERVER SIP_PORT CLI_PORT TONE [pjsua args]
 #   sip-phone cli NAME COMMAND...      e.g. sip-phone cli alice call new sip:102@pbx
 #   sip-phone stop NAME
 #
-# The phone loops received audio back and sends audio continuously (no VAD),
-# so RTP flows in both directions. Full SIP traces are logged to
-# /tmp/sip-phone-NAME.log. How it answers (--auto-answer) and its transport
-# flags (--no-tcp, --ipv6, ...) come with the pjsua args, from phone.py.
+# The phone sends a sine of TONE Hz on every call without pause (no VAD), so
+# RTP flows in both directions, and records what its calls bring to
+# /tmp/sip-phone-NAME.wav, so a test can tell who hears whom (tones.py). Full
+# SIP traces are logged to /tmp/sip-phone-NAME.log. How it answers
+# (--auto-answer) and its transport flags (--no-tcp, --ipv6, ...) come with
+# the pjsua args, from phone.py.
 {pkgs, ...}: let
   pjsip = pkgs.pjsip.overrideAttrs (old: {
     # fixes for pjsua's CLI (pjsua_app_cli.c, unfixed in pjproject master):
@@ -40,6 +42,7 @@
       pkgs.getent
       pkgs.gnused
       pkgs.iproute2
+      pkgs.sox
       pkgs.systemd
     ];
     text = ''
@@ -48,10 +51,13 @@
       mkdir -p /run/sip-phone
       case $command in
         start)
-          name=$1 user=$2 password=$3 server=$4 sip_port=$5 cli_port=$6
-          shift 6
+          name=$1 user=$2 password=$3 server=$4 sip_port=$5 cli_port=$6 tone=$7
+          shift 7
           echo "$cli_port" > "/run/sip-phone/$name.port"
-          rm -f "/tmp/sip-phone-$name.log"
+          rm -f "/tmp/sip-phone-$name.log" "/tmp/sip-phone-$name.wav"
+          # one second of a whole number of periods, which pjsua loops without
+          # a click; quiet enough that 20 phones mixed together don't clip
+          sox -n -r 16000 -b 16 -c 1 "/run/sip-phone/$name-tone.wav" synth 1 sine "$tone" vol 0.05
           # pjsua advertises the address of the default route's interface in
           # its SDP, which in the test VMs is QEMU's user network: every VM has
           # the same one there, so audio sent to it never arrives. Advertise
@@ -75,7 +81,9 @@
               --id="sip:$user@$server" --registrar="sip:$server" \
               --realm='*' --username="$user" --password="$password" \
               "''${ip_addr[@]}" \
-              --null-audio --no-vad --local-port="$sip_port" --auto-loop \
+              --null-audio --no-vad --local-port="$sip_port" \
+              --play-file="/run/sip-phone/$name-tone.wav" --auto-play \
+              --rec-file="/tmp/sip-phone-$name.wav" --auto-rec \
               --use-cli --cli-telnet-port="$cli_port" --no-cli-console \
               --log-file="/tmp/sip-phone-$name.log" --log-append --log-level=5 --app-log-level=3 \
               "$@"

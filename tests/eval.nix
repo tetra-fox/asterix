@@ -413,6 +413,37 @@ in {
       ];
     };
 
+    # Asterisk raises an RTP port below 1024 to 1024 (res_rtp_asterisk.c,
+    # MINIMUM_RTP_PORT), so such a range needs no capability
+    testRtpRangeStartsAt1024 = {
+      expr = let
+        config = evalConfig [
+          phone
+          {
+            services.asterisk = {
+              openFirewall = true;
+              rtp.portRange = {
+                from = 1000;
+                to = 1100;
+              };
+            };
+          }
+        ];
+      in {
+        inherit (config.networking.firewall) allowedUDPPortRanges;
+        inherit (config.systemd.services.asterisk.serviceConfig) CapabilityBoundingSet;
+      };
+      expected = {
+        allowedUDPPortRanges = [
+          {
+            from = 1024;
+            to = 1100;
+          }
+        ];
+        CapabilityBoundingSet = [""];
+      };
+    };
+
     testTlsFilesAreCredentials = {
       expr = let
         config = evalConfig [

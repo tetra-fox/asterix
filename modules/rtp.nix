@@ -21,7 +21,7 @@ in {
       from = mkOption {
         type = types.port;
         default = 10000;
-        description = "First UDP port for RTP and RTCP.";
+        description = "First UDP port for RTP and RTCP. Asterisk raises a port below 1024 to 1024.";
       };
       to = mkOption {
         type = types.port;

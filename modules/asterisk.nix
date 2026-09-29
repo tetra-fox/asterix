@@ -497,10 +497,13 @@
     from = toPort (rtpGeneral.rtpstart or 5000);
     to = toPort (rtpGeneral.rtpend or 31000);
   };
+  # Asterisk raises either end below 1024 to 1024 (res_rtp_asterisk.c,
+  # MINIMUM_RTP_PORT)
+  rtpPorts = lib.mapAttrs (_: lib.max 1024) rtpRange;
 
-  # Ports Asterisk binds itself (not only the ones opened in the firewall);
-  # anything below 1024 needs CAP_NET_BIND_SERVICE. The listen ports are
-  # bound at startup, RTP ports only for calls.
+  # Ports Asterisk binds at startup (not only the ones opened in the
+  # firewall); one below 1024 needs CAP_NET_BIND_SERVICE. RTP ports are never
+  # below 1024.
   httpGeneral = cfg.settings."http.conf".general or {};
   managerGeneral = cfg.settings."manager.conf".general or {};
   httpPorts =
@@ -511,7 +514,7 @@
   amiPorts = optional (format.isTrue (managerGeneral.enabled or false)) (toPort (managerGeneral.port or 5038));
   listenPorts = map (t: t.port) transportPorts ++ httpPorts ++ amiPorts;
   lowPort = port: port < 1024;
-  needsLowPorts = builtins.any lowPort (listenPorts ++ [rtpRange.from]);
+  needsLowPorts = builtins.any lowPort listenPorts;
 
   # Specific addresses Asterisk binds (not wildcard or loopback). With
   # scripted networking, static addresses of interfaces other than the default
@@ -569,7 +572,7 @@
       ++ lib.optionals cfg.firewall.http httpPorts
       ++ lib.optionals cfg.firewall.ami amiPorts
     );
-    allowedUDPPortRanges = [rtpRange];
+    allowedUDPPortRanges = [rtpPorts];
   };
 
   includeType = types.coercedTo types.str (file: {inherit file;}) (

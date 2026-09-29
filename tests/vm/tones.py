@@ -49,6 +49,30 @@ def heard(phone, start, end=None):
     return tones_in(samples, sample_rate(phone))
 
 
+def hears_any(windows, tones):
+    return any(abs(f - t) <= TOLERANCE for w in windows for f in w for t in tones)
+
+
+def bursts(phone, mark, tones):
+    """Which of `tones` `phone` heard since `mark`, once for each stretch of
+    100 ms windows whose loudest tone it was: a window with a few ms of a
+    prompt at its edge also has peaks some 200 Hz off."""
+    found = []
+    previous = None
+    for window in heard(phone, mark):
+        tone = next((t for t in tones if window and abs(window[0] - t) <= TOLERANCE), None)
+        if tone is not None and tone != previous:
+            found.append(tone)
+        previous = tone
+    return found
+
+
+def wait_recorded(phone, mark, seconds):
+    """Wait until `phone` has recorded `seconds` of audio after `mark`."""
+    size = HEADER + mark + round(seconds * sample_rate(phone)) * 2
+    phone.machine.wait_until_succeeds(f"test $(stat -c %s {phone.recording}) -ge {size}")
+
+
 def tones_in(samples, rate):
     size = round(rate * WINDOW)
     hann = numpy.hanning(size)

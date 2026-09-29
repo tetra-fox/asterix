@@ -313,27 +313,6 @@ in
             """Wait until an outside member hears the confirmation prompt."""
             wait_journal(pbx, cursor, r"Playing 'followme/no-recording\.")
 
-        def hears_any(windows, tones):
-            return any(abs(f - t) <= TOLERANCE for w in windows for f in w for t in tones)
-
-        def wait_recorded(p, mark, seconds):
-            """Wait until `p` has recorded `seconds` of audio after `mark`."""
-            size = HEADER + mark + round(seconds * sample_rate(p)) * 2
-            p.machine.wait_until_succeeds(f"test $(stat -c %s {p.recording}) -ge {size}")
-
-        def bursts(p, mark):
-            """The prompt tones `p` heard since `mark`, once for each stretch of
-            100 ms windows whose loudest tone it was: a window with a few ms of
-            a prompt at its edge also has peaks some 200 Hz off."""
-            found = []
-            previous = None
-            for window in heard(p, mark):
-                tone = next((t for t in PROMPTS.values() if window and abs(window[0] - t) <= TOLERANCE), None)
-                if tone is not None and tone != previous:
-                    found.append(tone)
-                previous = tone
-            return found
-
         def distinct(tones):
             return [t for i, t in enumerate(tones) if i == 0 or tones[i - 1] != t]
 
@@ -480,7 +459,7 @@ in
             boss.wait_disconnected(after=ended)
             assert db("test", "keys") == "0123456789*", db("test", "keys")
             assert played(cursor).count("test/keys") == 12, played(cursor)
-            assert distinct(bursts(boss, mark)) == [PROMPTS["keys"]], bursts(boss, mark)
+            assert distinct(bursts(boss, mark, PROMPTS.values())) == [PROMPTS["keys"]], heard(boss, mark)
             wait_idle(pbx)
 
         with subtest("a key that starts an extension number waits for the next digit"):
@@ -508,7 +487,7 @@ in
             boss.call("702")
             assert wait_db("test", "five") == "landed"
             assert played(cursor) == ["test/five"] * 5, played(cursor)
-            assert bursts(boss, mark) == [PROMPTS["five"]] * 5, bursts(boss, mark)
+            assert bursts(boss, mark, PROMPTS.values()) == [PROMPTS["five"]] * 5, heard(boss, mark)
             wait_idle(pbx)
 
         with subtest("a key opens a nested menu, or the menu itself"):
@@ -523,7 +502,7 @@ in
             # sub plays once, then takes its no-input destination
             assert wait_db("test", "sub") == "landed"
             assert played(cursor) == ["test/top", "test/top", "test/sub"], played(cursor)
-            assert distinct(bursts(boss, mark)) == [PROMPTS["top"], PROMPTS["sub"]], bursts(boss, mark)
+            assert distinct(bursts(boss, mark, PROMPTS.values())) == [PROMPTS["top"], PROMPTS["sub"]], heard(boss, mark)
             wait_idle(pbx)
 
         with subtest("a spoken prompt of 2,000 characters, some not ASCII, plays"):

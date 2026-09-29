@@ -252,6 +252,17 @@ in {
           assertion = invalidAddresses == {};
           message = "pbx.phones.files: allowedAddress must be one IPv4 or IPv6 address: ${lib.concatStringsSep ", " (mapAttrsToList (name: file: "${name} has `${file.allowedAddress}`") invalidAddresses)}.";
         }
+        {
+          # the socket's ListenStream= takes an address and the port
+          assertion = isAddress cfg.listenAddress;
+          message = "pbx.phones.listenAddress must be one IPv4 or IPv6 address: ${builtins.toJSON cfg.listenAddress}.";
+        }
+        {
+          assertion = moduleLib.invalidInterfaces cfg.firewallInterfaces == [];
+          message = "pbx.phones.firewallInterfaces: Linux takes interface names of 1 to 15 bytes without /, : or whitespace: ${
+            lib.concatMapStringsSep ", " builtins.toJSON (moduleLib.invalidInterfaces cfg.firewallInterfaces)
+          }.";
+        }
       ]
       ++ map (ref: {
         assertion = !(secrets.isStorePath ref) && secrets.isValidReference ref;

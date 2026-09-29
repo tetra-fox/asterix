@@ -244,6 +244,13 @@
   ) (attrNames cfg.settings);
   fileSecrets = filter (ref: ref ? _secret) secretRefs;
 
+  # credentials whose path would change the lines of the unit: a line break
+  # starts a line of its own, and a backslash at the end joins the next line
+  # to its LoadCredential= line
+  unitBreakingCredentials = attrNames (
+    filterAttrs (_: path: lib.hasInfix "\n" path || lib.hasInfix "\r" path || hasSuffix "\\" path) cfg.credentials
+  );
+
   # Asterisk skips a line of a config file longer than 8190 bytes (main/config.c
   # config_text_file_load); render-secrets checks a line with its secrets
   longLines = concatMap (
@@ -980,6 +987,16 @@ in {
         })
         cfg.credentials
         ++ [
+          {
+            assertion = unitBreakingCredentials == [];
+            message = "services.asterisk.credentials: paths cannot contain a line break or end with a backslash, which would change the lines of asterisk.service: ${concatStringsSep ", " unitBreakingCredentials}.";
+          }
+          {
+            assertion = moduleLib.invalidInterfaces cfg.firewallInterfaces == [];
+            message = "services.asterisk.firewallInterfaces: Linux takes interface names of 1 to 15 bytes without /, : or whitespace: ${
+              lib.concatMapStringsSep ", " builtins.toJSON (moduleLib.invalidInterfaces cfg.firewallInterfaces)
+            }.";
+          }
           {
             # otherwise res_rtp_asterisk uses 5000-31000, which the firewall does not open
             assertion = rtpRange.from < rtpRange.to;

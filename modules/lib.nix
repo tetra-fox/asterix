@@ -113,4 +113,9 @@ in {
     if interfaces == []
     then ports
     else {interfaces = lib.genAttrs interfaces (_: ports);};
+
+  # the names in `interfaces` that Linux refuses for an interface: it takes 1
+  # to 15 bytes without /, : or whitespace, other than . and .. (net/core/dev.c
+  # dev_valid_name)
+  invalidInterfaces = builtins.filter (name: builtins.match "[^/:[:space:]]{1,15}" name == null || name == "." || name == "..");
 }

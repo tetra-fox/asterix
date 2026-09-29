@@ -4,14 +4,12 @@
 # file to OUT/known.nix.
 {
   "pbx.hours.<name>.timezone = \"Mars/Olympus_Mons\"" = "rejected by pbx-hours-timezones";
-  "pbx.phones.firewallInterfaces = string lineBreak" = "P3: loads";
   "pbx.phones.grandstream.ht801.adminPassword = string lineBreak" = "P3: loads";
   "pbx.phones.grandstream.ht801.devices.<name>.settings = string lineBreak" = "P3: loads";
   "pbx.phones.grandstream.ht801.ntpServer = string lineBreak" = "P3: loads";
   "pbx.phones.grandstream.ht801.settings = string lineBreak" = "P3: loads";
   "pbx.phones.grandstream.ht801.sipServer = string lineBreak" = "P3: loads";
   "pbx.phones.grandstream.ht801.timeZone = string lineBreak" = "P3: loads";
-  "pbx.phones.listenAddress = string lineBreak" = "P3: loads";
   "services.asterisk.ami.address = \"127.0.0.1:5038\"" = "rejected by asterisk-config-check";
   "services.asterisk.ami.address = \"300.0.0.1\"" = "rejected by asterisk-config-check";
   "services.asterisk.ami.address = \"pbx\"" = "rejected by asterisk-config-check";
@@ -37,7 +35,6 @@
   "services.asterisk.confbridge.bridges.<name>.settings = {\"q7unknown\":\"x\"}" = "rejected by asterisk-config-check";
   "services.asterisk.confbridge.menus = {\"admin_menu\":{\"*1\":\"q7action\"}}" = "P3: loads";
   "services.asterisk.confbridge.users.<name>.settings = {\"q7unknown\":\"x\"}" = "rejected by asterisk-config-check";
-  "services.asterisk.credentials = string lineBreak" = "P3: loads";
   "services.asterisk.dialplan.contexts.<name>.extensions = {\"100\":[\"Dial(PJSIP/101\"]}" = "rejected by asterisk-config-check";
   "services.asterisk.dialplan.contexts.<name>.extensions = {\"100\":[\"Q7NoSuchApp(x)\"]}" = "rejected by asterisk-config-check";
   "services.asterisk.dialplan.contexts.<name>.extensions = {\"100\":[\"q7notanapp\"]}" = "rejected by asterisk-config-check";
@@ -52,15 +49,12 @@
   "services.asterisk.features.featureMap = {\"blindxfer\":\"q7\"}" = "P3: loads";
   "services.asterisk.features.featureMap = {\"q7feature\":\"*1\"}" = "rejected by asterisk-config-check";
   "services.asterisk.features.general = {\"q7unknown\":\"x\"}" = "rejected by asterisk-config-check";
-  "services.asterisk.firewallInterfaces = string lineBreak" = "P3: loads";
   "services.asterisk.generatedConfig = set" = "P3: loads";
   "services.asterisk.http.address = \"300.0.0.1\"" = "rejected by asterisk-config-check";
   "services.asterisk.http.address = \"pbx\"" = "rejected by asterisk-config-check";
   "services.asterisk.http.openFirewall = \"yes\"" = "P3: loads";
   "services.asterisk.http.settings = {\"q7unknown\":\"x\"}" = "rejected by asterisk-config-check";
   "services.asterisk.http.tls.address = \"pbx\"" = "rejected by asterisk-config-check";
-  "services.asterisk.http.tls.certFile = string lineBreak" = "P3: loads";
-  "services.asterisk.http.tls.keyFile = string lineBreak" = "P3: loads";
   "services.asterisk.includes.<name>.*.optional = default" = "limitation (D43: the included file is not in the build)";
   "services.asterisk.includes.<name>.*.optional = false" = "limitation (D43: the included file is not in the build)";
   "services.asterisk.logger.channels = {\"messages\":[\"q7level\"]}" = "P3: loads";
@@ -107,9 +101,6 @@
   "services.asterisk.pjsip.transports.<name>.externalSignalingAddress = \"q7 address\"" = "rejected by asterisk-config-check";
   "services.asterisk.pjsip.transports.<name>.localNet = [\"q7net\"]" = "rejected by asterisk-config-check";
   "services.asterisk.pjsip.transports.<name>.settings = {\"q7unknown\":\"x\"}" = "rejected by asterisk-config-check";
-  "services.asterisk.pjsip.transports.<name>.tls.caListFile = string lineBreak" = "P3: loads";
-  "services.asterisk.pjsip.transports.<name>.tls.certFile = string lineBreak" = "P3: loads";
-  "services.asterisk.pjsip.transports.<name>.tls.keyFile = string lineBreak" = "P3: loads";
   "services.asterisk.pjsip.trunks.<name>.allow = [\"q7codec\"]" = "rejected by asterisk-config-check";
   "services.asterisk.pjsip.trunks.<name>.aorSettings = {\"q7unknown\":\"x\"}" = "rejected by asterisk-config-check";
   "services.asterisk.pjsip.trunks.<name>.host = \"\"" = "rejected by asterisk-config-check";

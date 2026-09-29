@@ -635,6 +635,32 @@
       assertion = "invalid or reserved credential name `secret-x`";
     };
 
+    # a path lands in a LoadCredential= line of asterisk.service, where a line
+    # break starts a line of its own and a backslash at the end joins the next
+    # line to it
+    credentialPathsBreakingUnit = {
+      module.services.asterisk.pjsip.transports.tls = {
+        protocol = "tls";
+        tls = {
+          certFile = "/var/lib/acme/pbx/cert.pem\\";
+          keyFile = "/var/lib/acme/pbx/key.pem\nExecStartPre=/bin/false";
+        };
+      };
+      assertion = "services.asterisk.credentials: paths cannot contain a line break or end with a backslash, which would change the lines of asterisk.service: pjsip-tls-cert, pjsip-tls-key.";
+    };
+
+    # the firewall's rules name the interfaces
+    firewallInterfaceNames = {
+      module.services.asterisk.firewallInterfaces = [
+        "lan"
+        "lan\nreboot"
+        "a/b"
+        "enp5s0-long-name"
+        "."
+      ];
+      assertion = ''services.asterisk.firewallInterfaces: Linux takes interface names of 1 to 15 bytes without /, : or whitespace: "lan\nreboot", "a/b", "enp5s0-long-name", ".".'';
+    };
+
     managedDirectory = {
       module.services.asterisk.settings."asterisk.conf".directories.astetcdir =
         lib.mkForce "/etc/asterisk";

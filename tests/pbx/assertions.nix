@@ -808,6 +808,27 @@
       assertions = ["pbx.phones.files: allowedAddress must be one IPv4 or IPv6 address: brackets.cfg has `[fd00::21]`, cfgc074ad000201.xml has `10.0.20.021`, name.cfg has `kitchen.lan`, network.cfg has `10.0.20.21/32`, zone.cfg has `fe80::21%voip`."];
     };
 
+    # the socket's ListenStream= takes an address, and a line break would
+    # start a line of its own in the unit; the firewall's rules name the
+    # interfaces
+    phonesListenAddressAndInterfaces = {
+      module = {
+        imports = [phones];
+        pbx.phones = {
+          enable = true;
+          listenAddress = lib.mkForce "10.0.20.10\nExecStartPre=/bin/false";
+          firewallInterfaces = [
+            "voip"
+            "voip\nreboot"
+          ];
+        };
+      };
+      assertions = [
+        ''pbx.phones.listenAddress must be one IPv4 or IPv6 address: "10.0.20.10\nExecStartPre=/bin/false".''
+        ''pbx.phones.firewallInterfaces: Linux takes interface names of 1 to 15 bytes without /, : or whitespace: "voip\nreboot".''
+      ];
+    };
+
     # the adapter sends one user name, for the endpoint and its aor
     ht801EndpointWithRenamedAor = {
       module = {

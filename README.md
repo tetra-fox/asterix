@@ -130,6 +130,9 @@ service does not start when a secret in it contains one.
 
 Other secret managers work the same way, since `secret` only takes a path.
 
+A crash leaves no core dump, since it would hold every secret. To debug one,
+set `systemd.services.asterisk.serviceConfig.LimitCORE = "infinity";`.
+
 A password written as a plain string works too, but it ends up in the Nix
 store, which every user on the host can read. The module warns about plain
 strings in password fields.

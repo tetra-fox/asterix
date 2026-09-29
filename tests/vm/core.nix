@@ -1,6 +1,7 @@
 # Core service behaviour with a purely freeform (layer 1) configuration: boot,
 # config loading, secrets, runtime file permissions, sandboxing, the CLI
-# wrapper for users in and out of the asterisk group.
+# wrapper for users in and out of the asterisk group, a crash that leaves no
+# core dump.
 {
   pkgs,
   self,
@@ -31,6 +32,7 @@ pkgs.testers.runNixOSTest {
   };
 
   testScript = ''
+    import re
     import shlex
 
     def ast(command):
@@ -169,5 +171,17 @@ pkgs.testers.runNixOSTest {
         pbx.succeed("systemctl restart asterisk.service")
         pbx.wait_for_unit("asterisk.service")
         ast("pjsip show endpoints")
+
+    with subtest("a crash leaves no core dump"):
+        pid = pbx.succeed("systemctl show -P MainPID asterisk.service").strip()
+        pbx.succeed(f"kill -SEGV {pid}")
+        # systemd-coredump records the crash, with a core file only where the
+        # process's RLIMIT_CORE lets it keep one
+        pbx.wait_until_succeeds(f"coredumpctl --no-legend list {pid}", timeout=60)
+        crash = pbx.succeed(f"coredumpctl --no-legend list {pid}")
+        assert re.search(r" SIGSEGV none ", crash), crash
+        pbx.succeed("test -z \"$(ls /var/lib/systemd/coredump)\"")
+        pbx.wait_until_succeeds(f"test \"$(systemctl show -P MainPID asterisk.service)\" != {pid}")
+        pbx.wait_for_unit("asterisk.service")
   '';
 }

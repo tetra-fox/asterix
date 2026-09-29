@@ -1095,6 +1095,9 @@ in {
             LogsDirectoryMode = "0750";
             UMask = "0027";
             LimitNOFILE = 65536;
+            # a core dump holds every secret Asterisk read; systemd-coredump
+            # keeps none of a process whose RLIMIT_CORE is 0
+            LimitCORE = 0;
             # Realtime scheduling is set by systemd: Asterisk ignores -p unless
             # it starts as root. LimitRTPRIO lets it adjust the priority later.
             CPUSchedulingPolicy = mkIf cfg.realtime "rr";

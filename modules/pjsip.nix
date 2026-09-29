@@ -493,12 +493,16 @@
       contactDeny = mkOption {
         type = types.listOf types.str;
         default = [];
-        description = "Networks registered contacts must not be in.";
+        description = ''
+          Networks the addresses in a request's Contact header must not be in.
+          Asterisk checks every request that has one, calls from a trunk as
+          well as registrations, and answers 403.
+        '';
       };
       contactPermit = mkOption {
         type = types.listOf types.str;
         default = [];
-        description = "Networks registered contacts may be in, overriding `contactDeny`.";
+        description = "Networks the addresses in a request's Contact header may be in, overriding `contactDeny`.";
       };
       settings = settingsOption "acl";
     };

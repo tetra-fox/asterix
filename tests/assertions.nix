@@ -218,9 +218,46 @@
       ];
     };
 
-    # so can other sorcery backends
+    # so can other sorcery backends, however sorcery.conf is written
     sorceryMapping = {
       module = withEveryReference {settings."sorcery.conf".res_pjsip.auth = "astdb,auths";};
+      assertions = [
+        reported.duplicate
+        reported.context
+        reported.include
+      ];
+    };
+
+    sorceryMappingByName = {
+      module = withEveryReference {
+        settings."sorcery.conf".mapping = {
+          name = "res_pjsip";
+          auth = "astdb,auths";
+        };
+      };
+      assertions = [
+        reported.duplicate
+        reported.context
+        reported.include
+      ];
+    };
+
+    sorceryMappingInRawText = {
+      module = withEveryReference {
+        extraConfig."sorcery.conf" = ''
+          [res_pjsip]
+          auth = astdb,auths
+        '';
+      };
+      assertions = [
+        reported.duplicate
+        reported.context
+        reported.include
+      ];
+    };
+
+    includedSorceryFiles = {
+      module = withEveryReference {includes."sorcery.conf" = ["sorcery-local.conf"];};
       assertions = [
         reported.duplicate
         reported.context

@@ -777,10 +777,16 @@
   objects = resolved.sections;
   namesOfType = type: map (s: s.name) (filter (s: (s.type or null) == type) objects);
 
+  # sorcery.conf's sections by name, or null when it includes files
+  sorcerySections = format.sectionNames {
+    sections = cfg.settings."sorcery.conf" or {};
+    includes = cfg.includes."sorcery.conf" or [];
+    extraConfig = cfg.extraConfig."sorcery.conf" or "";
+  };
   # sections of the raw text (of unknown type), or null when objects can also
   # come from included files or other sorcery backends
   rawSections =
-    if builtins.any (lib.hasPrefix "res_pjsip") (attrNames (cfg.settings."sorcery.conf" or {}))
+    if sorcerySections == null || builtins.any (lib.hasPrefix "res_pjsip") sorcerySections
     then null
     else
       format.sectionNames {

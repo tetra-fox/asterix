@@ -154,9 +154,6 @@ in
           ./common.nix
           ./phone.nix
         ];
-        # the phones' firewall lets in what answers their own requests, but
-        # the carrier only receives requests
-        networking.firewall.allowedUDPPorts = [carrierPort];
       };
     };
 

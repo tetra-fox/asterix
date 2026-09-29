@@ -110,4 +110,7 @@
   };
 in {
   environment.systemPackages = [sipPhone];
+  # phones take what the PBX sends to the Contact they give, such as the ACK
+  # for a TCP or TLS callee's answer, which comes over a new connection
+  networking.firewall.enable = false;
 }

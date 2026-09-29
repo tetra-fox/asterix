@@ -124,6 +124,10 @@
   # that makes the next character literal
   escapeField = lib.replaceStrings ["\\" "," "\"" "(" ")" "[" "]"] ["\\\\" "\\," "\\\"" "\\(" "\\)" "\\[" "\\]"];
 
+  # queues.conf keeps the first 79 bytes of a queue's name (main/config.c
+  # struct ast_category), and Queue() looks for the whole name
+  longNames = builtins.filter (name: builtins.stringLength name > 79) (builtins.attrNames qcfg.queues);
+
   memberValue = m:
     format.joinFields (map escapeField [
       m.interface
@@ -166,7 +170,10 @@ in {
           };
         }
       '';
-      description = "Call queues, used as `Queue(support)` in the dialplan.";
+      description = ''
+        Call queues, used as `Queue(support)` in the dialplan. Asterisk keeps
+        79 bytes of a queue's name.
+      '';
     };
   };
 
@@ -198,6 +205,10 @@ in {
       {
         assertion = !(qcfg.queues ? general);
         message = "services.asterisk.queues.queues: `general` is reserved.";
+      }
+      {
+        assertion = longNames == [];
+        message = "services.asterisk.queues.queues: names longer than 79 bytes, which Asterisk cuts, so Queue() never finds them: ${lib.concatStringsSep ", " longNames}.";
       }
     ];
   };

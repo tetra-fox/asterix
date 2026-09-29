@@ -1016,6 +1016,16 @@
       throws = true;
     };
 
+    # queues.conf keeps the first 79 bytes of a section's name, while Queue()
+    # looks for the whole name
+    queueNameLongerThan79Bytes = {
+      module.services.asterisk.queues.queues = {
+        ${lib.strings.replicate 80 "q"}.members = ["PJSIP/101"];
+        ${lib.strings.replicate 79 "r"}.members = ["PJSIP/101"];
+      };
+      assertion = "services.asterisk.queues.queues: names longer than 79 bytes, which Asterisk cuts, so Queue() never finds them: ${lib.strings.replicate 80 "q"}.";
+    };
+
     # Asterisk waits its default of 5 seconds instead
     queueRetryZeroThrows = {
       module.services.asterisk.queues.queues.support.retry = 0;

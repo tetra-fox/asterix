@@ -251,6 +251,12 @@
       assertions = [];
     };
 
+    # hangup takes only true; nothing else may hang up quietly
+    hangupFalseThrows = {
+      module.pbx.ringGroups.front.noAnswer = {hangup = false;};
+      throws = true;
+    };
+
     missingDestinations = {
       module.pbx = {
         ringGroups.front.noAnswer.voicemail = "999";

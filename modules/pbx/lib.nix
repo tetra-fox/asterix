@@ -142,7 +142,9 @@ in rec {
         (toString dest.context.priority)
       ])
     ]
-    else [(app "Hangup" [])];
+    # hangup: its value is read, so its type, which takes only true, is
+    # checked
+    else builtins.seq dest.hangup [(app "Hangup" [])];
 
   # `steps`, the first one labelled
   labelled = label: dest: let

@@ -25,8 +25,11 @@
     ;
 
   cfg = config.pbx;
+  core = config.services.asterisk;
   pbxLib = import ./lib.nix {inherit lib;};
-  inherit ((import ../../lib {inherit lib;}).dialplan) app;
+  asteriskLib = import ../../lib {inherit lib;};
+  inherit (asteriskLib) format;
+  inherit (asteriskLib.dialplan) app;
 
   gotoAt = context: extension: pbxLib.app "Goto" [context extension "1"];
 
@@ -82,6 +85,26 @@
   clashes = filterAttrs (_: owners: length owners > 1) (builtins.groupBy (n: n.number) numbers);
   malformed = filter (n: builtins.match "[0-9*#]+" n.number == null) numbers;
 
+  # chan_pjsip takes a call to pickupexten, *8 unless set, as a call pickup
+  # before the dialplan runs; null when features.conf has includes or raw text
+  pickupExten = let
+    general = filter (s: s.name == "general") (format.resolveInheritance (core.settings."features.conf" or {})).sections;
+    values = concatMap (s: lib.toList (s.pickupexten or [])) general;
+  in
+    if core.includes."features.conf" or [] != [] || core.extraConfig."features.conf" or "" != ""
+    then null
+    else if values == []
+    then "*8"
+    else toString (lib.last values);
+  pickedUp = map (n: n.owner) (filter (n: n.number == pickupExten) (
+    numbers
+    ++ mapAttrsToList (number: _: {
+      inherit number;
+      owner = ''pbx.inbound."${number}"'';
+    })
+    cfg.inbound
+  ));
+
   generated = listToAttrs (map (n: nameValuePair n.number n.steps) numbers);
 
   # Nix concatenates the lists of several definitions, so steps defined for a
@@ -128,6 +151,10 @@ in {
       {
         assertion = malformed == [];
         message = "pbx: numbers may only contain digits, * and #: ${concatMapStringsSep ", " (n: "${n.number} (${n.owner})") malformed}.";
+      }
+      {
+        assertion = pickedUp == [];
+        message = "pbx: chan_pjsip takes a call to ${pickupExten}, the pickupexten of features.conf, as a call pickup before the dialplan runs, so it never reaches ${concatStringsSep ", " pickedUp}. Use another number, or change services.asterisk.features.general.pickupexten.";
       }
       {
         assertion = extended == [];

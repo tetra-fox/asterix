@@ -107,6 +107,26 @@
       assertion = "numbers may only contain digits, * and #: 61O (pbx.queues.support)";
     };
 
+    # *8 unless features.conf says otherwise
+    numberIsCallPickup = {
+      module.pbx.hours.office.closeEarly = "*8";
+      assertion = "takes a call to *8, the pickupexten of features.conf, as a call pickup before the dialplan runs, so it never reaches pbx.hours.office.closeEarly.";
+    };
+
+    callPickupMoved = {
+      module = {
+        pbx.hours.office.closeEarly = "*8";
+        services.asterisk.features.general.pickupexten = "*9";
+      };
+      assertions = [];
+    };
+
+    # calls from trunks are picked up too
+    callPickupOnInboundNumber = {
+      module.services.asterisk.features.general.pickupexten = "5551000";
+      assertion = ''takes a call to 5551000, the pickupexten of features.conf, as a call pickup before the dialplan runs, so it never reaches pbx.inbound."5551000".'';
+    };
+
     # list definitions concatenate, so these steps would follow the pbx's
     stepsAddedToPbxNumber = {
       module.services.asterisk.dialplan.contexts.pbx-internal.extensions."201" = ["NoOp(extra)"];

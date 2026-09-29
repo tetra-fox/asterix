@@ -34,8 +34,12 @@ def heard(phone, start, end=None):
     """The tones in each 100 ms `phone` heard between two marks, loudest first;
     an empty list is silence"""
     end = recorded(phone) if end is None else end
+    # dd reads just this range; with tail | head, tail fails on the closed pipe
+    # once the phone has recorded a pipe buffer past the range
     raw = base64.b64decode(
-        phone.machine.succeed(f"tail -c +{HEADER + start + 1} {phone.recording} | head -c {end - start} | base64 -w0")
+        phone.machine.succeed(
+            f"dd if={phone.recording} iflag=skip_bytes,count_bytes skip={HEADER + start} count={end - start} status=none | base64 -w0"
+        )
     )
     samples = numpy.frombuffer(raw[: len(raw) // 2 * 2], dtype="<i2").astype(float)
     return tones_in(samples, sample_rate(phone))

@@ -234,6 +234,8 @@ in
             print(wait_for_media_both_ways(pbx, [phone["201"], phone["202"]]))
             wait_hears(phone["201"], [phone["202"].tone])
             wait_hears(phone["202"], [phone["201"].tone])
+            # the first half second, read while 201 goes on recording
+            assert len(heard(phone["201"], 0, 16000)) == 5
             phone["201"].hangup()
             wait_idle(pbx)
 

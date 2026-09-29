@@ -1,12 +1,16 @@
 # Calls between phones, which hear each other: busy, unanswered and
 # unreachable callees send the caller to voicemail with the matching greeting,
-# the mailbox owner learns about the message and deletes it after entering a
-# PIN from a secret as DTMF, a hint lights a busy lamp, a ring group cancels
-# the phones that did not answer, one extension rings on two devices, call
+# a message reaches an SMTP server with its recording attached and reads back
+# in every format, the mailbox owner learns about the message, hears it and
+# deletes it after entering a PIN from a secret as DTMF, records a busy
+# greeting callers then hear, a message stops at maxSeconds and a full
+# mailbox takes none, a hint lights a busy lamp, a ring group cancels the
+# phones that did not answer, one extension rings on two devices, call
 # forwarding is kept in astdb across a restart, a ringing call is picked up
 # from another phone, an IVR reads RFC 4733 and SIP INFO DTMF, a call
-# survives a lossy network, codecs with different sample rates are transcoded,
-# a call is recorded to the spool, and a baresip phone calls a pjsua one
+# survives a lossy network, codecs with different sample rates are
+# transcoded, a call is recorded to the spool, and a baresip phone calls a
+# pjsua one
 {
   pkgs,
   self,
@@ -49,6 +53,17 @@ in
           })
         ];
 
+        # voicemail e-mails go to the mail node
+        programs.msmtp = {
+          enable = true;
+          accounts.default = {
+            host = "mail";
+            port = 25;
+            auth = false;
+            tls = false;
+          };
+        };
+
         services.asterisk = {
           enable = true;
           openFirewall = true;
@@ -82,12 +97,27 @@ in
             ];
           };
 
-          voicemail.mailboxes =
-            lib.mapAttrs (extension: name: {
-              fullName = name;
-              pin = secret "/run/test-secrets/vm-${extension}";
-            })
-            names;
+          voicemail = {
+            mailboxes = lib.mkMerge [
+              (lib.mapAttrs (extension: name: {
+                  fullName = name;
+                  pin = secret "/run/test-secrets/vm-${extension}";
+                })
+                names)
+              {"209".email = "ivy@example.org";}
+            ];
+            # 10 formats, the most Asterisk takes: each format module and codec
+            # the default modules load, and two of the sln rates
+            format = ["wav49" "wav" "wav16" "gsm" "ulaw" "alaw" "g722" "au" "sln" "sln16"];
+            maxMessages = 1;
+            maxSeconds = 5;
+            email = {
+              command = "${pkgs.msmtp}/bin/msmtp --read-envelope-from -t";
+              fromAddress = "voicemail@example.org";
+            };
+          };
+          # `file convert` reads stored messages back
+          modules.load = ["res_convert.so"];
 
           dialplan.contexts = {
             office = {
@@ -186,6 +216,21 @@ in
           ./baresip.nix
         ];
       };
+
+      # an SMTP server that keeps every message it receives in a Maildir
+      mail = {
+        imports = [./common.nix];
+        networking.firewall.allowedTCPPorts = [25];
+        systemd.services.smtp-sink = {
+          wantedBy = ["multi-user.target"];
+          serviceConfig = {
+            # Python's mailbox module creates a Maildir's subdirectories only
+            # along with the Maildir itself, so it cannot be the state directory
+            ExecStart = "${pkgs.python3Packages.aiosmtpd}/bin/aiosmtpd --nosetuid --listen 0.0.0.0:25 --class aiosmtpd.handlers.Mailbox /var/lib/smtp-sink/maildir";
+            StateDirectory = "smtp-sink";
+          };
+        };
+      };
     };
 
     extraPythonPackages = p: [p.numpy];
@@ -194,8 +239,11 @@ in
       builtins.readFile ./phone.py
       + builtins.readFile ./tones.py
       + ''
+        import email
+
         start_all()
         pbx.wait_for_unit("asterisk.service")
+        mail.wait_for_open_port(25)
 
         answers = {"203": 486, "204": 180, "205": 180}
         registered = ["201", "202", "203", "204", "205", "206", "207", "208", "211"]
@@ -218,6 +266,19 @@ in
             caller.hangup()
             pbx.wait_until_succeeds(f"test -f /var/lib/asterisk/spool/voicemail/default/{callee}/INBOX/msg0000.txt")
             wait_idle(pbx)
+
+        def assert_tone(path, tone):
+            """Asterisk reads the audio file `path` back as `tone`, too loud to
+            count as silence."""
+            converted = "/var/lib/asterisk/spool/tmp/check.sln"
+            answer = asterisk(pbx, f"file convert {path} {converted}")
+            assert "Converted" in answer, answer
+            raw = base64.b64decode(pbx.succeed(f"base64 -w0 {converted}"))
+            windows = tones_in(numpy.frombuffer(raw, dtype="<i2").astype(float), 8000)
+            # the first and last 100 ms hold the start and the end of the tone.
+            # GSM adds weaker tones beside it, so the loudest is the one to check.
+            inner = windows[1:-1]
+            assert len(inner) >= 20 and all(window and abs(window[0] - tone) <= TOLERANCE for window in inner), f"{path}: {windows}"
 
         with subtest("phones register"):
             start_phones(list(phone.values()) + [desk, mobile])
@@ -246,6 +307,30 @@ in
             leave_message(phone["201"], "204", "NOANSWER", "vm-isunavail")
             leave_message(phone["201"], "209", "CHANUNAVAIL", "vm-isunavail")
 
+        with subtest("the message reaches an SMTP server with the recording attached"):
+            mail.wait_until_succeeds("test $(ls /var/lib/smtp-sink/maildir/new | wc -l) -eq 1", timeout=60)
+            message = email.message_from_string(mail.succeed("cat /var/lib/smtp-sink/maildir/new/*"))
+            assert message["X-MailFrom"] == "voicemail@example.org", message
+            assert message["X-RcptTo"] == "ivy@example.org", message
+            # the first format, wav49, is attached, and stored as .WAV
+            attachment = next(part for part in message.walk() if part.get_filename() == "msg0000.WAV")
+            recording = pbx.succeed("base64 -w0 /var/lib/asterisk/spool/voicemail/default/209/INBOX/msg0000.WAV")
+            assert attachment.get_payload(decode=True) == base64.b64decode(recording)
+
+        with subtest("the message reads back in every format as the caller's tone"):
+            stored = "/var/lib/asterisk/spool/voicemail/default/209/INBOX/msg0000"
+            for extension in ["WAV", "wav", "wav16", "gsm", "ulaw", "alaw", "g722", "au", "sln", "sln16"]:
+                assert_tone(f"{stored}.{extension}", phone["201"].tone)
+            # the rates of the sln format beyond one configuration's 10 formats,
+            # written from the stored message by the same module
+            # TODO: add sln44 once Asterisk keeps the level of 44.1 kHz audio; its
+            # copy of the speex resampler halves it (codecs/speex/resample.c:478)
+            for extension in ["sln12", "sln24", "sln32", "sln48", "sln96", "sln192"]:
+                copy = f"/var/lib/asterisk/spool/tmp/copy.{extension}"
+                answer = asterisk(pbx, f"file convert {stored}.sln16 {copy}")
+                assert "Converted" in answer, answer
+                assert_tone(copy, phone["201"].tone)
+
         with subtest("the mailbox owner is notified and deletes the message after entering the PIN"):
             cara = phone["203"]
             # unsolicited NOTIFY: the endpoint lists the mailbox
@@ -262,12 +347,66 @@ in
             wait_journal(pbx, cursor, "Playing 'vm-youhave\\.")
             cara.dtmf("1")
             wait_journal(pbx, cursor, "Playing '/var/lib/asterisk/spool/voicemail/default/203/INBOX/msg0000\\.")
+            # Anna left it
+            wait_hears(cara, [phone["201"].tone])
             cara.dtmf("7")
             wait_journal(pbx, cursor, "Playing 'vm-deleted\\.")
             cara.hangup()
             cara.wait_count("Messages-Waiting: no", cleared + 1)
             pbx.fail("test -f /var/lib/asterisk/spool/voicemail/default/203/INBOX/msg0000.txt")
             wait_idle(pbx)
+
+        with subtest("the mailbox owner records a busy greeting"):
+            cara = phone["203"]
+            greeting = "/var/lib/asterisk/spool/voicemail/default/203/busy"
+            cursor = journal_cursor(pbx)
+            cara.call("*97")
+            wait_journal(pbx, cursor, "Playing 'vm-password\\.")
+            cara.dtmf("9203#")
+            wait_journal(pbx, cursor, "Playing 'vm-youhave\\.")
+            cara.dtmf("0")
+            wait_journal(pbx, cursor, "Playing 'vm-options\\.")
+            cara.dtmf("2")
+            wait_journal(pbx, cursor, "Playing 'beep\\.")
+            # 3 s of Cara's tone, in the raw 8 kHz copy
+            pbx.wait_until_succeeds(f"test $(stat -c %s {greeting}.tmp.sln) -ge 48000")
+            cara.dtmf("#")
+            wait_journal(pbx, cursor, "Playing 'vm-review\\.")
+            cara.dtmf("1")
+            wait_journal(pbx, cursor, "Playing 'vm-msgsaved\\.")
+            cara.hangup()
+            wait_idle(pbx)
+
+        with subtest("a caller hears the busy greeting the owner recorded, and a message stops at maxSeconds"):
+            ben = phone["202"]
+            cursor = journal_cursor(pbx)
+            disconnects = ben.disconnects()
+            ben.call("203")
+            wait_journal(pbx, cursor, "Playing '/var/lib/asterisk/spool/voicemail/default/203/busy\\.")
+            wait_hears(ben, [phone["203"].tone])
+            # pound skips the instructions after the greeting
+            wait_journal(pbx, cursor, "Playing 'vm-intro\\.")
+            ben.dtmf("#")
+            wait_journal(pbx, cursor, "Playing 'beep\\.")
+            # Ben's phone goes on sending its tone until Asterisk ends the message and the call
+            wait_journal(pbx, cursor, "Took too long, cutting it short")
+            ben.wait_disconnected(after=disconnects)
+            wait_idle(pbx)
+            info = pbx.succeed("cat /var/lib/asterisk/spool/voicemail/default/203/INBOX/msg0000.txt")
+            # Asterisk compares whole seconds of the clock, so it stops up to a second late
+            assert re.search("^duration=[56]$", info, re.M), info
+
+        with subtest("a full mailbox takes no message"):
+            ben = phone["202"]
+            cursor = journal_cursor(pbx)
+            ben.call("209")
+            wait_journal(pbx, cursor, "Playing 'vm-isunavail\\.")
+            # pound skips the instructions after the greeting
+            ben.dtmf("#")
+            # the message from the unregistered callee's subtest fills maxMessages
+            wait_journal(pbx, cursor, "Playing 'vm-mailboxfull\\.")
+            wait_idle(pbx)
+            pbx.fail("test -e /var/lib/asterisk/spool/voicemail/default/209/INBOX/msg0001.txt")
 
         with subtest("a phone watching a hint sees the extension busy"):
             anna = phone["201"]

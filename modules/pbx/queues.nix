@@ -33,13 +33,13 @@
       timeout = mkOption {
         type = types.nullOr types.ints.positive;
         default = null;
-        description = "Seconds a caller waits before the call goes to `noAnswer`; without it, callers wait until someone answers.";
+        description = "Seconds a caller waits before the call goes to `noAnswer`; without it, callers wait until someone answers, unless the queue turns them away.";
       };
       noAnswer = mkOption {
         type = pbxLib.destination;
         default = {hangup = true;};
         example = {voicemail = "200";};
-        description = "Where the call goes after `timeout`.";
+        description = "Where the call goes after `timeout`, and at once when the queue turns the caller away: when it is full (`maxLength`) or has no member to take calls (`joinempty` and `leavewhenempty` of its `settings`).";
       };
     };
   };

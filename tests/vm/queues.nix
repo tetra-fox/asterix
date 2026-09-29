@@ -12,7 +12,8 @@
 # waits in line while the only agent is busy and during its wrap-up time, and
 # the queue log records it all. The numbers of pbx.queues reach the same
 # queues: rrmemory goes on across both ways in, a caller waits in line without
-# a timeout and goes to noAnswer after one while the member still rings
+# a timeout, goes to noAnswer after one while the member still rings, and at
+# once when the queue is full or turns callers away
 {
   pkgs,
   self,
@@ -99,6 +100,14 @@ in
           enable = true;
           queues = {
             support.number = "700";
+            tiers = {
+              number = "701";
+              noAnswer = landed "full";
+            };
+            sales = {
+              number = "702";
+              noAnswer = landed "empty";
+            };
             ring516 = {
               number = "703";
               timeout = 3;
@@ -253,7 +262,7 @@ in
               "Hangup()"
             ]);
           dialplan.contexts.office.includes = ["pbx-internal"];
-          dialplan.contexts.landed.extensions = lib.genAttrs ["timeout"] (outcome: [
+          dialplan.contexts.landed.extensions = lib.genAttrs ["full" "empty" "timeout"] (outcome: [
             "Set(DB(test/landed)=${outcome})"
             "Hangup()"
           ]);
@@ -427,13 +436,16 @@ in
             assert set(called(cursor)) == {"516"}, called(cursor)
             phone["516"].wait_request("CANCEL", after=1)
 
-        with subtest("a full queue turns callers away"):
+        with subtest("a full queue turns callers away, and those of pbx.queues to its noAnswer"):
             cursor = journal_cursor(pbx)
             phone["502"].call("tiers")
             wait_journal(pbx, cursor, "queuestatus FULL")
             assert "tiers has 1 calls (max ${toString tiers.maxLength})" in asterisk(pbx, "queue show tiers")
             wait_channel(pbx, "501", app="Queue")
             poll(lambda: not any(endpoint_of(c["name"]) == "502" for c in channels(pbx)), "502 to be turned away")
+            # through pbx.queues.tiers, which has no timeout, to its noAnswer
+            phone["502"].call("701")
+            pbx.wait_until_succeeds("asterisk -rx 'database get test landed' | grep -q 'Value: full'")
 
         with subtest("511 gets the call once 516 cannot take it"):
             asterisk(pbx, "queue pause member PJSIP/516 queue tiers")
@@ -460,12 +472,16 @@ in
             # whole seconds
             assert len(entered) == len(left) == 1 and 3 <= left[0] - entered[0] <= 4, entries
 
-        with subtest("a queue whose members are all unavailable turns callers away"):
+        with subtest("a queue whose members are all unavailable turns callers away, and those of pbx.queues to its noAnswer"):
             # the member's name is read whole, and its state is its device's
             assert "Doe, Jane (PJSIP/515) (ringinuse enabled) (Unavailable)" in asterisk(pbx, "queue show sales")
             cursor = journal_cursor(pbx)
             phone["502"].call("601")
             wait_journal(pbx, cursor, "queuestatus JOINEMPTY")
+            wait_idle(pbx)
+            # through pbx.queues.sales, which has no timeout, to its noAnswer
+            phone["502"].call("702")
+            pbx.wait_until_succeeds("asterisk -rx 'database get test landed' | grep -q 'Value: empty'")
             wait_idle(pbx)
 
         with subtest("an agent who logs in with *45 stays a member across a restart"):

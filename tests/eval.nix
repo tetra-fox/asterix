@@ -314,6 +314,44 @@ in {
       };
     };
 
+    # Asterisk reads a transport's protocol in any case
+    # (res/res_pjsip/config_transport.c, transport_protocol_handler)
+    testFirewallReadsTheProtocolInAnyCase = {
+      expr = let
+        config = evalConfig [
+          phone
+          {
+            services.asterisk = {
+              openFirewall = true;
+              settings."pjsip.conf" = {
+                tcp = {
+                  type = "transport";
+                  protocol = "TCP";
+                  bind = "0.0.0.0:5070";
+                };
+                tls = {
+                  type = "transport";
+                  protocol = "Tls";
+                  bind = "0.0.0.0";
+                  cert_file = "/var/lib/acme/pbx/cert.pem";
+                  priv_key_file = "/var/lib/acme/pbx/key.pem";
+                };
+              };
+            };
+          }
+        ];
+      in {
+        inherit (config.networking.firewall) allowedTCPPorts allowedUDPPorts;
+      };
+      expected = {
+        allowedTCPPorts = [
+          5061
+          5070
+        ];
+        allowedUDPPorts = [5060];
+      };
+    };
+
     testTlsFilesAreCredentials = {
       expr = let
         config = evalConfig [

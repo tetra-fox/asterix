@@ -474,7 +474,8 @@
   transportPorts =
     map (
       t: let
-        protocol = t.protocol or "udp";
+        # Asterisk reads the protocol in any case (res_pjsip/config_transport.c)
+        protocol = lib.toLower (t.protocol or "udp");
       in {
         inherit protocol;
         port = parseBindPort (toString (t.bind or "0.0.0.0")) (

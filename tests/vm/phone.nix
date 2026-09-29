@@ -10,7 +10,10 @@
 # /tmp/sip-phone-NAME.wav, so a test can tell who hears whom (tones.py). Full
 # SIP traces are logged to /tmp/sip-phone-NAME.log. Whether it registers
 # (--registrar), how it answers (--auto-answer) and its transport flags
-# (--no-tcp, --ipv6, ...) come with the pjsua args, from phone.py.
+# (--no-tcp, --ipv6, ...) come with the pjsua args, from phone.py. With
+# --no-symmetric-rtp first among them, the phone keeps sending RTP to the
+# address the SDP names, as many desk phones do, instead of to wherever RTP
+# comes from.
 {pkgs, ...}: let
   pjsip = pkgs.pjsip.overrideAttrs (old: {
     # fixes for pjsua's CLI (pjsua_app_cli.c, unfixed in pjproject master):
@@ -30,6 +33,16 @@
           'pj_file_write(pjsua_var.log_file, buffer, &size);' \
           'pj_file_write(pjsua_var.log_file, buffer, &size); pj_file_flush(pjsua_var.log_file);'
         echo '#define PJ_HAS_IPV6 1' > pjlib/include/pj/config_site.h
+      '';
+  });
+
+  # pjsua sends its RTP to wherever RTP comes from, once it arrives from a new
+  # address (pjmedia's symmetric RTP); this build keeps the SDP's address
+  pjsipNoSymmetricRtp = pjsip.overrideAttrs (old: {
+    postPatch =
+      old.postPatch
+      + ''
+        echo '#define PJMEDIA_TRANSPORT_SWITCH_REMOTE_ADDR 0' >> pjlib/include/pj/config_site.h
       '';
   });
 
@@ -53,6 +66,11 @@
         start)
           name=$1 user=$2 password=$3 server=$4 sip_port=$5 cli_port=$6 tone=$7
           shift 7
+          pjsua=pjsua
+          if [ "''${1:-}" = --no-symmetric-rtp ]; then
+            pjsua=${pjsipNoSymmetricRtp}/bin/pjsua
+            shift
+          fi
           echo "$cli_port" > "/run/sip-phone/$name.port"
           rm -f "/tmp/sip-phone-$name.log" "/tmp/sip-phone-$name.wav"
           # one second of a whole number of periods, which pjsua loops without
@@ -64,10 +82,11 @@
           # the address this machine reaches the server from instead. pjsua
           # would also give an IPv6 address to its IPv4 transport, which then
           # fails to start, so IPv6 phones run on machines without QEMU's
-          # network, where pjsua finds its address itself.
+          # network, where pjsua finds its address itself, and so does a phone
+          # with a STUN server or an address of its own.
           ip_addr=()
-          case $server in
-            \[*) ;;
+          case "$server $*" in
+            \[* | *" --ip-addr="* | *" --stun-srv="*) ;;
             *)
               address=$(getent ahostsv4 "''${server%%[:;]*}" | awk 'NR == 1 { print $1 }')
               source=$(ip -o route get "$address" | sed -n 's/.* src \([^ ]*\).*/\1/p')
@@ -77,7 +96,7 @@
           # --log-append: pjsua reopens its log file when the CLI starts,
           # which would truncate a registration logged before that
           systemd-run --unit="sip-phone-$name" --collect \
-            pjsua \
+            "$pjsua" \
               --id="sip:$user@$server" \
               --realm='*' --username="$user" --password="$password" \
               "''${ip_addr[@]}" \

@@ -21,9 +21,10 @@ class Phone:
     incoming calls with the SIP status `auto_answer`: 200 picks up, 180 rings
     until told otherwise, 486 is busy. With `call_waiting=False` it answers
     486 to any call that comes while it is in one. It sends a sine of `tone`
-    Hz and records what it hears (tones.py)."""
+    Hz and records what it hears (tones.py). With `symmetric_rtp=False` it
+    sends RTP only to the address the SDP names (tests/vm/phone.nix)."""
 
-    def __init__(self, machine, name, user, password, server, sip_port=5070, cli_port=2300, auto_answer=200, tone=None, register=True, call_waiting=True):
+    def __init__(self, machine, name, user, password, server, sip_port=5070, cli_port=2300, auto_answer=200, tone=None, register=True, call_waiting=True, symmetric_rtp=True):
         self.machine = machine
         self.name = name
         self.user = user
@@ -34,12 +35,15 @@ class Phone:
         self.auto_answer = auto_answer
         self.register = register
         self.call_waiting = call_waiting
+        self.symmetric_rtp = symmetric_rtp
         self.tone = PHONE_TONES[next(phones_made) % len(PHONE_TONES)] if tone is None else tone
         self.log = f"/tmp/sip-phone-{name}.log"
         self.recording = f"/tmp/sip-phone-{name}.wav"
 
     def start_command(self, extra=""):
-        flags = [f"--auto-answer={self.auto_answer}"]
+        # sip-phone reads this one before the pjsua arguments
+        flags = [] if self.symmetric_rtp else ["--no-symmetric-rtp"]
+        flags.append(f"--auto-answer={self.auto_answer}")
         if self.register:
             flags.append(shlex.quote(f"--registrar=sip:{self.server}"))
         if not self.call_waiting:
@@ -140,6 +144,17 @@ class Phone:
     def received(self, method):
         """Requests of `method` this phone received, as raw SIP messages."""
         return re.findall(rf"RX \d+ bytes Request msg {method}/.*?\n--end msg--", self.log_text(), re.S)
+
+    def rtp_address(self):
+        """The address and RTP port the last SDP the phone sent gives; pjsua
+        takes a new port for each call. RTCP is one above."""
+        sent = re.findall(r"TX \d+ bytes .*?\n--end msg--", self.log_text(), re.S)
+        offers = [message for message in sent if "\nm=audio " in message]
+        assert offers, f"{self.name} sent no SDP"
+        address = re.search(r"^c=IN IP[46] (\S+)", offers[-1], re.M)
+        port = re.search(r"^m=audio (\d+) ", offers[-1], re.M)
+        assert address and port, offers[-1]
+        return address.group(1), int(port.group(1))
 
     def count(self, pattern):
         """Lines of the phone's log matching the extended regular expression."""
@@ -328,6 +343,19 @@ def rtp_received(phones):
         else:
             received[phone.name] = 0
     return received
+
+
+def media_peers(phones):
+    """Where the RTP each phone receives on its current call comes from, as
+    address:port by phone name, or "-" before any has arrived."""
+    answers = cli_parallel([(phone, "call dump_q") for phone in phones])
+    peers = {}
+    for phone in phones:
+        # `#0 audio G722 @16kHz, sendrecv, peer=10.3.1.10:5058`
+        match = re.search(r"#\d+ audio .*, peer=(\S+)", answers[phone.name])
+        assert match, answers[phone.name]
+        peers[phone.name] = match.group(1)
+    return peers
 
 
 def asterisk(machine, command):

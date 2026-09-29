@@ -1091,6 +1091,24 @@ in {
       };
     };
 
+    # the module reads its read-only options, so the system does not evaluate
+    # with a definition of one elsewhere, instead of ignoring it
+    testReadOnlyOptionsCannotBeSet = {
+      expr =
+        map (
+          module: (builtins.tryEval (evalConfig [phone module]).system.build.toplevel.drvPath).success
+        ) [
+          {}
+          {services.asterisk.generatedConfig = pkgs.emptyDirectory;}
+          {services.asterisk.paths.config = "/etc/elsewhere";}
+        ];
+      expected = [
+        true
+        false
+        false
+      ];
+    };
+
     # the config check passes extraArguments to Asterisk as its getopt reads
     # them, each option on its own, without the user and group of -U and -G;
     # after -- nothing is an option

@@ -142,7 +142,7 @@
   checkTree = pkgs.linkFarm "asterisk-check-config" (
     mapAttrsToList (file: text: {
       name = "config/${file}";
-      path = configFile file (lib.replaceStrings ["${paths.credentials}/"] ["@root@/credentials/"] text);
+      path = configFile file (lib.replaceStrings ["${cfg.paths.credentials}/"] ["@root@/credentials/"] text);
     }) (
       cfg.renderedFiles
       # res_rtp_asterisk looks a STUN server's name up with Asterisk's own DNS
@@ -383,7 +383,7 @@
   # credential: a changed credential counts as a change of these files
   credentialFiles =
     lib.mapAttrs (
-      name: _: filter (file: lib.hasInfix "${paths.credentials}/${name}" cfg.renderedFiles.${file}) fileNames
+      name: _: filter (file: lib.hasInfix "${cfg.paths.credentials}/${name}" cfg.renderedFiles.${file}) fileNames
     )
     cfg.credentials;
 
@@ -403,9 +403,9 @@
       umask 0077
 
       mode=''${1:-start}
-      template=${paths.template}
-      runtime=${paths.runtime}
-      current=${paths.config}
+      template=${cfg.paths.template}
+      runtime=${cfg.paths.runtime}
+      current=${cfg.paths.config}
 
       new=$(mktemp -d "$runtime/.config.XXXXXXXX")
       cleanup() {
@@ -468,7 +468,7 @@
 
       case $mode in
         start)
-          mkdir -p ${lib.escapeShellArgs (map (dir: "${paths.state}/${dir}") stateDirectories)}
+          mkdir -p ${lib.escapeShellArgs (map (dir: "${cfg.paths.state}/${dir}") stateDirectories)}
           ;;
         reload)
           declare -A commands=()
@@ -530,10 +530,10 @@
   # TODO: Type = "notify" instead, once https://github.com/NixOS/nixpkgs/blob/master/pkgs/servers/asterisk/default.nix has systemd in buildInputs
   waitForBoot = pkgs.writeShellScript "asterisk-wait-for-boot" ''
     for _ in $(seq 1 600); do
-      [ -S ${paths.runtime}/asterisk.ctl ] && break
+      [ -S ${cfg.paths.runtime}/asterisk.ctl ] && break
       sleep 0.2
     done
-    exec ${asteriskBin} -C ${paths.config}/asterisk.conf -rx "core waitfullybooted"
+    exec ${asteriskBin} -C ${cfg.paths.config}/asterisk.conf -rx "core waitfullybooted"
   '';
 
   # `asterisk -rx "..."` for admins: always talks to the running daemon.
@@ -557,7 +557,7 @@
         echo "The daemon itself is managed by systemd: systemctl status asterisk" >&2
         exit 1
       fi
-      exec ${asteriskBin} -C ${paths.template}/asterisk.conf "$@"
+      exec ${asteriskBin} -C ${cfg.paths.template}/asterisk.conf "$@"
     '';
   };
   remoteConsole = pkgs.writeShellScriptBin "rasterisk" ''
@@ -737,8 +737,8 @@
   );
 
   managedDirectories = {
-    astetcdir = paths.config;
-    astrundir = paths.runtime;
+    astetcdir = cfg.paths.config;
+    astrundir = cfg.paths.runtime;
   };
 in {
   options.services.asterisk = {
@@ -1010,6 +1010,8 @@ in {
 
     (mkIf cfg.enable {
       services.asterisk = {
+        # the module reads generatedConfig and paths back from their options,
+        # so a definition elsewhere fails as read-only instead of going unused
         inherit generatedConfig;
         renderedFiles = lib.genAttrs fileNames renderFile;
         paths =
@@ -1104,16 +1106,16 @@ in {
         "asterisk.conf" = {
           directories = {
             order = 0;
-            astetcdir = paths.config;
+            astetcdir = cfg.paths.config;
             astmoddir = "${cfg.package}/lib/asterisk/modules";
-            astvarlibdir = paths.state;
-            astdbdir = paths.state;
-            astkeydir = paths.state;
-            astdatadir = "${dataDir}";
-            astagidir = mkOptionDefault "${paths.state}/agi-bin";
-            astspooldir = paths.spool;
-            astrundir = paths.runtime;
-            astlogdir = paths.log;
+            astvarlibdir = cfg.paths.state;
+            astdbdir = cfg.paths.state;
+            astkeydir = cfg.paths.state;
+            astdatadir = cfg.paths.data;
+            astagidir = mkOptionDefault "${cfg.paths.state}/agi-bin";
+            astspooldir = cfg.paths.spool;
+            astrundir = cfg.paths.runtime;
+            astlogdir = cfg.paths.log;
             astsbindir = "${cfg.package}/sbin";
           };
           options = {
@@ -1154,7 +1156,7 @@ in {
         "pjsip_notify.conf" = ''#include "${cfg.package}/etc/asterisk/pjsip_notify.conf"'';
       };
 
-      environment.etc.asterisk.source = generatedConfig;
+      environment.etc.asterisk.source = cfg.generatedConfig;
 
       system.checks = optional cfg.checkConfig configCheck;
 
@@ -1167,7 +1169,7 @@ in {
         isSystemUser = true;
         uid = config.ids.uids.asterisk;
         group = "asterisk";
-        home = paths.state;
+        home = cfg.paths.state;
         description = "Asterisk PBX daemon";
       };
       users.groups.asterisk.gid = config.ids.gids.asterisk;
@@ -1182,8 +1184,8 @@ in {
           "time-sync.target"
         ];
 
-        restartTriggers = [restartOnlyConfig] ++ optional (!cfg.reloadOnChange) generatedConfig;
-        reloadTriggers = optional cfg.reloadOnChange generatedConfig;
+        restartTriggers = [restartOnlyConfig] ++ optional (!cfg.reloadOnChange) cfg.generatedConfig;
+        reloadTriggers = optional cfg.reloadOnChange cfg.generatedConfig;
         # Keep the old daemon running during activation and restart it
         # afterwards: shorter downtime.
         stopIfChanged = false;
@@ -1206,7 +1208,7 @@ in {
                 "-f"
                 "-n"
                 "-C"
-                "${paths.config}/asterisk.conf"
+                "${cfg.paths.config}/asterisk.conf"
               ]
               ++ cfg.extraArguments
             );

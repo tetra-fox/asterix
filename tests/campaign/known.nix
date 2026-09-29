@@ -49,7 +49,6 @@
   "services.asterisk.features.featureMap = {\"blindxfer\":\"q7\"}" = "P3: loads";
   "services.asterisk.features.featureMap = {\"q7feature\":\"*1\"}" = "rejected by asterisk-config-check";
   "services.asterisk.features.general = {\"q7unknown\":\"x\"}" = "rejected by asterisk-config-check";
-  "services.asterisk.generatedConfig = set" = "P3: loads";
   "services.asterisk.http.address = \"300.0.0.1\"" = "rejected by asterisk-config-check";
   "services.asterisk.http.address = \"pbx\"" = "rejected by asterisk-config-check";
   "services.asterisk.http.openFirewall = \"yes\"" = "P3: loads";
@@ -67,7 +66,6 @@
   "services.asterisk.musicOnHold.classes.<name>.directory = \"q7-no-such-directory\"" = "rejected by asterisk-config-check";
   "services.asterisk.musicOnHold.classes.<name>.mode = \"custom\" with services.asterisk.musicOnHold.classes.office.application" = "P2: does not load";
   "services.asterisk.musicOnHold.classes.<name>.settings = {\"q7unknown\":\"x\"}" = "P3: loads";
-  "services.asterisk.paths = set" = "P3: loads";
   "services.asterisk.pjsip.acls.<name>.contactDeny = [\"q7net\"]" = "rejected by asterisk-config-check";
   "services.asterisk.pjsip.acls.<name>.contactPermit = [\"q7net\"]" = "rejected by asterisk-config-check";
   "services.asterisk.pjsip.acls.<name>.deny = [\"10.0.0.0/33\"]" = "rejected by asterisk-config-check";

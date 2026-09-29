@@ -15,7 +15,7 @@ secret() {
 
 secret semicolon $'p;w&d\\x"$HOME\n'
 secret crlf $'pw\r\n'
-secret xml $'a&b<c>"d\'e\n'
+secret xml $'a&b<c>"d\'e]]>\n'
 secret lines $'one\ntwo\n'
 secret space $' padded\n'
 secret lookalike "$(placeholder semicolon)"
@@ -55,8 +55,8 @@ s=$(placeholder semicolon)
 check asterisk \
   "password = $s"$'\n'"200 => $s,Sales,$(placeholder crlf)$s"$'\n'"; a comment"$'\n'"last = $(placeholder lookalike)" \
   'password = p\;w&d\x"$HOME'$'\n''200 => p\;w&d\x"$HOME,Sales,pwp\;w&d\x"$HOME'$'\n''; a comment'$'\n'"last = $s"
-check asterisk "x = $(placeholder xml)"$'\n' $'x = a&b<c>"d\'e\n'
-check xml "<P34>$(placeholder xml)</P34>"$'\n' $'<P34>a&amp;b&lt;c&gt;&quot;d&apos;e</P34>\n'
+check asterisk "x = $(placeholder xml)"$'\n' $'x = a&b<c>"d\'e]]>\n'
+check xml "<P34>$(placeholder xml)</P34>"$'\n' $'<P34>a&amp;b&lt;c&gt;&quot;d&apos;e]]&gt;</P34>\n'
 check none "$(placeholder lines)|$(placeholder space)" $'one\ntwo| padded'
 check asterisk "password = $(placeholder comma)"$'\n'"101 => $(placeholder pin),Sales"$'\n' $'password = a,b\n101 => 1234,Sales\n'
 

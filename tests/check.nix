@@ -195,6 +195,88 @@
     };
   };
 
+  # the typed features that load a module or write a file of their own
+  features = {
+    voicemail = {config, ...}: {
+      services.asterisk.voicemail.mailboxes."101".pin = config.lib.asterisk.secret "/run/secrets/vm-101";
+    };
+    confbridge.services.asterisk.confbridge = {
+      bridges.board.maxMembers = 5;
+      users.chair = {
+        admin = true;
+        marked = true;
+      };
+      menus.chair."*1" = "toggle_mute";
+    };
+    queues.services.asterisk.queues.queues.support.members = ["PJSIP/101"];
+    musicOnHold.services.asterisk.musicOnHold.classes.office = {
+      directory = "moh";
+      sort = "alpha";
+    };
+    cdr.services.asterisk.cdr = {
+      csv.enable = true;
+      sqlite.enable = true;
+      unanswered = true;
+    };
+    cel.services.asterisk.cel = {
+      enable = true;
+      sqlite.enable = true;
+    };
+    ami = {config, ...}: {
+      services.asterisk.ami = {
+        enable = true;
+        users.monitor = {
+          secret = config.lib.asterisk.secret "/run/secrets/ami";
+          read = ["system"];
+        };
+      };
+    };
+    ari = {config, ...}: {
+      services.asterisk = {
+        http.enable = true;
+        ari = {
+          enable = true;
+          users.app.password = config.lib.asterisk.secret "/run/secrets/ari";
+        };
+      };
+    };
+    https.services.asterisk.http = {
+      enable = true;
+      tls = {
+        enable = true;
+        certFile = "/var/lib/acme/pbx/cert.pem";
+        keyFile = "/var/lib/acme/pbx/key.pem";
+      };
+    };
+    callFeatures.services.asterisk.features = {
+      featureMap = {
+        blindxfer = "#1";
+        parkcall = "#72";
+        disconnect = "*0";
+        automixmon = "*3";
+      };
+      applications.monkeys = {
+        dtmf = "*9";
+        app = "Playback";
+        args = "tt-monkeys";
+      };
+    };
+    securityLog.services.asterisk.logger.channels.security = ["security"];
+    websocket.services.asterisk = {
+      http.enable = true;
+      pjsip.transports.ws.protocol = "ws";
+    };
+  };
+
+  # each feature alone and with each other one
+  featureCases = let
+    names = builtins.attrNames features;
+  in
+    lib.mapAttrs' (name: lib.nameValuePair "feature-${name}") features
+    // lib.listToAttrs (lib.concatLists (lib.imap0 (i: a:
+      map (b: lib.nameValuePair "features-${a}-${b}" {imports = [features.${a} features.${b}];}) (lib.drop (i + 1) names))
+    names));
+
   # IPv4 addresses become loopback ones, which need no namespace
   passingWithoutUserNamespaces = {
     ipv4Addresses.services.asterisk.pjsip.transports = {
@@ -369,7 +451,7 @@ in {
   # `config` in place of a module on top of base
   tests =
     failing
-    // lib.mapAttrs (_: module: {inherit module;}) passing
+    // lib.mapAttrs (_: module: {inherit module;}) (passing // featureCases)
     // lib.mapAttrs (_: module: {
       inherit module;
       withoutUserNamespaces = true;

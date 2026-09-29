@@ -110,10 +110,10 @@ Caveats and known issues:
 
 A device is supported once someone who owns it has tested it:
 
-1. A module in `modules/provisioning/<vendor>/`, imported by
-   `modules/provisioning/default.nix`, that writes the device's files into
+1. A module in `modules/pbx/phones/<vendor>/`, imported by
+   `modules/pbx/phones/default.nix`, that writes the device's files into
    `pbx.phones.files`, like
-   `modules/provisioning/grandstream/ht801.nix`.
+   `modules/pbx/phones/grandstream/ht801.nix`.
 2. Only settings the vendor documents for that device, with the source (template
    or manual, and its version).
 3. A VM test like `tests/vm/ht801.nix`, and a check on the real device.

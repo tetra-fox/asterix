@@ -50,6 +50,24 @@
     );
 
   zoneFile = zone: "${pkgs.tzdata}/share/zoneinfo/${zone}";
+
+  # an HT801 adapter for extension 201 on the phones' network, which each test
+  # adds to
+  ht801 = module:
+    configOf {
+      imports = [module];
+      pbx.phones = {
+        listenAddress = lib.mkDefault "10.0.20.10";
+        allowedNetworks = lib.mkDefault ["10.0.20.0/24"];
+        grandstream.ht801 = {
+          enable = true;
+          devices."201".mac = lib.mkDefault "c0:74:ad:00:02:01";
+        };
+      };
+    };
+
+  # the line of the adapter's file that sets `p`
+  pLine = p: config: lib.findFirst (lib.hasPrefix "    <${p}>") null (lib.splitString "\n" config.pbx.phones.files."cfgc074ad000201.xml".text);
 in {
   run = lib.runTests;
   tests = {
@@ -73,6 +91,39 @@ in {
       expected = [
         "    <P35>201</P35>"
         "    <P36>kitchen</P36>"
+      ];
+    };
+
+    # the socket and the configuration server the adapters keep (P237), with
+    # an IPv6 address in brackets as in a URL
+    testHt801ConfigServer = {
+      expr =
+        map (listen: let
+          config = ht801 {pbx.phones = listen;};
+        in {
+          socket = config.systemd.sockets.asterisk-provisioning.listenStreams;
+          server = pLine "P237" config;
+        }) [
+          {port = 8080;}
+          {listenAddress = "fd00:20::10";}
+          {
+            listenAddress = "fd00:20::10";
+            port = 8080;
+          }
+        ];
+      expected = [
+        {
+          socket = ["10.0.20.10:8080"];
+          server = "    <P237>10.0.20.10:8080</P237>";
+        }
+        {
+          socket = ["[fd00:20::10]:80"];
+          server = "    <P237>[fd00:20::10]</P237>";
+        }
+        {
+          socket = ["[fd00:20::10]:8080"];
+          server = "    <P237>[fd00:20::10]:8080</P237>";
+        }
       ];
     };
 

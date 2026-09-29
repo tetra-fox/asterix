@@ -94,7 +94,11 @@
       P2 = cfg.adminPassword; # admin password of the web interface
       P212 = 1; # config upgrade via HTTP
       # config server path: this server, so the adapter keeps coming back here
-      P237 = pcfg.listenAddress + lib.optionalString (pcfg.port != 80) ":${toString pcfg.port}";
+      P237 = format.hostPort pcfg.listenAddress (
+        if pcfg.port == 80
+        then null
+        else pcfg.port
+      );
       P238 = 2; # always skip the firmware check (Grandstream's server by default)
       P1409 = 0; # TR-069 off (Grandstream's GDMS cloud by default)
     }

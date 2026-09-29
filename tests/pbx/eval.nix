@@ -184,14 +184,21 @@ in {
           ; from pbx.ringGroups.front
           [pbx-ringgroup-front]
           exten => 5559000,1,Set(CALLERID(num)=5551000)
-           same => n,Dial(PJSIP/''${EXTEN}@provider,20,U(pbx-confirm^s^1))
+           same => n,Dial(PJSIP/''${EXTEN}@provider,20,U(pbx-confirm))
            same => n,Hangup()
-          exten => s,1,Dial(''${PJSIP_DIAL_CONTACTS(201)}&''${PJSIP_DIAL_CONTACTS(202)}&Local/5559000@pbx-ringgroup-front/n,20)
+          exten => s,1,Dial(''${PJSIP_DIAL_CONTACTS(201)}&''${PJSIP_DIAL_CONTACTS(202)}&Local/5559000@pbx-ringgroup-front/n,20,b(pbx-confirm^leg^1))
            same => n,VoiceMail(201@default,b)
            same => n,Hangup()'';
         confirm = ''
           ; from pbx.ringGroups: confirmation of external members
           [pbx-confirm]
+          exten => drop,1,Set(PBX_LEG=''${IMPORT(''${CHANNEL:0:-1}2,DIALEDPEERNAME)})
+           same => n,GotoIf($["''${PBX_LEG}" = ""]?done)
+           same => n,SoftHangup(''${PBX_LEG})
+           same => n(done),Return()
+          exten => leg,1,GotoIf($["''${CHANNEL(channeltype)}" != "Local"]?done)
+           same => n,Set(CHANNEL(hangup_handler_push)=pbx-confirm,drop,1)
+           same => n(done),Return()
           exten => s,1,Read(PBX_CONFIRM,followme/no-recording&followme/options,1,,3,5)
            same => n,GotoIf($["''${PBX_CONFIRM}" = "1"]?accept)
            same => n,Set(GOSUB_RESULT=CONTINUE)
@@ -199,6 +206,7 @@ in {
       };
     };
 
+    # only the external number's Local channel needs the predial routine
     testHuntRingsOneAfterTheOther = {
       expr = context "pbx-ringgroup-hunt" {
         pbx.ringGroups.hunt = {
@@ -206,6 +214,8 @@ in {
             "202"
             "201"
           ];
+          external = ["5559000"];
+          trunk = "provider";
           strategy = "hunt";
           ringTime = 10;
         };
@@ -213,8 +223,11 @@ in {
       expected = ''
         ; from pbx.ringGroups.hunt
         [pbx-ringgroup-hunt]
+        exten => 5559000,1,Dial(PJSIP/''${EXTEN}@provider,10,U(pbx-confirm))
+         same => n,Hangup()
         exten => s,1,Dial(''${PJSIP_DIAL_CONTACTS(202)},10)
          same => n,Dial(''${PJSIP_DIAL_CONTACTS(201)},10)
+         same => n,Dial(Local/5559000@pbx-ringgroup-hunt/n,10,b(pbx-confirm^leg^1))
          same => n,Hangup()'';
     };
 

@@ -89,12 +89,15 @@
     then cfg.outbound.trunk
     else null;
 
-  channels = name: group:
-    map pbxLib.devices group.members
-    ++ map (number: "Local/${number}@${pbxLib.objectContext "ringgroup" name}/n") group.external;
-
   groupSection = name: group: let
-    dial = members: pbxLib.app "Dial" [(concatStringsSep "&" members) group.ringTime];
+    members = map pbxLib.devices group.members;
+    external = map (number: "Local/${number}@${pbxLib.objectContext "ringgroup" name}/n") group.external;
+    # b() runs `leg` of pbx-confirm on each channel before it is called
+    dial = channels: withLocal:
+      pbxLib.app "Dial" (
+        [(concatStringsSep "&" channels) group.ringTime]
+        ++ optional withLocal "b(pbx-confirm^leg^1)"
+      );
     outsideCallerId = optional (cfg.outbound != null && cfg.outbound.callerId != null) (
       pbxLib.app "Set" ["CALLERID(num)=${cfg.outbound.callerId}"]
     );
@@ -105,8 +108,8 @@
         s =
           (
             if group.strategy == "ringall"
-            then [(dial (channels name group))]
-            else map (channel: dial [channel]) (channels name group)
+            then [(dial (members ++ external) (external != []))]
+            else map (channel: dial [channel] false) members ++ map (channel: dial [channel] true) external
           )
           ++ pbxLib.steps group.noAnswer;
       }
@@ -117,7 +120,7 @@
           (pbxLib.app "Dial" [
             "PJSIP/\${EXTEN}@${trunkOf group}"
             group.ringTime
-            "U(pbx-confirm^s^1)"
+            "U(pbx-confirm)"
           ])
           (pbxLib.app "Hangup" [])
         ]);
@@ -152,27 +155,51 @@ in {
     services.asterisk.dialplan.contexts =
       mapAttrs' (name: group: nameValuePair (pbxLib.objectContext "ringgroup" name) (groupSection name group)) cfg.ringGroups
       // optionalAttrs (withExternal != {}) {
-        # a Dial U() routine on the external leg: GOSUB_RESULT=CONTINUE hangs
-        # that leg up, and the Local channel ends with it
         pbx-confirm = {
           comment = mkDefault "from pbx.ringGroups: confirmation of external members";
-          extensions.s = [
-            (pbxLib.app "Read" [
-              "PBX_CONFIRM"
-              "followme/no-recording&followme/options"
-              1
-              ""
-              3
-              5
-            ])
-            (pbxLib.app "GotoIf" [''$["''${PBX_CONFIRM}" = "1"]?accept''])
-            (pbxLib.app "Set" ["GOSUB_RESULT=CONTINUE"])
-            {
-              app = "Return";
-              args = [];
-              label = "accept";
-            }
-          ];
+          extensions = {
+            # a Dial U() routine on the external leg: GOSUB_RESULT=CONTINUE
+            # hangs that leg up, and the Local channel ends with it
+            s = [
+              (pbxLib.app "Read" [
+                "PBX_CONFIRM"
+                "followme/no-recording&followme/options"
+                1
+                ""
+                3
+                5
+              ])
+              (pbxLib.app "GotoIf" [''$["''${PBX_CONFIRM}" = "1"]?accept''])
+              (pbxLib.app "Set" ["GOSUB_RESULT=CONTINUE"])
+              {
+                app = "Return";
+                args = [];
+                label = "accept";
+              }
+            ];
+            # Dial finishes `s` even after the call is gone, so the ;1 side of
+            # the Local channel hangs up the leg when the ring group drops it
+            leg = [
+              (pbxLib.app "GotoIf" [''$["''${CHANNEL(channeltype)}" != "Local"]?done''])
+              (pbxLib.app "Set" ["CHANNEL(hangup_handler_push)=pbx-confirm,drop,1"])
+              {
+                app = "Return";
+                args = [];
+                label = "done";
+              }
+            ];
+            # the ;2 side names the leg once it answered
+            drop = [
+              (pbxLib.app "Set" ["PBX_LEG=\${IMPORT(\${CHANNEL:0:-1}2,DIALEDPEERNAME)}"])
+              (pbxLib.app "GotoIf" [''$["''${PBX_LEG}" = ""]?done''])
+              (pbxLib.app "SoftHangup" ["\${PBX_LEG}"])
+              {
+                app = "Return";
+                args = [];
+                label = "done";
+              }
+            ];
+          };
         };
       };
 

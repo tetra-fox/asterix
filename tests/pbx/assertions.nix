@@ -534,6 +534,21 @@
       assertions = ["pbx.phones.grandstream.ht801: the admin password (P2) of long, short is not 4 to 30 characters long, which HT801 V2 hardware requires."];
     };
 
+    # two spellings of one address would be one file
+    ht801SameMacTwice = {
+      module = {
+        imports = [phones];
+        pbx.phones.grandstream.ht801 = {
+          enable = true;
+          devices = {
+            "201".mac = "c0:74:ad:00:02:01";
+            "202".mac = "C0-74-AD-00-02-01";
+          };
+        };
+      };
+      assertions = ["pbx.phones.grandstream.ht801.devices: MAC addresses must be unique."];
+    };
+
     # systemd drops every connection with no IPAddressAllow= entry
     phonesWithoutNetworks = {
       module = {

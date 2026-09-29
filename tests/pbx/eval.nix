@@ -5,7 +5,7 @@
   self,
 }: let
   inherit (pkgs) lib;
-  inherit (import ../eval-lib.nix {inherit pkgs self;}) evalConfig;
+  inherit (import ../eval-lib.nix {inherit pkgs self;}) evalConfig placeholderFor;
 
   # two phones and a trunk, which each test adds to
   base = {config, ...}: let
@@ -92,6 +92,89 @@ in {
         "    <P35>201</P35>"
         "    <P36>kitchen</P36>"
       ];
+    };
+
+    # every P-value the module sets, in numeric order; common settings replace
+    # the module's values and an adapter's settings replace both
+    testHt801File = {
+      expr =
+        (ht801 {
+          pbx.phones.grandstream.ht801 = {
+            ntpServer = "10.0.20.1";
+            timeZone = "CET-1CEST-2,M3.5.0/02:00:00,M10.5.0/03:00:00";
+            adminPassword = self.lib.secret "/run/secrets/ht801-admin";
+            settings = {
+              P238 = 0;
+              P1362 = "de";
+            };
+            devices."201".settings = {
+              P47 = "10.0.20.11";
+              P1362 = "en";
+            };
+          };
+        }).pbx.phones.files."cfgc074ad000201.xml".text;
+      expected = ''
+        <?xml version="1.0" encoding="UTF-8"?>
+        <gs_provision version="1">
+          <mac>c074ad000201</mac>
+          <config version="1">
+            <P2>${placeholderFor "/run/secrets/ht801-admin"}</P2>
+            <P30>10.0.20.1</P30>
+            <P34>${placeholderFor "/run/secrets/201"}</P34>
+            <P35>201</P35>
+            <P36>201</P36>
+            <P47>10.0.20.11</P47>
+            <P64>CET-1CEST-2,M3.5.0/02:00:00,M10.5.0/03:00:00</P64>
+            <P212>1</P212>
+            <P237>10.0.20.10</P237>
+            <P238>0</P238>
+            <P271>1</P271>
+            <P1362>en</P1362>
+            <P1409>0</P1409>
+          </config>
+        </gs_provision>
+      '';
+    };
+
+    # a plain admin password is escaped for XML, an integer is written as it
+    # is, a secret is left to the service
+    testHt801AdminPassword = {
+      expr = map (adminPassword: pLine "P2" (ht801 {pbx.phones.grandstream.ht801 = {inherit adminPassword;};})) [
+        "a&b<c>\"d'e]]>"
+        1234
+        (self.lib.secret "/run/secrets/ht801-admin")
+      ];
+      expected = [
+        "    <P2>a&amp;b&lt;c&gt;&quot;d&apos;e]]&gt;</P2>"
+        "    <P2>1234</P2>"
+        "    <P2>${placeholderFor "/run/secrets/ht801-admin"}</P2>"
+      ];
+    };
+
+    # every spelling the option takes names the file, and fills <mac>, with the
+    # address in lowercase without separators
+    testHt801MacSpellings = {
+      expr =
+        lib.mapAttrs (_: file: lib.findFirst (lib.hasPrefix "  <mac>") null (lib.splitString "\n" file.text))
+        (ht801 {
+          pbx.phones.grandstream.ht801.devices =
+            lib.mapAttrs (_: mac: {
+              inherit mac;
+              endpoint = "201";
+            }) {
+              colons = "C0:74:AD:00:02:0A";
+              hyphens = "c0-74-ad-00-02-0b";
+              none = "C074AD00020c";
+              mixed = "c0:74-ad0002:0D";
+            };
+        }).pbx.phones.files;
+      expected = {
+        "cfgc074ad000201.xml" = "  <mac>c074ad000201</mac>";
+        "cfgc074ad00020a.xml" = "  <mac>c074ad00020a</mac>";
+        "cfgc074ad00020b.xml" = "  <mac>c074ad00020b</mac>";
+        "cfgc074ad00020c.xml" = "  <mac>c074ad00020c</mac>";
+        "cfgc074ad00020d.xml" = "  <mac>c074ad00020d</mac>";
+      };
     };
 
     # the socket and the configuration server the adapters keep (P237), with

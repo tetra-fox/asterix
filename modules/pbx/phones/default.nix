@@ -130,6 +130,9 @@
     tokens == [] || !(builtins.all valid tokens))
   cfg.allowedNetworks;
 
+  # files whose allowedAddress the server cannot parse, so it would not start
+  invalidAddresses = filterAttrs (_: file: file.allowedAddress != null && !isAddress file.allowedAddress) cfg.files;
+
   renderer = pkgs.writeShellApplication {
     name = "asterisk-provisioning-render";
     runtimeInputs = with pkgs; [
@@ -244,6 +247,10 @@ in {
         {
           assertion = invalidNetworks == [];
           message = "pbx.phones.allowedNetworks: entries must be addresses, networks such as 10.0.20.0/24, or any, localhost, link-local or multicast, which is what systemd takes: ${lib.concatMapStringsSep ", " (entry: "`${entry}`") invalidNetworks}.";
+        }
+        {
+          assertion = invalidAddresses == {};
+          message = "pbx.phones.files: allowedAddress must be one IPv4 or IPv6 address: ${lib.concatStringsSep ", " (mapAttrsToList (name: file: "${name} has `${file.allowedAddress}`") invalidAddresses)}.";
         }
       ]
       ++ map (ref: {

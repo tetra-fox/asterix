@@ -531,6 +531,37 @@
       assertions = ["pbx.phones.allowedNetworks: entries must be addresses, networks such as 10.0.20.0/24, or any, localhost, link-local or multicast, which is what systemd takes: `10.0.20.0/33`, `phones`, `10.0.20.021`, `[fd00::21]`, `10.0.20.0/24 phones`, ``."];
     };
 
+    # what Rust's IpAddr parses, which the server compares the client's
+    # address with; it does not start with anything else
+    phonesAllowedAddressNotAnAddress = {
+      module = {
+        imports = [phones];
+        pbx.phones = {
+          grandstream.ht801 = {
+            enable = true;
+            devices."201" = {
+              mac = "c0:74:ad:00:02:01";
+              allowedAddress = "10.0.20.021";
+            };
+          };
+          files =
+            lib.mapAttrs (_: allowedAddress: {
+              text = "x";
+              inherit allowedAddress;
+            }) {
+              "v4.cfg" = "10.0.20.21";
+              "v6.cfg" = "FD00::21";
+              "mapped.cfg" = "::ffff:10.0.20.21";
+              "name.cfg" = "kitchen.lan";
+              "network.cfg" = "10.0.20.21/32";
+              "zone.cfg" = "fe80::21%voip";
+              "brackets.cfg" = "[fd00::21]";
+            };
+        };
+      };
+      assertions = ["pbx.phones.files: allowedAddress must be one IPv4 or IPv6 address: brackets.cfg has `[fd00::21]`, cfgc074ad000201.xml has `10.0.20.021`, name.cfg has `kitchen.lan`, network.cfg has `10.0.20.21/32`, zone.cfg has `fe80::21%voip`."];
+    };
+
     # the adapter sends one user name, for the endpoint and its aor
     ht801EndpointWithRenamedAor = {
       module = {

@@ -163,15 +163,13 @@ in
         [ ! -f "$root/log/check" ] || cat "$root/log/check" >&2
         exit 1
       fi
-      # only what it logged while loading
-      sed '/Asterisk Ready\./,$d' "$root/log/check" > "$root/loaded"
       rx "dialplan show" > "$root/dialplan"
       rx "core show applications" > "$root/applications"
       rx "core show functions" > "$root/functions"
       rx "core show switches" > "$root/switches"
 
       failed=0
-      if gawk -f ${./problems.awk} "$root/loaded" > "$root/problems"; then
+      if gawk -f ${./problems.awk} "$root/log/check" > "$root/problems"; then
         echo "Asterisk logged these while loading the configuration:" >&2
         cat "$root/problems" >&2
         failed=1

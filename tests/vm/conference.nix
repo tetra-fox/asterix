@@ -1,15 +1,16 @@
 # ConfBridge rooms built from the typed profiles and pbx.conferences, checked
 # by what each phone hears: seven phones on G.711 and one on G.722 in a
 # recorded room hear each other at their own pitch and never themselves, and
-# the recording holds all eight; guests wait muted for a chair, who hears
-# none of them until one unmutes, kicks the last guest with a DTMF menu and
-# ends the meeting by leaving; a room behind a PIN from a secret, dialled from
-# the core dialplan or its pbx number, turns away a wrong PIN and, once full,
-# further callers but not an admin; the default profiles, through a pbx
-# conference and the core dialplan: music on hold for a caller alone, the
-# number of the others for the next, join sounds in the room's language but
-# none for a quiet user, and the room's limit; each action of a user's DTMF
-# menu but the two that reset a volume, and of an admin's
+# the recording holds all eight; guests wait muted for a chair, with music
+# only when their profile asks for it, the chair hears none of them until one
+# unmutes, kicks the last guest with a DTMF menu and ends the meeting by
+# leaving; a room behind a PIN from a secret, dialled from the core dialplan
+# or its pbx number, turns away a wrong PIN and, once full, further callers
+# but not an admin; the default profiles, through a pbx conference and the
+# core dialplan: music on hold for a caller alone, the number of the others
+# for the next, join sounds in the room's language but none for a quiet user,
+# and the room's limit; each action of a user's DTMF menu but the two that
+# reset a volume, and of an admin's
 {
   pkgs,
   self,
@@ -149,6 +150,12 @@ in
                 endMarked = true;
                 startMuted = true;
               };
+              patient = {
+                waitMarked = true;
+                endMarked = true;
+                startMuted = true;
+                musicOnHoldWhenEmpty = true;
+              };
               pinned.pin = secret "/run/test-secrets/conference-pin";
               member = {};
               hush.quiet = true;
@@ -191,7 +198,7 @@ in
                 "ConfBridge(800,recorded,member)"
                 "Hangup()"
               ];
-              # guests dial 810, the chair 811
+              # guests dial 810, or 812 to wait with music, the chair 811
               "810" = [
                 "Answer()"
                 "ConfBridge(810,meeting,guest,user_menu)"
@@ -200,6 +207,11 @@ in
               "811" = [
                 "Answer()"
                 "ConfBridge(810,meeting,chair,chair_menu)"
+                "Hangup()"
+              ];
+              "812" = [
+                "Answer()"
+                "ConfBridge(810,meeting,patient,user_menu)"
                 "Hangup()"
               ];
               "820" = [
@@ -337,14 +349,17 @@ in
             # a second of all eight at once
             assert any(all(same(w, everyone) for w in windows[i : i + 10]) for i in range(len(windows) - 9)), windows
 
-        with subtest("guests wait muted for the chair, who hears none of them until one unmutes, kicks the last guest and ends the meeting by leaving"):
+        with subtest("guests wait muted for the chair, with music only if musicOnHoldWhenEmpty says so; the chair hears none of them until one unmutes, kicks the last guest and ends the meeting by leaving"):
             chair = phone["401"]
             guests = ["402", "403", "404"]
             ended = {ext: phone[ext].disconnects() for ext in guests}
             # one after the other, so 404 is the last to join
-            for i, ext in enumerate(guests):
-                phone[ext].call("810")
+            for i, (ext, number) in enumerate(zip(guests, ["810", "810", "812"])):
+                phone[ext].call(number)
                 wait_members("810", {guest: "WEmw" for guest in guests[: i + 1]})
+            for ext in ["402", "403"]:
+                wait_hears(phone[ext], [])
+            wait_hears(phone["404"], [TONES["moh"]])
             chair.call("811")
             wait_members("810", {"401": "AM", **{guest: "WEm" for guest in guests}})
             for ext in guests:

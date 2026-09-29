@@ -32,7 +32,7 @@
       maxMembers = mkOption {
         type = types.nullOr types.ints.positive;
         default = null;
-        description = "Maximum number of participants (`max_members`).";
+        description = "Maximum number of participants (`max_members`); an admin joins a full conference anyway.";
       };
       recordConference = optionalBool "Record the conference (`record_conference`).";
       musicOnHoldClass = mkOption {
@@ -61,12 +61,12 @@
           stored in the world-readable Nix store and triggers a warning.
         '';
       };
-      waitMarked = optionalBool "Wait (with music) until a marked user joins (`wait_marked`).";
+      waitMarked = optionalBool "Wait, muted, until a marked user joins (`wait_marked`); with music only if `musicOnHoldWhenEmpty` is set.";
       endMarked = optionalBool "Leave when the last marked user leaves (`end_marked`).";
       startMuted = optionalBool "Join muted (`startmuted`).";
       quiet = optionalBool "Do not play join/leave sounds for this user.";
       announceUserCount = optionalBool "Announce the number of participants on join (`announce_user_count`).";
-      musicOnHoldWhenEmpty = optionalBool "Play music on hold while alone (`music_on_hold_when_empty`).";
+      musicOnHoldWhenEmpty = optionalBool "Play music on hold while alone, or waiting for a marked user (`music_on_hold_when_empty`).";
       settings = settingsOption "user profile";
     };
   };

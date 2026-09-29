@@ -135,7 +135,28 @@
       name = "credentials/${name}";
       path = checkCertificate;
     }) (attrNames cfg.credentials)
+    ++ optional (checkHostNames != []) {
+      name = "hosts";
+      path = pkgs.writeText "asterisk-check-hosts" (lib.concatMapStrings (name: "192.0.2.1 ${name}\n") checkHostNames);
+    }
   );
+  # host names Asterisk resolves while it loads the configuration; the build
+  # has no DNS, so for the check they resolve to a documentation address
+  checkHostNames = let
+    listOf = v:
+      if builtins.isList v
+      then v
+      else lib.splitString "," (toString v);
+    host = v: builtins.head (builtins.match "[[:space:]]*([^:/[:space:]]*).*" (toString v));
+    isName = v: builtins.match "[A-Za-z0-9-]+([.][A-Za-z0-9-]+)*" v != null && builtins.match "[0-9.]+" v == null;
+    ofType = type: filter (s: (s.type or null) == type) pjsipObjects;
+  in
+    unique (filter isName (map host (
+      concatMap (s: listOf (s.match or [])) (ofType "identify")
+      ++ concatMap (s: lib.optionals (s ? external_signaling_address) [s.external_signaling_address] ++ lib.optionals (s ? external_media_address) [s.external_media_address]) (ofType "transport")
+      ++ lib.optionals (rtpGeneral ? stunaddr) [rtpGeneral.stunaddr]
+      ++ lib.optionals (rtpGeneral ? turnaddr) [rtpGeneral.turnaddr]
+    )));
   configCheck = pkgs.runCommand "asterisk-config-check" {} ''
     ${lib.getExe (pkgs.callPackage ../pkgs/config-check/package.nix {})} \
       ${lib.optionalString (builtins.any lowPort listenPorts) "--low-ports"} \
@@ -175,11 +196,8 @@
 
   # Parts of the configuration that Asterisk only reads at startup. Changing
   # them restarts the service; everything else is applied with a reload.
-  pjsipTransports =
-    filter (s: (s.type or null) == "transport")
-    (
-      format.resolveInheritance (cfg.settings."pjsip.conf" or {})
-    ).sections;
+  pjsipObjects = (format.resolveInheritance (cfg.settings."pjsip.conf" or {})).sections;
+  pjsipTransports = filter (s: (s.type or null) == "transport") pjsipObjects;
   restartOnlyConfig = builtins.hashString "sha256" (
     concatStringsSep "\n" (
       map renderFile (

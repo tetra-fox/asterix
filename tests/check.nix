@@ -129,6 +129,16 @@
       protocol = "tcp";
       port = 443;
     };
+    # Asterisk resolves the host in identify `match` while loading, and the
+    # build has no DNS
+    trunkByHostName = {config, ...}: {
+      services.asterisk.pjsip.trunks.provider = {
+        host = "sip.provider.example";
+        username = "5551000";
+        password = config.lib.asterisk.secret "/run/secrets/trunk";
+        context = "internal";
+      };
+    };
     # a digest after its algorithm must have that algorithm's length
     sha256Digest = {config, ...}: {
       services.asterisk.pjsip.endpoints."101".auth.settings.password_digest = "SHA-256:${

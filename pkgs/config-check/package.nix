@@ -4,7 +4,8 @@
 # an error or warning while loading it, or if the dialplan uses an application
 # or function that no loaded module provides. CONFIG is prepared by
 # modules/asterisk.nix: `config/` with `@root@` where the files will be and a
-# log channel `check`, and `credentials/`. Secrets become zeros.
+# log channel `check`, `credentials/`, and `hosts` for the names Asterisk
+# resolves while loading, since a build has no DNS. Secrets become zeros.
 #
 # ADDRESS are the addresses Asterisk listens on. IPv4 ones become loopback
 # addresses, which a build can bind without privileges. Asterisk only runs in
@@ -19,6 +20,7 @@
   gnugrep,
   gnused,
   iproute2,
+  nss_wrapper,
   util-linux,
   writeShellApplication,
 }: let
@@ -101,7 +103,11 @@ in
       rx() {
         "$asterisk" -C "$root/config/asterisk.conf" -rx "$1"
       }
-      "$asterisk" -f -n -C "$root/config/asterisk.conf" > "$root/console" 2>&1 &
+      preload=()
+      if [ -f "$root/hosts" ]; then
+        preload=(LD_PRELOAD=${nss_wrapper}/lib/libnss_wrapper.so NSS_WRAPPER_HOSTS="$root/hosts")
+      fi
+      env "''${preload[@]}" "$asterisk" -f -n -C "$root/config/asterisk.conf" > "$root/console" 2>&1 &
       pid=$!
       for _ in $(seq 600); do
         if [ -S "$root/run/asterisk.ctl" ] || ! kill -0 "$pid" 2> /dev/null; then

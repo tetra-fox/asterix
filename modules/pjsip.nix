@@ -35,6 +35,7 @@
     mkIf
     mkMerge
     mkOption
+    mkOptionDefault
     nameValuePair
     optional
     optionalAttrs
@@ -859,7 +860,11 @@ in {
         user_agent = "PBX";
         endpoint_identifier_order = "ip,username";
       };
-      description = "Keys of the `[global]` section (`type = global`).";
+      description = ''
+        Keys of the `[global]` section (`type = global`). The module sets
+        `max_initial_qualify_time = 5`, so phones and trunks are qualified
+        within 5 seconds of a start; any definition replaces it.
+      '';
     };
 
     system = mkOption {
@@ -967,6 +972,10 @@ in {
       ];
 
       credentials = lib.listToAttrs transportCredentials;
+
+      # after a start, queues skip a phone and calls to a trunk fail until its
+      # first qualify, which Asterisk otherwise schedules within qualify_frequency
+      pjsip.global.max_initial_qualify_time = mkOptionDefault 5;
     };
 
     assertions = [

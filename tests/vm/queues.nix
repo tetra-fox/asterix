@@ -166,6 +166,11 @@ in
             pbx.succeed("systemctl restart asterisk.service")
             pbx.wait_for_unit("asterisk.service")
             wait_contacts(pbx, len(registered))
+            # the queue skips an agent until its restored contact is qualified,
+            # which max_initial_qualify_time keeps within 5 s of the start
+            pbx.wait_until_succeeds(
+                f"test $(asterisk -rx 'pjsip show contacts' | grep -c ' Avail ') -eq {len(registered)}", timeout=15
+            )
             assert "PJSIP/514" in asterisk(pbx, "queue show hotline")
             phone["501"].call("602")
             wait_bridged(pbx, "501", "514")

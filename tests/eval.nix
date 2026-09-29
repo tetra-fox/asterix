@@ -38,6 +38,10 @@ in {
       expected =
         header
         + ''
+          [global]
+          type = global
+          max_initial_qualify_time = 5
+
           [udp]
           type = transport
           bind = 0.0.0.0:5060
@@ -68,6 +72,21 @@ in {
         '';
     };
 
+    # a definition replaces the built-in max_initial_qualify_time without
+    # mkForce, through the typed option and through settings
+    testMaxInitialQualifyTimeIsReplaceable = {
+      expr =
+        map (module: lib.hasInfix "[global]\ntype = global\nmax_initial_qualify_time = 30\n" (rendered [phone module])."pjsip.conf")
+        [
+          {services.asterisk.pjsip.global.max_initial_qualify_time = 30;}
+          {services.asterisk.settings."pjsip.conf".global.max_initial_qualify_time = 30;}
+        ];
+      expected = [
+        true
+        true
+      ];
+    };
+
     testTypedTrunkSections = {
       expr =
         (rendered [
@@ -93,6 +112,10 @@ in {
       expected =
         header
         + ''
+          [global]
+          type = global
+          max_initial_qualify_time = 5
+
           [provider]
           type = aor
           contact = sip:sip.provider.example:5070

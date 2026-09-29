@@ -45,6 +45,7 @@
     "order"
     "template"
     "inherits"
+    "comment"
   ];
 
   contextString = ctx:
@@ -324,13 +325,21 @@ in rec {
 
     options = optional template "!" ++ inherits;
     header = "[${name}]" + optionalString (options != []) "(${concatStringsSep "," options})";
+    comment = section.comment or null;
+    commentLines = lib.optionals (comment != null) (
+      map (line:
+        if line == ""
+        then ";"
+        else "; ${line}") (lib.splitString "\n" (lib.removeSuffix "\n" comment))
+    );
   in
     if !isValidSectionName name
     then fail ctx "invalid section name"
     else if !(builtins.all isValidSectionName inherits)
     then fail ctx "invalid name in inherits: ${builtins.toJSON inherits}"
     else
-      [header]
+      commentLines
+      ++ [header]
       ++ map (e: "${e.indent}${e.key} ${
         if e.arrow
         then "=>"
@@ -556,6 +565,12 @@ in rec {
               Sections (usually templates) this section inherits from:
               `[name](a,b)`. They must be rendered earlier in the file.
             '';
+          };
+          comment = mkOption {
+            type = lib.types.nullOr lib.types.str;
+            default = null;
+            example = "from pbx.ringGroups.front";
+            description = "Comment written above the section header, one `;` line per line.";
           };
         };
       }

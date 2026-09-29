@@ -123,6 +123,12 @@
           `[context]` block at the end of the file (Asterisk merges both).
         '';
       };
+      comment = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        example = "calls from the provider";
+        description = "Comment written above the context in {file}`extensions.conf`.";
+      };
     };
   };
 
@@ -151,6 +157,7 @@
 
   contextSection = name: context: {
     inherit name;
+    inherit (context) comment;
     include = context.includes;
     switch = context.switches;
     ignorepat = context.ignorePatterns;
@@ -300,11 +307,12 @@ in {
     knownContexts = mkOption {
       type = types.nullOr (types.listOf types.str);
       readOnly = true;
-      internal = true;
       description = ''
-        Every context of the dialplan at runtime, for checking references to
-        contexts, or null when included files or an AEL or Lua dialplan make
-        that unknowable.
+        Every context of the dialplan at runtime: the contexts of
+        {file}`extensions.conf`, section headers in its raw text and the
+        contexts of res_parking's parking lots. Null when included files or
+        an AEL or Lua dialplan make that unknowable. Other modules use it to
+        check references to contexts.
       '';
     };
   };

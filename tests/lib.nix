@@ -480,6 +480,23 @@ in
       '';
     };
 
+    # a comment is not a key, and every line of it stays a comment
+    testSectionComment = {
+      expr = render {} {
+        sections.s = {
+          comment = "from pbx.ringGroups.front\n\nrings 201; then 202\n";
+          x = 1;
+        };
+      };
+      expected = ''
+        ; from pbx.ringGroups.front
+        ;
+        ; rings 201; then 202
+        [s]
+        x = 1
+      '';
+    };
+
     testSectionOrderThenId = {
       expr = render {} {
         sections = {

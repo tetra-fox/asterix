@@ -23,6 +23,39 @@
     };
   };
 
+  # a problem for each reference check (an object, a parent, an endpoint
+  # context, an include) and one that no included file or dialplan hides
+  everyReference = {
+    services.asterisk = {
+      pjsip.endpoints = {
+        "101".settings.outbound_auth = "elsewhere";
+        "102" = {
+          context = "from-elsewhere";
+          aor = null;
+        };
+      };
+      settings."pjsip.conf" = {
+        gate.inherits = ["elsewhere"];
+        again = {
+          name = "101";
+          type = "endpoint";
+        };
+      };
+      dialplan.contexts.internal.includes = ["from-elsewhere"];
+    };
+  };
+  reported = {
+    reference = "services.asterisk: pjsip.conf references objects that do not exist:\n  [101] (type=endpoint) outbound_auth = elsewhere: no auth named `elsewhere`\n";
+    parent = "services.asterisk: pjsip.conf sections inherit from sections that are not rendered before them, so Asterisk would not load the file:\n  [gate](elsewhere)\n";
+    duplicate = "services.asterisk: pjsip.conf defines these objects more than once (same type and name):\n  endpoint 101\n";
+    context = "services.asterisk: PJSIP endpoints use dialplan contexts that are not defined:\n  [102] context = from-elsewhere\n";
+    include = "services.asterisk: dialplan includes contexts that are not defined:\n  [internal] include => from-elsewhere\n";
+  };
+  withEveryReference = module: {
+    imports = [everyReference];
+    services.asterisk = module;
+  };
+
   cases = {
     baselineIsValid = {
       module = {};
@@ -154,20 +187,45 @@
       assertion = "[gate](raw-phone)";
     };
 
-    includedFilesDisableReferenceChecks = {
-      module.services.asterisk = {
-        pjsip.endpoints."101".settings.outbound_auth = "elsewhere";
-        includes."pjsip.conf" = ["pjsip-local.conf"];
-      };
-      assertions = [];
+    everyReferenceIsChecked = {
+      module = everyReference;
+      assertions = [
+        reported.reference
+        reported.parent
+        reported.duplicate
+        reported.context
+        reported.include
+      ];
     };
 
-    sorceryBackendsDisableReferenceChecks = {
-      module.services.asterisk = {
-        pjsip.endpoints."101".settings.outbound_auth = "elsewhere";
-        settings."sorcery.conf".res_pjsip.auth = "astdb,auths";
-      };
-      assertions = [];
+    # included files can define any pjsip object: the pjsip reference checks
+    # stop, the others go on
+    includedPjsipFiles = {
+      module = withEveryReference {includes."pjsip.conf" = ["pjsip-local.conf"];};
+      assertions = [
+        reported.duplicate
+        reported.context
+        reported.include
+      ];
+    };
+
+    includedPjsipFilesInRawText = {
+      module = withEveryReference {extraConfig."pjsip.conf" = ''#tryinclude "pjsip-local.conf"'';};
+      assertions = [
+        reported.duplicate
+        reported.context
+        reported.include
+      ];
+    };
+
+    # so can other sorcery backends
+    sorceryMapping = {
+      module = withEveryReference {settings."sorcery.conf".res_pjsip.auth = "astdb,auths";};
+      assertions = [
+        reported.duplicate
+        reported.context
+        reported.include
+      ];
     };
 
     registrationEndpointWithoutLine = {
@@ -259,20 +317,43 @@
       assertions = [];
     };
 
-    includedFilesDisableContextChecks = {
-      module.services.asterisk = {
-        pjsip.endpoints."101".context = lib.mkForce "elsewhere";
-        includes."extensions.conf" = ["extensions-local.conf"];
-      };
-      assertions = [];
+    # included files can define any context: the context checks stop, the
+    # pjsip ones go on
+    includedDialplanFiles = {
+      module = withEveryReference {includes."extensions.conf" = ["extensions-local.conf"];};
+      assertions = [
+        reported.reference
+        reported.parent
+        reported.duplicate
+      ];
     };
 
-    aelDisablesContextChecks = {
-      module.services.asterisk = {
-        dialplan.contexts.internal.includes = ["from-ael"];
-        extraConfig."extensions.ael" = "context from-ael { 1 => Answer(); };";
+    # so can AEL and Lua dialplans
+    aelDialplan = {
+      module = withEveryReference {
+        extraConfig."extensions.ael" = "context from-elsewhere { 1 => Answer(); };";
+        modules.load = [
+          "res_ael_share"
+          "pbx_ael"
+        ];
       };
-      assertions = [];
+      assertions = [
+        reported.reference
+        reported.parent
+        reported.duplicate
+      ];
+    };
+
+    luaDialplan = {
+      module = withEveryReference {
+        extraConfig."extensions.lua" = ''extensions = { ["from-elsewhere"] = {} }'';
+        modules.load = ["pbx_lua"];
+      };
+      assertions = [
+        reported.reference
+        reported.parent
+        reported.duplicate
+      ];
     };
 
     # res_parking creates the contexts of its parking lots at runtime

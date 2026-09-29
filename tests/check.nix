@@ -52,6 +52,29 @@
       module.services.asterisk.dialplan.contexts.internal.extensions."411" = ["Directory(default)"];
       expect = ["(internal, 411): no loaded module provides the application Directory"];
     };
+    # the reference checks cannot see into an included file, Asterisk loads it
+    # here
+    includedFileProblem = {
+      module.services.asterisk.includes."pjsip.conf" = [
+        "${pkgs.writeText "pjsip-local.conf" ''
+          [102]
+          type = endpoint
+          context = internal
+          direct_mdia = no
+        ''}"
+      ];
+      expect = ["Could not find option suitable for category '102' named 'direct_mdia'"];
+    };
+    aelApplicationNotLoaded = {
+      module.services.asterisk = {
+        modules.load = [
+          "res_ael_share"
+          "pbx_ael"
+        ];
+        extraConfig."extensions.ael" = "context from-ael { 411 => Directory(default); };";
+      };
+      expect = ["pbx_ael (from-ael, 411): no loaded module provides the application Directory"];
+    };
     functionsNotLoaded = {
       module.services.asterisk.dialplan.contexts.internal.extensions."412" = [
         "NoOp(\${SHELL(ls)})"
@@ -105,6 +128,27 @@
     base = {};
     # res_parking, which parkcall loads, starts from the file rendered for it
     parkcall.services.asterisk.features.featureMap.parkcall = "#72";
+    # an endpoint in a context only the AEL dialplan defines, and a Lua one
+    aelAndLuaDialplans.services.asterisk = {
+      pjsip.endpoints."101".context = lib.mkForce "from-ael";
+      modules.load = [
+        "res_ael_share"
+        "pbx_ael"
+        "pbx_lua"
+      ];
+      extraConfig = {
+        "extensions.ael" = "context from-ael { _1XX => Dial(PJSIP/\${EXTEN}); };";
+        "extensions.lua" = ''
+          extensions = {
+            ["from-lua"] = {
+              ["_1XX"] = function(context, extension)
+                app.dial("PJSIP/" .. extension)
+              end;
+            };
+          }
+        '';
+      };
+    };
     # what the reference checks accept since they resolve templates
     endpointFromTemplate.services.asterisk.settings."pjsip.conf" = {
       phone = {

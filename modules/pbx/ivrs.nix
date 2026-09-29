@@ -10,6 +10,7 @@
   inherit
     (lib)
     concatMap
+    concatMapStringsSep
     concatStringsSep
     filterAttrs
     genAttrs
@@ -130,6 +131,7 @@
       // lib.mapAttrs (_: pbxLib.steps) ivr.options;
   };
 
+  badNames = builtins.filter (name: builtins.match "[A-Za-z0-9_-]+" name == null) (builtins.attrNames cfg.ivrs);
   badKeys = concatMap (name: map (key: "pbx.ivrs.${name}.options.${key}") (builtins.filter (key: builtins.match "[0-9*#]" key == null) (builtins.attrNames cfg.ivrs.${name}.options))) (builtins.attrNames cfg.ivrs);
   # a key that is also an extension number would be defined twice
   shadowed = concatMap (name: let
@@ -165,8 +167,8 @@ in {
 
     assertions = [
       {
-        assertion = builtins.all (name: builtins.match "[A-Za-z0-9_-]+" name != null) (builtins.attrNames cfg.ivrs);
-        message = "pbx.ivrs: menu names may only contain letters, digits, _ and -: ${concatStringsSep ", " (builtins.attrNames cfg.ivrs)}.";
+        assertion = badNames == [];
+        message = "pbx.ivrs: menu names may only contain letters, digits, _ and -: ${concatMapStringsSep ", " (name: lib.showOption ["pbx" "ivrs" name]) badNames}.";
       }
       {
         assertion = badKeys == [];

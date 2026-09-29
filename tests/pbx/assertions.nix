@@ -504,9 +504,10 @@
       assertion = "which directDial makes dialable: pbx.ivrs.main.options.2.";
     };
 
+    # only the menu with the bad name, not the baseline's `main`
     ivrName = {
       module.pbx.ivrs."main menu".prompt.sound = "custom/main-menu";
-      assertion = "menu names may only contain letters, digits, _ and -";
+      assertion = ''menu names may only contain letters, digits, _ and -: pbx.ivrs."main menu".'';
     };
 
     # Goto and Gosub end a context at the first comma, and Dial splits its

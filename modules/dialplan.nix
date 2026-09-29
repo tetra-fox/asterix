@@ -176,8 +176,9 @@
 
   # Every context that exists at runtime, where that can be known: the
   # sections of extensions.conf, section headers in its raw text and the
-  # contexts res_parking creates for its parking lots. Included files and AEL
-  # or Lua dialplans can define any context.
+  # contexts res_parking creates for its parking lots. Included files, and AEL
+  # or Lua dialplans whose module is loaded to read them, can define any
+  # context.
   dialplan = cfg.settings."extensions.conf" or {};
   toList = v:
     if builtins.isList v
@@ -200,14 +201,12 @@
     includes = cfg.includes."extensions.conf" or [];
     extraConfig = cfg.extraConfig."extensions.conf" or "";
   };
+  otherDialplans = lib.filterAttrs (file: module: cfg.renderedFiles ? ${file} && loaded module) {
+    "extensions.ael" = "pbx_ael.so";
+    "extensions.lua" = "pbx_lua.so";
+  };
   knownContexts =
-    if
-      dialplanSections
-      == null
-      || builtins.any (file: cfg.settings ? ${file} || cfg.extraConfig ? ${file}) [
-        "extensions.ael"
-        "extensions.lua"
-      ]
+    if dialplanSections == null || otherDialplans != {}
     then null
     else dialplanSections ++ lib.optionals (loaded "res_parking.so") parkingContexts;
 
@@ -311,8 +310,8 @@ in {
         Every context of the dialplan at runtime: the contexts of
         {file}`extensions.conf`, section headers in its raw text and the
         contexts of res_parking's parking lots. Null when included files or
-        an AEL or Lua dialplan make that unknowable. Other modules use it to
-        check references to contexts.
+        an AEL or Lua dialplan, with pbx_ael or pbx_lua loaded, make that
+        unknowable. Other modules use it to check references to contexts.
       '';
     };
   };

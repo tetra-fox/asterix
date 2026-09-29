@@ -365,10 +365,25 @@
       ];
     };
 
-    # so can AEL and Lua dialplans
+    # so can AEL and Lua dialplans, once their module is loaded to read them
     aelDialplan = {
       module = withEveryReference {
         extraConfig."extensions.ael" = "context from-elsewhere { 1 => Answer(); };";
+        modules.load = [
+          "res_ael_share"
+          "pbx_ael"
+        ];
+      };
+      assertions = [
+        reported.reference
+        reported.parent
+        reported.duplicate
+      ];
+    };
+
+    includedAelDialplan = {
+      module = withEveryReference {
+        includes."extensions.ael" = ["/var/lib/asterisk/extensions.ael"];
         modules.load = [
           "res_ael_share"
           "pbx_ael"
@@ -390,6 +405,18 @@
         reported.reference
         reported.parent
         reported.duplicate
+      ];
+    };
+
+    # without pbx_ael, Asterisk never reads extensions.ael
+    aelDialplanWithoutModule = {
+      module = withEveryReference {extraConfig."extensions.ael" = "context from-elsewhere { 1 => Answer(); };";};
+      assertions = [
+        reported.reference
+        reported.parent
+        reported.duplicate
+        reported.context
+        reported.include
       ];
     };
 

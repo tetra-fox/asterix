@@ -43,20 +43,39 @@ in {
         ]
       );
       default = null;
-      description = "Drop RTP from unexpected sources (`strictrtp`); Asterisk's default is `yes`.";
+      description = ''
+        Drop RTP from sources other than the one Asterisk learns in the first
+        5 seconds of a call's media (`strictrtp`; `seqno` learns from sequence
+        numbers alone). Asterisk's default is `yes`. A phone whose address or
+        port changes after that, as behind a NAT that rebinds, is not heard
+        for the rest of the call, and Asterisk logs it only at debug level.
+        With `false`, Asterisk takes RTP from any source, and for endpoints
+        with `behindNat` sends its own to where it comes from.
+      '';
     };
 
     ice = mkOption {
       type = types.nullOr types.bool;
       default = null;
-      description = "Offer ICE candidates in SDP (`icesupport`); Asterisk's default is `yes`.";
+      description = ''
+        Gather ICE candidates for the RTP of every call leg (`icesupport`);
+        Asterisk's default is `yes`. Only endpoints with `ice_support` in
+        their settings offer them, and then they include every address of
+        the host, private ones too (`ice_deny` in `settings` leaves some out).
+      '';
     };
 
     stunServer = mkOption {
       type = types.nullOr types.str;
       default = null;
       example = "stun.example.org:3478";
-      description = "STUN server used to discover the public address for ICE.";
+      description = ''
+        STUN server Asterisk asks for its public address, which ICE offers as
+        a candidate. With `ice`, Asterisk asks it for every call leg, endpoints
+        without ICE too, and the call waits up to 9 seconds for each answer.
+        It asks in RFC 3489 form, which servers that only follow RFC 5389
+        ignore, such as coturn without `rfc3489-compatibility`.
+      '';
     };
 
     turn = {
@@ -64,7 +83,11 @@ in {
         type = types.nullOr types.str;
         default = null;
         example = "turn.example.org:3478";
-        description = "TURN server offered as ICE relay candidate.";
+        description = ''
+          TURN server offered as ICE relay candidate. With `ice`, Asterisk
+          allocates a relay on it over TCP for every call leg, endpoints
+          without ICE too.
+        '';
       };
       username = mkOption {
         type = types.nullOr types.str;

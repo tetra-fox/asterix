@@ -107,7 +107,7 @@ A full list of options is in the options reference: `nix build .#docs`.
   to it. Asterisk relays the audio, so phones on different networks never talk
   to each other directly.
 - **NAT.** Options for a PBX behind NAT and for phones behind NAT, plus STUN
-  and TURN.
+  and TURN for ICE.
 - **Sandboxed.** Asterisk runs as its own user, without extra privileges.
 - **Phone provisioning.** Supported devices fetch their configuration from the
   PBX. It is part of the pbx layer, see [PROVISIONING.md](PROVISIONING.md).

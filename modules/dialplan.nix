@@ -212,10 +212,13 @@
       map (sort (a: b: a < b)) (attrValues (lib.groupBy (builtins.substring 0 79) (unique dialplanSections)))
     )
   );
+  # pbx_config takes a section called general or globals, in any case, for
+  # its settings or its global variables (pbx/pbx_config.c pbx_load_config)
+  reserved = name: builtins.elem (lib.toLower name) ["general" "globals"];
   knownContexts =
     if dialplanSections == null || otherDialplans != {}
     then null
-    else dialplanSections ++ lib.optionals (loaded "res_parking.so") parkingContexts;
+    else filter (name: !(reserved name)) dialplanSections ++ lib.optionals (loaded "res_parking.so") parkingContexts;
 
   # pbx_config reads the globals and contexts of extensions.conf
   hasDialplan =
@@ -260,6 +263,7 @@
     )
     dcfg.contexts
   );
+  reservedContexts = filter reserved (attrNames dcfg.contexts);
   badExtensionNames = lib.concatLists (
     mapAttrsToList (
       name: context:
@@ -392,8 +396,8 @@ in {
         message = "services.asterisk.dialplan: invalid extension name(s) (no commas, semicolons or spaces): ${concatStringsSep ", " badExtensionNames}.";
       }
       {
-        assertion = !(dcfg.contexts ? general || dcfg.contexts ? globals);
-        message = "services.asterisk.dialplan.contexts: `general` and `globals` are reserved; use dialplan.general and dialplan.globals.";
+        assertion = reservedContexts == [];
+        message = "services.asterisk.dialplan.contexts: `general` and `globals` are reserved, in any case; use dialplan.general and dialplan.globals: ${concatStringsSep ", " reservedContexts}.";
       }
     ];
   };

@@ -652,6 +652,22 @@
       assertion = "`general` and `globals` are reserved";
     };
 
+    # Asterisk takes a section called general or globals in any case for its
+    # settings or its global variables: [General] is no context, and the lines
+    # of [GLOBALS] become variables called exten and same
+    reservedContextNameInAnotherCase = {
+      module.services.asterisk.dialplan.contexts = {
+        General.extensions.s = ["Answer()"];
+        GLOBALS.extensions.s = ["Answer()"];
+      };
+      assertion = "services.asterisk.dialplan.contexts: `general` and `globals` are reserved, in any case; use dialplan.general and dialplan.globals: GLOBALS, General.";
+    };
+
+    endpointInGeneralSection = {
+      module.services.asterisk.pjsip.endpoints."101".context = lib.mkForce "general";
+      assertion = "[101] context = general";
+    };
+
     # Asterisk keeps 79 bytes of a section name, which makes the long-x contexts
     # one; a long name of its own works, and so does a context's raw lines block
     contextsAlikeInTheirFirst79Bytes = let

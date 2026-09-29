@@ -118,7 +118,9 @@ in {
       pjsip.endpoints =
         mapAttrs (number: e: {
           context = mkDefault "pbx-internal";
-          callerId = mkDefault ''"${e.name}" <${number}>'';
+          # Asterisk drops each \ of a quoted name and keeps the character after
+          # it (main/callerid.c ast_callerid_parse)
+          callerId = mkDefault ''"${lib.escape ["\\" "\""] e.name}" <${number}>'';
           auth.password = mkDefault e.password;
           mailboxes = optional (e.voicemail != null) "${number}@default";
         })

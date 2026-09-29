@@ -16,9 +16,18 @@
   result = probe {
     name = "roundtrip";
     modules = [
+      self.nixosModules.pbx
       ({config, ...}: let
         secret = name: config.lib.asterisk.secret "/run/secrets/${name}";
       in {
+        # the name goes into the endpoint's caller ID, "name" <number>
+        pbx = {
+          enable = true;
+          extensions."202" = {
+            name = value;
+            password = secret "202";
+          };
+        };
         services.asterisk = {
           enable = true;
           pjsip = {
@@ -50,6 +59,7 @@
       "dialplan show globals"
       "dialplan show roundtrip"
       "pjsip show endpoint 101"
+      "pjsip show endpoint 202"
       "queue show roundtrip"
       "voicemail show users"
     ];
@@ -75,6 +85,11 @@
     {
       command = "pjsip show endpoint 101";
       text = ": ${value}\n";
+    }
+    # a caller ID shows its name with \ and " escaped, as it is written
+    {
+      command = "pjsip show endpoint 202";
+      text = ": \"${lib.escape ["\\" "\""] value}\" <202>\n";
     }
     {
       command = "queue show roundtrip";

@@ -213,9 +213,9 @@ The helpers `var` and `app` are in `config.lib.asterisk.dialplan`, and in
 ## PBX layer
 
 `nixosModules.pbx` adds `pbx.*` on top of the options above: extensions with
-voicemail, ring groups, queues, conference rooms, opening hours and routes to
-and from trunks, the way a PBX admin thinks of them. It imports the core, so
-it replaces `nixosModules.default` in `imports`.
+voicemail, ring groups, queues, conference rooms, voice menus, paging, opening
+hours and routes to and from trunks, the way a PBX admin thinks of them. It
+imports the core, so it replaces `nixosModules.default` in `imports`.
 
 ```nix
 { config, ... }:
@@ -259,6 +259,32 @@ saying which option it came from, and phones dial from `pbx-internal`. The
 layer only writes core options, as defaults, so anything it generates can be
 changed with the core options or `settings`. Evaluation fails when a number
 has two owners or a destination, trunk or member does not exist.
+
+A voice menu plays a prompt, a recorded sound or text spoken by flite when
+the system is built, and sends each key to a destination. A paging group
+calls several phones at once and asks them to answer by themselves:
+
+```nix
+pbx = {
+  ivrs.main = {
+    number = "700";
+    prompt.text = "For sales, press 1. For the front desk, press 2.";
+    options = {
+      "1".extension = "202";
+      "2".ringGroup = "front";
+    };
+    noInput.voicemail = "201";
+  };
+
+  paging.all = { number = "650"; members = [ "201" "202" ]; };
+};
+```
+
+`{ ivr = "main"; }` is a destination like the others, for example for
+`inbound`. A menu plays its prompt `attempts` times before a caller who
+pressed nothing goes to `noInput`, or one who pressed an unknown key goes to
+`invalid`. Pages are one-way unless `duplex` is set, and skip phones that are
+in a call. The phones must also be set to allow auto-answer.
 
 Emergency numbers have no defaults, since they depend on where the PBX is:
 see `pbx.emergency`. [small-office.nix](examples/small-office.nix) is a

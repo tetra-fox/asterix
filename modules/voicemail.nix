@@ -59,6 +59,7 @@
             contain a comma, which ends the PIN in the mailbox line. Callers
             cannot change it from the phone: it is rendered with Asterisk's `-`
             prefix for unchangeable PINs, so it cannot start with `-` itself.
+            Asterisk keeps 79 bytes of the two, so the PIN can have 78.
           '';
         };
         fullName = mkOption {
@@ -150,24 +151,59 @@
     "zonemessages"
   ];
 
-  # secrets in the mailbox lines of the generated voicemail.conf, which
-  # app_voicemail splits at every comma
-  mailboxLineSecrets =
+  # the lines of the generated voicemail.conf's mailbox sections with their
+  # context, which app_voicemail reads as `mailbox => PIN,name,email,...`
+  mailboxLines =
     (lib.foldl' (
         acc: line: let
           header = builtins.match "[[:space:]]*[[]([^]]*)[]].*" line;
         in
           if header != null
-          then acc // {inMailboxes = !(builtins.elem (builtins.head header) reservedSections);}
-          else if acc.inMailboxes
-          then acc // {refs = acc.refs ++ secrets.fromText line;}
+          then acc // {context = builtins.head header;}
+          else if acc.context != null && !(builtins.elem acc.context reservedSections)
+          then
+            acc
+            // {
+              lines =
+                acc.lines
+                ++ [
+                  {
+                    inherit (acc) context;
+                    inherit line;
+                  }
+                ];
+            }
           else acc
       ) {
-        inMailboxes = false;
-        refs = [];
+        context = null;
+        lines = [];
       }
       (splitString "\n" (cfg.renderedFiles."voicemail.conf" or "")))
-    .refs;
+    .lines;
+
+  # secrets in them, which app_voicemail splits at every comma
+  mailboxLineSecrets = lib.concatMap (mailbox: secrets.fromText mailbox.line) mailboxLines;
+
+  # app_voicemail keeps 79 bytes of a PIN, the value up to its first comma
+  # (apps/app_voicemail.c append_mailbox); `room` is what the secrets in a PIN
+  # may add to its other bytes
+  pins =
+    lib.concatMap (
+      mailbox: let
+        # the line up to a `;` that is not `\;`, at its first `=` or `=>`
+        entry = builtins.match "([^=]*)=>?(.*)" (builtins.head (builtins.match "((\\\\;|[^;])*).*" mailbox.line));
+        pin = builtins.head (splitString "," (lib.trim (builtins.elemAt entry 1)));
+        # `\;` is one byte to Asterisk
+        plain = lib.replaceStrings ["\\;"] [";"] (lib.concatStrings (filter isString (builtins.split secrets.placeholderPattern pin)));
+      in
+        lib.optional (entry != null) {
+          mailbox = "${lib.trim (builtins.head entry)}@${mailbox.context}";
+          refs = secrets.fromText pin;
+          room = 79 - builtins.stringLength plain;
+        }
+    )
+    mailboxLines;
+  longPins = map (pin: pin.mailbox) (filter (pin: pin.room < 0) pins);
 
   # mailboxes referenced by typed PJSIP endpoints (MWI) that are not defined
   voicemailConf = cfg.settings."voicemail.conf" or {};
@@ -318,7 +354,20 @@ in {
   config = mkMerge [
     # settings."voicemail.conf" can hold mailboxes without the typed options
     (mkIf cfg.enable {
-      services.asterisk.fieldSecrets = mailboxLineSecrets;
+      services.asterisk = {
+        fieldSecrets = mailboxLineSecrets;
+        # a secret in several PINs has the least room of them
+        secretMaxLengths = lib.zipAttrsWith (_: rooms: lib.foldl' lib.min (builtins.head rooms) rooms) (
+          lib.concatMap (pin: map (ref: {${secrets.placeholderOf ref} = pin.room;}) pin.refs) (filter (pin: pin.room >= 0) pins)
+        );
+      };
+
+      assertions = [
+        {
+          assertion = longPins == [];
+          message = "services.asterisk: voicemail PINs longer than the 79 bytes Asterisk keeps, the `-` before a typed mailbox's PIN included: ${concatStringsSep ", " longPins}.";
+        }
+      ];
     })
 
     (mkIf (cfg.enable && vcfg.enable) {

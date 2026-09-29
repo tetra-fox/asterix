@@ -522,6 +522,37 @@ in {
       ];
     };
 
+    # what a secret may add to the other bytes of a PIN (a typed one's `-`) to
+    # reach the 79 Asterisk keeps; a name has no such limit here
+    testPinSecretLengths = {
+      expr = let
+        config = evalConfig [
+          phone
+          (
+            {config, ...}: {
+              services.asterisk = {
+                voicemail.mailboxes."101".pin = config.lib.asterisk.secret "/run/secrets/vm-101";
+                settings."voicemail.conf".sales = {
+                  "200" = "0;${config.lib.asterisk.secret "/run/secrets/vm-200"},Sales";
+                  "201" = "1234,${config.lib.asterisk.secret "/run/secrets/name"}";
+                };
+                extraConfig."voicemail.conf" = ''
+                  [support]
+                  300 => @NIX_ASTERISK_SECRET:file:/run/secrets/vm-300@ ; the PIN
+                '';
+              };
+            }
+          )
+        ];
+      in
+        config.services.asterisk.secretMaxLengths;
+      expected = {
+        ${placeholderFor "/run/secrets/vm-101"} = 78;
+        ${placeholderFor "/run/secrets/vm-200"} = 77;
+        ${placeholderFor "/run/secrets/vm-300"} = 79;
+      };
+    };
+
     testConfbridgeProfiles = {
       expr =
         (rendered [

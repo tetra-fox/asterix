@@ -110,6 +110,16 @@ pkgs.testers.runNixOSTest {
         pbx.succeed("printf 1234 > /run/test-secrets/vm-101")
         pbx.succeed("systemctl reload asterisk.service")
 
+    with subtest("a secret PIN longer than the 79 bytes Asterisk keeps fails the reload"):
+        pbx.succeed("printf %080d 0 > /run/test-secrets/vm-101")
+        pbx.fail("systemctl reload asterisk.service")
+        pbx.succeed("journalctl --sync")
+        pbx.succeed("journalctl -u asterisk.service | grep -F 'secret /run/test-secrets/vm-101 is longer than 79 bytes'")
+        pin = ast("dialplan eval function VM_INFO(101@default,password)")
+        assert "Result: 1234\n" in pin, pin
+        pbx.succeed("printf 1234 > /run/test-secrets/vm-101")
+        pbx.succeed("systemctl reload asterisk.service")
+
     with subtest("a secret that makes its line longer than 8190 bytes fails the reload"):
         # Asterisk would skip the line and log how it begins, with part of the
         # secret

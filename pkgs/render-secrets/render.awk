@@ -32,6 +32,8 @@ function value(placeholder,    name, path, line, lines, count, status, v, parts,
 
     if (isField[placeholder] && index(v, ","))
         fail("secret " source[placeholder] " is one field of a comma-separated value, so it cannot contain a comma")
+    if (maxLength[placeholder] != "" && length(v) > maxLength[placeholder] + 0)
+        fail("secret " source[placeholder] " is longer than " maxLength[placeholder] " bytes, which is all Asterisk keeps of it")
     if (mode == "asterisk") {
         if (count > 1 || index(v, "\r"))
             fail("secret " source[placeholder] " contains a line break")
@@ -60,6 +62,7 @@ BEGIN {
         credential[fields[1]] = fields[2]
         source[fields[1]] = fields[3]
         isField[fields[1]] = fields[4] == "field"
+        maxLength[fields[1]] = fields[5]
     }
     if (status < 0)
         fail("cannot read " manifest)

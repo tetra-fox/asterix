@@ -181,7 +181,11 @@
   refsByFile = lib.genAttrs fileNames (file: secrets.fromText cfg.renderedFiles.${file});
   secretRefs = unique (concatLists (attrValues refsByFile));
   filesWithSecrets = attrNames (filterAttrs (_: refs: refs != []) refsByFile);
-  secretManifest = pkgs.writeText "asterisk-secrets" (secrets.manifest cfg.fieldSecrets secretRefs);
+  secretManifest = pkgs.writeText "asterisk-secrets" (secrets.manifest {
+      fields = cfg.fieldSecrets;
+      maxLengths = cfg.secretMaxLengths;
+    }
+    secretRefs);
 
   # Keys that hold credentials; a plain string there lands in the store.
   secretKeys = [
@@ -837,6 +841,17 @@ in {
         Secret references that are one field of a comma-separated value, from
         the modules that know the file's format. The service does not start
         when one of them contains a comma.
+      '';
+    };
+
+    secretMaxLengths = mkOption {
+      type = types.attrsOf types.ints.unsigned;
+      default = {};
+      internal = true;
+      description = ''
+        The most bytes Asterisk keeps of a secret, by its placeholder, from the
+        modules that know the file's format. The service does not start when a
+        secret is longer.
       '';
     };
 

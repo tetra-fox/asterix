@@ -675,6 +675,29 @@
       assertion = "PINs, names and e-mail addresses cannot contain commas (101@default)";
     };
 
+    # 79 bytes of a PIN with the `-` of a typed one, where \; is one byte and a
+    # comment none; a secret's own length counts when the service starts
+    voicemailPinLongerThan79Bytes = {
+      module = {config, ...}: {
+        services.asterisk = {
+          voicemail.mailboxes = {
+            "101".pin = lib.strings.replicate 79 "1";
+            "102".pin = "1;" + lib.strings.replicate 76 "1";
+          };
+          settings."voicemail.conf".sales = {
+            "200" = "${lib.strings.replicate 70 "2"}${config.lib.asterisk.secret "/run/secrets/vm-200"}${lib.strings.replicate 10 "2"},Sales";
+            "201" = "${config.lib.asterisk.secret "/run/secrets/vm-201"}${lib.strings.replicate 79 "2"},Sales";
+          };
+          extraConfig."voicemail.conf" = ''
+            [support]
+            300 => ${lib.strings.replicate 80 "3"} ; the PIN
+            301 => ${lib.strings.replicate 79 "3"} ; the PIN
+          '';
+        };
+      };
+      assertion = "services.asterisk: voicemail PINs longer than the 79 bytes Asterisk keeps, the `-` before a typed mailbox's PIN included: 101@default, 200@sales, 300@support.";
+    };
+
     voicemailEmailWithoutCommand = {
       module = {config, ...}: {
         services.asterisk.voicemail.mailboxes."101" = {

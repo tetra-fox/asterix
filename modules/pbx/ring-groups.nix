@@ -9,8 +9,10 @@
   inherit
     (lib)
     concatMap
+    concatMapStringsSep
     concatStringsSep
     filterAttrs
+    hasInfix
     mapAttrs'
     mkDefault
     mkIf
@@ -122,6 +124,9 @@
   };
 
   withExternal = filterAttrs (_: group: group.external != []) cfg.ringGroups;
+  # Dial splits its channels at &, and the Local channel of an external
+  # number names the group's context
+  badNames = builtins.filter (name: pbxLib.breaksContext name || pbxLib.breaksArgument name || (withExternal ? ${name} && hasInfix "&" name)) (builtins.attrNames cfg.ringGroups);
   # a group without a trunk uses pbx.outbound's, which routes.nix checks
   unknownTrunks = builtins.attrNames (
     filterAttrs (_: group: group.trunk != null && !(config.services.asterisk.pjsip.trunks ? ${group.trunk})) cfg.ringGroups
@@ -175,6 +180,13 @@ in {
       {
         assertion = builtins.all (group: group.members != [] || group.external != []) (builtins.attrValues cfg.ringGroups);
         message = "pbx.ringGroups: a ring group needs members or external numbers.";
+      }
+      {
+        assertion = badNames == [];
+        message = ''
+          pbx.ringGroups: names that Asterisk would misread in the dialplan (they may not contain , ; [ ] " \ ''${ $[ or an unclosed parenthesis, nor & with external numbers):
+            ${concatMapStringsSep "\n  " (name: lib.showOption ["pbx" "ringGroups" name]) badNames}
+        '';
       }
       {
         assertion = builtins.all (group: trunkOf group != null) (builtins.attrValues withExternal);

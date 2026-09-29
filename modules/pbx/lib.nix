@@ -89,6 +89,24 @@ in rec {
   # the generated context of a pbx object
   objectContext = kind: name: "pbx-${kind}-${name}";
 
+  # Goto and Gosub end a context at a comma (main/pbx.c pbx_parseable_goto),
+  # ${ and $[ are substituted, and ; [ ] end a section header
+  breaksContext = name: builtins.match ".*([],;[]|[$][{[]).*" name != null;
+
+  # Asterisk's argument parser drops quotes and backslashes, and an unclosed
+  # ( takes in the arguments after it (main/app.c __ast_app_separate_args)
+  breaksArgument = name:
+    builtins.match ".*[\"\\\\].*" name
+    != null
+    || builtins.foldl' (open: c:
+      if c == "("
+      then open + 1
+      else if c == ")" && open > 0
+      then open - 1
+      else open)
+    0 (lib.stringToCharacters name)
+    != 0;
+
   # dial string that calls every contact of an extension; PJSIP/<number>
   # calls only the first reachable one
   devices = number: "\${PJSIP_DIAL_CONTACTS(${number})}";

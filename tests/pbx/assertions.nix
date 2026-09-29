@@ -389,6 +389,117 @@
       assertion = "menu names may only contain letters, digits, _ and -";
     };
 
+    # Goto and Gosub end a context at the first comma, and Dial splits its
+    # channels at &, one of which is the Local channel of an external number
+    ringGroupNames = {
+      module.pbx.ringGroups = {
+        "a,b".members = ["201"];
+        "x&y" = {
+          members = ["201"];
+          external = ["5559000"];
+        };
+        "sales & support".members = ["201"];
+        "sales (east)".members = ["201"];
+      };
+      assertion = ''
+        pbx.ringGroups: names that Asterisk would misread in the dialplan (they may not contain , ; [ ] " \ ''${ $[ or an unclosed parenthesis, nor & with external numbers):
+          pbx.ringGroups."a,b"
+          pbx.ringGroups."x&y"
+      '';
+    };
+
+    # Gosub ends its target at the first (; with closeEarly the name is also
+    # in Set(), which ends the variable at =, and in a hint, which splits at &
+    hoursNames = {
+      module.pbx.hours = let
+        hours = {
+          timezone = "UTC";
+          open = [
+            {
+              days = "mon-fri";
+              time = "09:00-17:00";
+            }
+          ];
+        };
+      in {
+        "a,b" = hours;
+        "office (east)" = hours;
+        "a=b" = hours // {closeEarly = "*29";};
+        "c&d" = hours // {closeEarly = "*30";};
+        "e&f" = hours;
+      };
+      assertion = ''
+        pbx.hours: names that Asterisk would misread in the dialplan (they may not contain , ; [ ] ''${ $[ or (, nor & or = or more than 62 bytes with closeEarly):
+          pbx.hours."a,b"
+          pbx.hours."a=b"
+          pbx.hours."c&d"
+          pbx.hours."office (east)"
+      '';
+    };
+
+    # Page turns ^ into a comma in its pre-dial routine, whose target Gosub
+    # ends at the first (
+    pagingNames = {
+      module.pbx.paging = {
+        "a,b" = {
+          number = "651";
+          members = ["201"];
+        };
+        "a^b" = {
+          number = "652";
+          members = ["201"];
+        };
+        "all (east)" = {
+          number = "653";
+          members = ["201"];
+        };
+      };
+      assertion = ''
+        pbx.paging: names that Asterisk would misread in the dialplan (they may not contain , ; [ ] " \ ''${ $[ ( ) or ^):
+          pbx.paging."a,b"
+          pbx.paging."a^b"
+          pbx.paging."all (east)"
+      '';
+    };
+
+    # ConfBridge needs a name, and its argument parser drops quotes
+    conferenceNames = {
+      module.pbx.conferences = {
+        "a,b" = {};
+        "" = {};
+        "a\"b" = {};
+        "board (east)" = {};
+      };
+      assertion = ''
+        pbx.conferences: names that Asterisk would misread in the dialplan (they may not be empty, or contain , ; [ ] " \ ''${ $[ or an unclosed parenthesis):
+          pbx.conferences.""
+          pbx.conferences."a\"b"
+          pbx.conferences."a,b"
+      '';
+    };
+
+    # Queue's argument parser drops backslashes, and an unclosed parenthesis
+    # takes the timeout into the name
+    queueNames = {
+      module = {
+        pbx.queues = {
+          "a,b" = {};
+          "a\\b" = {};
+          "c(d".timeout = 60;
+          "support (east)" = {};
+        };
+        services.asterisk.queues.queues = lib.genAttrs ["a,b" "a\\b" "c(d" "support (east)"] (_: {
+          members = ["PJSIP/201"];
+        });
+      };
+      assertion = ''
+        pbx.queues: names that Asterisk would misread in the dialplan (they may not contain , ; [ ] " \ ''${ $[ or an unclosed parenthesis):
+          pbx.queues."a,b"
+          pbx.queues."a\\b"
+          pbx.queues."c(d"
+      '';
+    };
+
     ivrNumberClash = {
       module.pbx.ivrs.main.number = lib.mkForce "201";
       assertion = ''201: pbx.extensions."201", pbx.ivrs.main'';

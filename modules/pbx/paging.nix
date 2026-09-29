@@ -10,6 +10,7 @@
   inherit
     (lib)
     concatMap
+    concatMapStringsSep
     concatStringsSep
     mapAttrs'
     mkDefault
@@ -112,6 +113,9 @@
         builtins.filter (member: !(cfg.extensions ? ${member})) cfg.paging.${name}.members
       )
   ) (builtins.attrNames cfg.paging);
+  # in Page's b() option, ) ends the routine, ^ becomes a comma, and Gosub
+  # ends its target at the first (
+  badNames = builtins.filter (name: pbxLib.breaksContext name || pbxLib.breaksArgument name || builtins.match ".*[()^].*" name != null) (builtins.attrNames cfg.paging);
 in {
   options.pbx.paging = mkOption {
     type = types.attrsOf pagingType;
@@ -129,6 +133,13 @@ in {
         message = ''
           pbx.paging: members that are not extensions of pbx.extensions:
             ${concatStringsSep "\n  " missing}
+        '';
+      }
+      {
+        assertion = badNames == [];
+        message = ''
+          pbx.paging: names that Asterisk would misread in the dialplan (they may not contain , ; [ ] " \ ''${ $[ ( ) or ^):
+            ${concatMapStringsSep "\n  " (name: lib.showOption ["pbx" "paging" name]) badNames}
         '';
       }
     ];

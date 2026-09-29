@@ -7,6 +7,7 @@
 }: let
   inherit
     (lib)
+    concatMapStringsSep
     concatStringsSep
     mapAttrs'
     mkDefault
@@ -43,6 +44,7 @@
   };
 
   missing = builtins.filter (name: !(config.services.asterisk.queues.queues ? ${name})) (builtins.attrNames cfg.queues);
+  badNames = builtins.filter (name: pbxLib.breaksContext name || pbxLib.breaksArgument name) (builtins.attrNames cfg.queues);
 in {
   options.pbx.queues = mkOption {
     type = types.attrsOf queueType;
@@ -91,6 +93,13 @@ in {
       {
         assertion = missing == [];
         message = "pbx.queues: ${concatStringsSep ", " missing} are not queues of services.asterisk.queues.queues.";
+      }
+      {
+        assertion = badNames == [];
+        message = ''
+          pbx.queues: names that Asterisk would misread in the dialplan (they may not contain , ; [ ] " \ ''${ $[ or an unclosed parenthesis):
+            ${concatMapStringsSep "\n  " (name: lib.showOption ["pbx" "queues" name]) badNames}
+        '';
       }
     ];
   };

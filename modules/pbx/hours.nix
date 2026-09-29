@@ -11,8 +11,10 @@
   inherit
     (lib)
     concatLists
+    concatMapStringsSep
     elemAt
     escapeShellArgs
+    hasInfix
     mapAttrs'
     mapAttrsToList
     mkDefault
@@ -111,6 +113,19 @@
   };
 
   zoneFile = zone: "${pkgs.tzdata}/share/zoneinfo/${zone}";
+  stateDevice = name: "Custom:${pbxLib.objectContext "hours" name}";
+
+  # Asterisk cuts device names at 79 bytes (main/devicestate.c
+  # ast_devstate_changed), so the busy lamp of a longer one never lights
+  maxNameLength = 79 - builtins.stringLength (stateDevice "");
+
+  # Gosub ends its target at the first (; with closeEarly, Set() ends the
+  # variable at = and the hint splits its devices at &
+  badNames = builtins.filter (name:
+    pbxLib.breaksContext name
+    || hasInfix "(" name
+    || (cfg.hours.${name}.closeEarly != null && (hasInfix "=" name || hasInfix "&" name || builtins.stringLength name > maxNameLength)))
+  (builtins.attrNames cfg.hours);
 
   # a day its month lacks never comes, and GotoIfTime wraps a range that
   # ends before it starts within the month (main/pbx_timing.c get_range)
@@ -128,7 +143,7 @@
   cfg.hours);
 
   hoursSection = name: hours: let
-    state = "Custom:${pbxLib.objectContext "hours" name}";
+    state = stateDevice name;
     # GotoIfTime(times,weekdays,monthdays,months,zone?label); a zone name
     # starting with / is a file, which nixpkgs' asterisk needs: it only looks
     # for named zones in /usr/share/zoneinfo
@@ -212,6 +227,13 @@ in {
     services.asterisk.dialplan.contexts = mapAttrs' (name: hours: nameValuePair (pbxLib.objectContext "hours" name) (hoursSection name hours)) cfg.hours;
 
     assertions = [
+      {
+        assertion = badNames == [];
+        message = ''
+          pbx.hours: names that Asterisk would misread in the dialplan (they may not contain , ; [ ] ''${ $[ or (, nor & or = or more than ${toString maxNameLength} bytes with closeEarly):
+            ${concatMapStringsSep "\n  " (name: showOption ["pbx" "hours" name]) badNames}
+        '';
+      }
       {
         assertion = badHolidays == [];
         message = ''

@@ -7,6 +7,7 @@
   inherit
     (lib)
     concatMap
+    concatMapStringsSep
     concatStringsSep
     mapAttrs'
     mkDefault
@@ -42,6 +43,9 @@
       };
     };
   };
+
+  # ConfBridge needs a conference name
+  badNames = builtins.filter (name: name == "" || pbxLib.breaksContext name || pbxLib.breaksArgument name) (builtins.attrNames cfg.conferences);
 
   # profiles Asterisk has without configuration
   missingProfiles = concatMap (
@@ -92,6 +96,13 @@ in {
       cfg.conferences;
 
     assertions = [
+      {
+        assertion = badNames == [];
+        message = ''
+          pbx.conferences: names that Asterisk would misread in the dialplan (they may not be empty, or contain , ; [ ] " \ ''${ $[ or an unclosed parenthesis):
+            ${concatMapStringsSep "\n  " (name: lib.showOption ["pbx" "conferences" name]) badNames}
+        '';
+      }
       {
         assertion = missingProfiles == [];
         message = ''

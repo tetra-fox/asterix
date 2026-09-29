@@ -96,6 +96,22 @@ class Phone:
         """Send DTMF as SIP INFO requests on the current call."""
         self.cli(f"call d_info {digits}")
 
+    def dtmf_received(self):
+        """Digits the phone received as DTMF on its calls so far, in order."""
+        return "".join(re.findall(r"Incoming DTMF on call \d+: (.)", self.log_text()))
+
+    def wait_dtmf(self, digits, after, timeout=30):
+        """Wait until the digits the phone received after its first `after`
+        are `digits`; fails as soon as one differs."""
+        deadline = time.time() + timeout
+        while True:
+            received = self.dtmf_received()[after:]
+            if received == digits:
+                return
+            if not digits.startswith(received) or time.time() > deadline:
+                raise Exception(f"{self.name} received DTMF {received!r}, expected {digits!r}")
+            time.sleep(0.5)
+
     def transfer(self, extension):
         """Blind transfer of the current call (REFER)."""
         self.cli(f"call transfer {self.uri(extension)}")

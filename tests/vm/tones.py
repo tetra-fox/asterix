@@ -80,6 +80,19 @@ def same(found, expected):
     return len(found) == len(expected) and all(any(abs(f - e) <= TOLERANCE for f in found) for e in expected)
 
 
+def wait_heard(phone, expected, start, seconds=1.0, timeout=30):
+    """Wait until `seconds` worth of the 100 ms `phone` heard since the mark
+    `start` held exactly the tones `expected`, such as a prompt played once"""
+    deadline = time.time() + timeout
+    while True:
+        windows = heard(phone, start)
+        if sum(same(window, expected) for window in windows) >= round(seconds / WINDOW):
+            return windows
+        if time.time() > deadline:
+            raise Exception(f"{phone.name} did not hear {sorted(expected)} for {seconds} s, but {windows}")
+        time.sleep(0.5)
+
+
 def wait_hears(phone, expected, seconds=1.0, timeout=30):
     """Wait until every 100 ms of the last `seconds` of `phone`'s calls held
     exactly the tones `expected`, in Hz."""

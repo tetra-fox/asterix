@@ -477,6 +477,16 @@
       assertions = [];
     };
 
+    voicemailElevenFormats = {
+      module = {config, ...}: {
+        services.asterisk.voicemail = {
+          mailboxes."101".pin = config.lib.asterisk.secret "/run/secrets/vm";
+          format = ["wav49" "wav" "wav16" "gsm" "ulaw" "alaw" "g722" "au" "sln" "sln16" "sln48"];
+        };
+      };
+      assertion = "Asterisk records at most 10 formats and ignores the rest";
+    };
+
     mwiForUndefinedMailbox = {
       module = {config, ...}: {
         services.asterisk = {

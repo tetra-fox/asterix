@@ -214,6 +214,15 @@
   );
   # raw text or included files may set mailcmd
   mailCommandKnown = (cfg.extraConfig."voicemail.conf" or "") == "" && (cfg.includes."voicemail.conf" or []) == [];
+
+  # [general] of the final voicemail.conf, where settings replace typed values
+  general = voicemailConf.general or {};
+  # Asterisk reads the first 10 formats and ignores the rest without a message
+  # (AST_MAX_FORMATS in include/asterisk/file.h)
+  storedFormats =
+    if isString (general.format or null)
+    then splitString "|" general.format
+    else [];
 in {
   options.services.asterisk.voicemail = {
     enable = mkOption {
@@ -251,6 +260,7 @@ in {
       description = ''
         Formats messages are stored in; the first is used for e-mail
         attachments (`wav49` is a small GSM WAV that most clients play).
+        Asterisk takes at most 10.
       '';
     };
 
@@ -367,6 +377,10 @@ in {
         {
           assertion = !mailCommandKnown || mailedBoxes == [] || (voicemailConf.general.mailcmd or null) != null;
           message = "services.asterisk.voicemail: mailboxes with an e-mail address (${concatStringsSep ", " mailedBoxes}) need voicemail.email.command; without it Asterisk runs /usr/sbin/sendmail, which NixOS does not have.";
+        }
+        {
+          assertion = builtins.length storedFormats <= 10;
+          message = "services.asterisk.voicemail.format: Asterisk records at most 10 formats and ignores the rest (${concatStringsSep ", " storedFormats}).";
         }
         {
           assertion = missingMailboxes == [];

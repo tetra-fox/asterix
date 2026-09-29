@@ -123,6 +123,12 @@
         "Could not create an object of type 'acl' with id 'lan'"
       ];
     };
+    # Asterisk loads a switch it has no module for, then passes over it with a
+    # warning on every call
+    switchNotLoaded = {
+      module.services.asterisk.dialplan.contexts.internal.switches = ["Realtime/default@extensions"];
+      expect = ["(internal): no loaded module provides the switch Realtime"];
+    };
     # Asterisk closes it and warns
     unclosedParenthesis = {
       module.services.asterisk.dialplan.contexts.internal.extensions."413" = ["Dial(PJSIP/101"];

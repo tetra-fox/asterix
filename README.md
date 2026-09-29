@@ -95,7 +95,8 @@ A full list of options is in the options reference: `nix build .#docs`.
 - **Asterisk checks the configuration before it is deployed.** Building the
   system starts Asterisk with the new configuration in the build sandbox. If
   Asterisk reports an error or a warning while loading it, or the dialplan uses
-  an application or function that no loaded module provides, the build fails.
+  an application, function or switch that no loaded module provides, the build
+  fails.
   See `checkConfig` in the options reference.
 - **Reload instead of restart.** Changes are applied with a reload where
   possible, so calls stay up. Only changes like a new SIP port

@@ -777,8 +777,8 @@ in {
       description = ''
         Start Asterisk with the generated configuration when the system is
         built, and fail the build if Asterisk logs an error or a warning
-        while loading it, or if the dialplan uses an application or function
-        that no loaded module provides. Secrets are replaced by zeros,
+        while loading it, or if the dialplan uses an application, function
+        or switch that no loaded module provides. Secrets are replaced by zeros,
         credentials by a throwaway certificate and IPv4 listen addresses by
         loopback ones, so a sandboxed build needs no privileges. Listening on
         IPv6 addresses or ports below 1024, or building without the sandbox,

@@ -1,12 +1,13 @@
-# reports dialplan lines that use an application or function Asterisk does
-# not have, see package.nix
+# reports dialplan lines that use an application, function or switch Asterisk
+# does not have, see package.nix
 #
-#   gawk -v applications=FILE -v functions=FILE -f dialplan.awk DIALPLAN
+#   gawk -v applications=FILE -v functions=FILE -v switches=FILE -f dialplan.awk DIALPLAN
 #
 # APPLICATIONS is the output of `core show applications`, FUNCTIONS of
-# `core show functions` and DIALPLAN of `dialplan show`
+# `core show functions`, SWITCHES of `core show switches` and DIALPLAN of
+# `dialplan show`
 
-# application names are not case sensitive, function names are
+# application and switch names are not case sensitive, function names are
 BEGIN {
     while ((getline line < applications) > 0)
         if (match(line, /^ *([A-Za-z0-9_]+): /, m))
@@ -18,6 +19,9 @@ BEGIN {
         else if (listed && match(line, /^[A-Za-z0-9_]+ /))
             has_function[substr(line, 1, RLENGTH - 1)] = 1
     }
+    while ((getline line < switches) > 0)
+        if (match(line, /^([A-Za-z0-9_]+): /, m))
+            has_switch[tolower(m[1])] = 1
 }
 
 # every priority line ends with where it was defined, such as
@@ -39,6 +43,13 @@ match($0, /^\[ Context '([^']*)'/, m) {
 
 match($0, /^ *'([^']*)' =>/, m) {
     extension = m[1]
+}
+
+# a switch, `Alt. Switch => 'Name/data'`, which Asterisk passes over on every
+# call when no module provides it
+match($0, /^  Alt\. Switch => +'([^'\/]*)/, m) && !(tolower(m[1]) in has_switch) {
+    printf "(%s): no loaded module provides the switch %s\n", context, m[1]
+    missing++
 }
 
 # a priority: `N. App(data)`, after the extension or a label if any

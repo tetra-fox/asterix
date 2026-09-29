@@ -220,10 +220,8 @@ in
       valid = [["internal"] ["internal,09:00-17:00,mon-fri,*,*"]];
       invalid = [["nowhere"]];
     };
-    # a switch needs the module that provides it
-    "services.asterisk.dialplan.contexts.<name>.switches".valid = [
-      (with' {services.asterisk.modules.load = ["pbx_realtime.so"];} ["Realtime/default@extensions"])
-    ];
+    # a switch's module is loaded with it
+    "services.asterisk.dialplan.contexts.<name>.switches".valid = [["Realtime/default@extensions"]];
     "services.asterisk.dialplan.general" = freeform {
       bool.autofallthrough = false;
       str.userscontext = "internal";

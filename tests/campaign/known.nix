@@ -33,7 +33,6 @@
   "services.asterisk.dialplan.contexts.<name>.extensions = {\"100\":[\"Q7NoSuchApp(x)\"]}" = "rejected by asterisk-config-check";
   "services.asterisk.dialplan.contexts.<name>.extensions = {\"100\":[\"q7notanapp\"]}" = "rejected by asterisk-config-check";
   "services.asterisk.dialplan.contexts.<name>.hints = {\"101\":\"Q7Tech/101\"}" = "P3: loads";
-  "services.asterisk.dialplan.contexts.<name>.switches = example [\"Realtime/default@extensions\"]" = "P2: does not load";
   "services.asterisk.dialplan.general = {\"q7unknown\":\"x\"}" = "P3: loads";
   "services.asterisk.extraArguments = [\"--q7-no-such-option\"]" = "rejected by asterisk-config-check";
   "services.asterisk.extraArguments = string lineBreak" = "P3: loads";

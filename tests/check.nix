@@ -126,8 +126,8 @@
     # Asterisk loads a switch it has no module for, then passes over it with a
     # warning on every call
     switchNotLoaded = {
-      module.services.asterisk.dialplan.contexts.internal.switches = ["Realtime/default@extensions"];
-      expect = ["(internal): no loaded module provides the switch Realtime"];
+      module.services.asterisk.dialplan.contexts.internal.switches = ["Nowhere/default"];
+      expect = ["(internal): no loaded module provides the switch Nowhere"];
     };
     # Asterisk closes it and warns
     unclosedParenthesis = {
@@ -501,6 +501,8 @@
     };
     # res_crypto reads the keys directory, which the service creates
     keyDirectory.services.asterisk.modules.load = ["res_crypto.so"];
+    # a switch's module is loaded with it
+    realtimeSwitch.services.asterisk.dialplan.contexts.internal.switches = ["Realtime/default@extensions"];
     # res_rtp_asterisk resolves the STUN server with Asterisk's own DNS client
     stunServerByName.services.asterisk.rtp.stunServer = "stun.example.org:3478";
     # a trunk whose host is in identify.match too: Asterisk warns about a

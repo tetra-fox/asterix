@@ -93,7 +93,8 @@
         description = ''
           Alternative switches (`switch =>`), asked in order after the
           context's own extensions and before its includes. One listed twice
-          is written once.
+          is written once. The module of a Realtime, Lua, DUNDi, Loopback or
+          IAX2 switch is loaded with it.
         '';
       };
       ignorePatterns = mkOption {
@@ -195,6 +196,26 @@
   # or Lua dialplans whose module is loaded to read them, can define any
   # context.
   dialplan = cfg.settings."extensions.conf" or {};
+
+  # the modules that provide switches, by the name before the /, which
+  # Asterisk takes in any case (pbx/pbx_realtime.c, pbx/pbx_lua.c,
+  # pbx/pbx_dundi.c, pbx/pbx_loopback.c, channels/chan_iax2.c)
+  switchModules = {
+    realtime = "pbx_realtime.so";
+    lua = "pbx_lua.so";
+    dundi = "pbx_dundi.so";
+    loopback = "pbx_loopback.so";
+    iax2 = "chan_iax2.so";
+  };
+  neededSwitchModules = unique (lib.concatMap (
+    s:
+      lib.concatMap (switch: let
+        name = lib.toLower (lib.head (lib.splitString "/" switch));
+      in
+        optional (switchModules ? ${name}) switchModules.${name})
+      (filter isString (toList (s.switch or []) ++ toList (s.eswitch or []) ++ toList (s.lswitch or [])))
+  ) (attrValues dialplan));
+
   toList = v:
     if builtins.isList v
     then v
@@ -382,6 +403,7 @@ in {
   config = mkIf cfg.enable {
     services.asterisk = {
       modules.needed."the dialplan in extensions.conf" = mkIf hasDialplan ["pbx_config.so"];
+      modules.needed."switches in extensions.conf" = mkIf (neededSwitchModules != []) neededSwitchModules;
 
       dialplan.knownContexts = knownContexts;
 

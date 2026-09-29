@@ -339,6 +339,31 @@ in {
       };
     };
 
+    # the busy lamp hints of pbx-internal too
+    testHintsAreReplaceable = {
+      expr = builtins.filter (lib.hasInfix ",hint,") (lib.splitString "\n" (context "pbx-internal" {
+        pbx.hours.office = {
+          timezone = "UTC";
+          open = [
+            {
+              days = "*";
+              time = "00:00-23:59";
+            }
+          ];
+          closeEarly = "*28";
+        };
+        services.asterisk.dialplan.contexts.pbx-internal.hints = {
+          "201" = "PJSIP/201&Custom:desk";
+          "*28" = "Custom:closed";
+        };
+      }));
+      expected = [
+        "exten => *28,hint,Custom:closed"
+        "exten => 201,hint,PJSIP/201&Custom:desk"
+        "exten => 202,hint,PJSIP/202"
+      ];
+    };
+
     # and so do plain definitions in settings, where the scalars pbx writes
     # end up as defaults too
     testSettingsOverridePbx = {

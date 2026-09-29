@@ -136,11 +136,12 @@ in {
       comment = mkDefault "from pbx: what the phones of pbx.extensions dial";
       includes = optional (cfg.outbound != null) "pbx-outbound";
       extensions = generated;
-      hints =
+      hints = lib.mapAttrs (_: mkDefault) (
         lib.mapAttrs (number: _: "PJSIP/${number}") cfg.extensions
         // listToAttrs (concatLists (mapAttrsToList (name: hours:
           optional (hours.closeEarly != null) (nameValuePair hours.closeEarly "Custom:${pbxLib.objectContext "hours" name}"))
-        cfg.hours));
+        cfg.hours))
+      );
     };
 
     assertions = [

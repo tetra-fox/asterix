@@ -63,7 +63,12 @@
       prefix = mkOption {
         type = types.strMatching "[0-9*#]*";
         example = "9";
-        description = "Digits dialled before a number outside, removed before the call leaves. Can be empty.";
+        description = ''
+          Digits dialled before a number outside, removed before the call
+          leaves. Can be empty. A pbx number that starts with them still
+          reaches the pbx: with `9`, a ring group on 900 takes the calls to
+          900, so 00 outside cannot be dialled.
+        '';
       };
       trunk = mkOption {
         type = types.str;

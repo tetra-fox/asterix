@@ -60,8 +60,8 @@
         default = false;
         description = ''
           Let callers dial the numbers of {option}`pbx.extensions` from the
-          menu. A key that starts an extension number waits for the next
-          digit before it counts on its own.
+          menu. A key that starts an extension number counts on its own once
+          no digit follows within 5 seconds.
         '';
       };
       timeout = mkOption {

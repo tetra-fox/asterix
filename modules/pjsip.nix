@@ -783,7 +783,25 @@
 
   resolved = format.resolveInheritance (cfg.settings."pjsip.conf" or {});
   objects = resolved.sections;
-  namesOfType = type: map (s: s.name) (filter (s: (s.type or null) == type) objects);
+  ofType = type: filter (s: (s.type or null) == type) objects;
+  namesOfType = type: map (s: s.name) (ofType type);
+  endpointObjects = ofType "endpoint";
+
+  # the modules the objects need; without res_pjsip_authenticator_digest,
+  # Asterisk takes every request as authenticated (res_pjsip.c)
+  neededModules = {
+    "endpoints in pjsip.conf" = mkIf (endpointObjects != []) ["chan_pjsip.so"];
+    "endpoints with auth in pjsip.conf" = mkIf (builtins.any (s: s ? auth) endpointObjects) ["res_pjsip_authenticator_digest.so"];
+    "endpoints with mailboxes in pjsip.conf" = mkIf (builtins.any (s: s ? mailboxes) endpointObjects) [
+      "res_pjsip_mwi.so"
+      "res_pjsip_mwi_body_generator.so"
+    ];
+    "aors that accept registrations in pjsip.conf" = mkIf (builtins.any (s: toString (s.max_contacts or 0) != "0") (ofType "aor")) ["res_pjsip_registrar.so"];
+    "outbound_auth in pjsip.conf" = mkIf (builtins.any (s: s ? outbound_auth) objects) ["res_pjsip_outbound_authenticator_digest.so"];
+    "identify sections in pjsip.conf" = mkIf (ofType "identify" != []) ["res_pjsip_endpoint_identifier_ip.so"];
+    "registrations in pjsip.conf" = mkIf (ofType "registration" != []) ["res_pjsip_outbound_registration.so"];
+    "acls in pjsip.conf" = mkIf (ofType "acl" != []) ["res_pjsip_acl.so"];
+  };
 
   # sorcery.conf's sections by name, or null when it includes files
   sorcerySections = format.sectionNames {
@@ -996,6 +1014,8 @@ in {
       ];
 
       credentials = lib.listToAttrs transportCredentials;
+
+      modules.needed = neededModules;
 
       # after a start, queues skip a phone and calls to a trunk fail until its
       # first qualify, which Asterisk otherwise schedules within qualify_frequency

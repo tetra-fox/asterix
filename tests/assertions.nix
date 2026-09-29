@@ -489,6 +489,107 @@
       assertion = "chan_sip.so is not supported";
     };
 
+    # Asterisk drops a module in noload without a message, and each of these
+    # options does nothing without its module
+    noloadOfNeededModules = {
+      module = {config, ...}: let
+        secret = name: config.lib.asterisk.secret "/run/secrets/${name}";
+      in {
+        services.asterisk = {
+          voicemail.mailboxes."101".pin = secret "vm-101";
+          queues.queues.support.members = ["PJSIP/101"];
+          confbridge.bridges.board.maxMembers = 5;
+          musicOnHold.classes.office.directory = "moh";
+          features.featureMap = {
+            parkcall = "#72";
+            disconnect = "*0";
+            automixmon = "*3";
+          };
+          cdr = {
+            csv.enable = true;
+            sqlite.enable = true;
+          };
+          cel.sqlite.enable = true;
+          logger.channels.security = ["security"];
+          http.enable = true;
+          ari = {
+            enable = true;
+            users.app.password = secret "ari";
+          };
+          pjsip = {
+            transports.ws.protocol = "ws";
+            acls.lan.permit = ["10.0.0.0/8"];
+            endpoints."101".mailboxes = ["101@default"];
+            trunks.provider = {
+              host = "203.0.113.5";
+              username = "5551000";
+              password = secret "trunk";
+              context = "internal";
+            };
+          };
+          modules.noload = [
+            "app_voicemail.so"
+            "app_queue"
+            "app_confbridge.so"
+            "res_musiconhold.so"
+            "res_parking.so"
+            "bridge_builtin_features.so"
+            "app_mixmonitor.so"
+            "cdr_csv.so"
+            "cdr_sqlite3_custom.so"
+            "cel_sqlite3_custom.so"
+            "res_security_log.so"
+            "res_ari.so"
+            "res_pjsip_transport_websocket.so"
+            "res_http_websocket.so"
+            "pbx_config.so"
+            "chan_pjsip.so"
+            "res_pjsip_authenticator_digest.so"
+            "res_pjsip_acl.so"
+            "res_pjsip_mwi.so"
+            "res_pjsip_mwi_body_generator.so"
+            "res_pjsip_registrar.so"
+            "res_pjsip_outbound_registration.so"
+            "res_pjsip_outbound_authenticator_digest.so"
+            "res_pjsip_endpoint_identifier_ip.so"
+          ];
+        };
+      };
+      assertions = [
+        ''
+          services.asterisk.modules.noload removes modules the configuration needs:
+            res_pjsip_acl.so for acls in pjsip.conf
+            res_pjsip_registrar.so for aors that accept registrations in pjsip.conf
+            chan_pjsip.so for endpoints in pjsip.conf
+            res_pjsip_authenticator_digest.so for endpoints with auth in pjsip.conf
+            res_pjsip_mwi.so, res_pjsip_mwi_body_generator.so for endpoints with mailboxes in pjsip.conf
+            res_pjsip_endpoint_identifier_ip.so for identify sections in pjsip.conf
+            res_pjsip_outbound_authenticator_digest.so for outbound_auth in pjsip.conf
+            res_pjsip_outbound_registration.so for registrations in pjsip.conf
+            res_ari.so for services.asterisk.ari
+            cdr_csv.so for services.asterisk.cdr.csv
+            cdr_sqlite3_custom.so for services.asterisk.cdr.sqlite
+            cel_sqlite3_custom.so for services.asterisk.cel.sqlite
+            app_confbridge.so for services.asterisk.confbridge
+            bridge_builtin_features.so, app_mixmonitor.so for services.asterisk.features.featureMap.automixmon
+            bridge_builtin_features.so for services.asterisk.features.featureMap.disconnect
+            res_parking.so for services.asterisk.features.featureMap.parkcall
+            res_musiconhold.so for services.asterisk.musicOnHold.classes
+            res_http_websocket.so, res_pjsip_transport_websocket.so for services.asterisk.pjsip.transports (ws, wss)
+            app_queue.so for services.asterisk.queues.queues
+            app_voicemail.so for services.asterisk.voicemail
+            pbx_config.so for the dialplan in extensions.conf
+            res_security_log.so for the security level in logger.conf
+        ''
+      ];
+    };
+
+    # the example of the option: no option needs it
+    noloadOfUnneededModule = {
+      module.services.asterisk.modules.noload = ["res_pjsip_messaging.so"];
+      assertions = [];
+    };
+
     secretInStore = {
       module = {config, ...}: {
         services.asterisk.pjsip.endpoints."101".auth.password = lib.mkForce (

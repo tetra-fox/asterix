@@ -1,6 +1,7 @@
-# Autoload is off and an explicit module list is loaded. Typed options add
-# the modules they need (voicemail adds app_voicemail.so, ...). Asterisk does not load a
-# module's dependencies by itself, so this list includes them.
+# Autoload is off and an explicit module list is loaded. The options put the
+# modules they need in `needed`, which is loaded even without the default
+# list and which noload cannot remove. Asterisk does not load a module's
+# dependencies by itself, so the default list includes them.
 {
   config,
   lib,
@@ -154,6 +155,16 @@
   loadedModules = lib.subtractLists (map normalize cfg.modules.noload) (
     unique (map normalize (cfg.modules.load ++ cfg.modules.preload))
   );
+
+  # Asterisk drops a module in noload without a message, and the option that
+  # needs it then does nothing
+  removedNeeds = lib.concatLists (
+    lib.mapAttrsToList (what: modules: let
+      removed = builtins.filter (module: builtins.elem module (map normalize cfg.modules.noload)) (map normalize modules);
+    in
+      lib.optional (removed != []) "${lib.concatStringsSep ", " removed} for ${what}")
+    cfg.modules.needed
+  );
   modulesCheck = pkgs.runCommand "asterisk-modules-check" {} ''
     missing=0
     for module in ${lib.escapeShellArgs loadedModules}; do
@@ -186,7 +197,9 @@ in {
         SRTP, bridging, the ulaw/alaw/G.722/GSM/Opus codecs, sound file
         formats, music on hold, the dialplan and its common applications and
         functions. Remove single modules with
-        {option}`services.asterisk.modules.noload`.
+        {option}`services.asterisk.modules.noload`. Without the set, the
+        options still load the modules they need, such as chan_pjsip.so for
+        PJSIP endpoints, but not the modules those depend on.
       '';
     };
 
@@ -210,8 +223,21 @@ in {
       example = ["res_pjsip_messaging.so"];
       description = ''
         Modules never to load (`noload =>`), taking precedence over
-        {option}`services.asterisk.modules.load`. `chan_sip.so` is
-        always excluded.
+        {option}`services.asterisk.modules.load`. A module the
+        configuration needs, such as app_voicemail.so with voicemail
+        mailboxes or res_pjsip_acl.so with PJSIP ACLs, cannot be listed.
+        `chan_sip.so` is always excluded.
+      '';
+    };
+
+    needed = mkOption {
+      type = types.attrsOf moduleListType;
+      default = {};
+      internal = true;
+      description = ''
+        Modules the configuration needs, keyed by what needs them. They are
+        loaded whatever `defaultModules` says, and `noload` cannot remove
+        them.
       '';
     };
 
@@ -225,7 +251,10 @@ in {
 
   config = mkIf cfg.enable {
     services.asterisk = {
-      modules.load = mkIf cfg.modules.defaultModules (baseModules ++ pjsipModules);
+      modules.load = lib.mkMerge [
+        (mkIf cfg.modules.defaultModules (baseModules ++ pjsipModules))
+        (lib.concatLists (lib.attrValues cfg.modules.needed))
+      ];
 
       settings."modules.conf".modules = {
         inherit (cfg.modules) autoload;
@@ -241,6 +270,13 @@ in {
       {
         assertion = !(builtins.any (m: builtins.elem (normalize m) legacyModules) cfg.modules.load);
         message = "services.asterisk.modules.load: chan_sip.so is not supported; use PJSIP (chan_pjsip.so).";
+      }
+      {
+        assertion = removedNeeds == [];
+        message = ''
+          services.asterisk.modules.noload removes modules the configuration needs:
+            ${lib.concatStringsSep "\n  " removedNeeds}
+        '';
       }
     ];
   };

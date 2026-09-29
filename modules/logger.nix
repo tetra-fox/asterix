@@ -76,7 +76,7 @@ in {
 
   config = mkIf cfg.enable {
     services.asterisk = {
-      modules.load = mkIf logsSecurity ["res_security_log.so"];
+      modules.needed."the security level in logger.conf" = mkIf logsSecurity ["res_security_log.so"];
 
       logger.channels.console = mkDefault [
         "notice"

@@ -1156,6 +1156,32 @@ in {
       ];
     };
 
+    # without the default list the options still load the modules they need;
+    # what those need in turn, Asterisk names when the check starts it
+    testNeededModulesLoadWithoutDefaults = {
+      expr = lib.sort lib.lessThan (builtins.filter (lib.hasPrefix "load =>") (
+        lib.splitString "\n"
+        (rendered [
+          phone
+          {
+            services.asterisk = {
+              modules.defaultModules = false;
+              confbridge.bridges.board.maxMembers = 5;
+              musicOnHold.classes.office.directory = "moh";
+            };
+          }
+        ])."modules.conf"
+      ));
+      expected = [
+        "load => app_confbridge.so"
+        "load => chan_pjsip.so"
+        "load => pbx_config.so"
+        "load => res_musiconhold.so"
+        "load => res_pjsip_authenticator_digest.so"
+        "load => res_pjsip_registrar.so"
+      ];
+    };
+
     testChanSipAlwaysNoloaded = {
       expr = lib.hasInfix "noload => chan_sip.so" (rendered [phone])."modules.conf";
       expected = true;

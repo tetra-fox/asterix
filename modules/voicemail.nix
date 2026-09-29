@@ -421,7 +421,7 @@ in {
 
     (mkIf (cfg.enable && vcfg.enable) {
       services.asterisk = {
-        modules.load = ["app_voicemail.so"];
+        modules.needed."services.asterisk.voicemail" = ["app_voicemail.so"];
 
         settings."voicemail.conf" = mkMerge (
           [

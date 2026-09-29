@@ -168,6 +168,11 @@
         "Contents of config file 'pjsip.conf' are invalid and cannot be parsed"
       ];
     };
+    # the options load the modules they need, but not what those need
+    pjsipWithoutDefaultModules = {
+      module.services.asterisk.modules.defaultModules = false;
+      expect = ["Error loading module 'chan_pjsip.so'"];
+    };
     # Asterisk exits while loading: res_websocket_client fails without
     # res_sorcery_config, which it does not declare as a dependency. The
     # check says so at once instead of waiting for Asterisk to be ready

@@ -19,9 +19,18 @@
   inherit (asteriskLib) format;
   inherit (import ./lib.nix {inherit lib;}) toSection;
 
-  # res_parking implements parkcall; without it Asterisk drops a call dialled
-  # with k or K as soon as it is answered
-  parksCalls = (fcfg.featureMap.parkcall or "") != "";
+  # modules that implement built-in features (the transfers are in the core);
+  # without res_parking Asterisk drops a call dialled with k or K when answered
+  featureModules = {
+    parkcall = ["res_parking.so"];
+    disconnect = ["bridge_builtin_features.so"];
+    automixmon = [
+      "bridge_builtin_features.so"
+      "app_mixmonitor.so"
+    ];
+  };
+  usedFeatures = lib.filterAttrs (key: _: (fcfg.featureMap.${key} or "") != "") featureModules;
+  parksCalls = usedFeatures ? parkcall;
 
   applicationType = types.submodule {
     options = {
@@ -76,7 +85,9 @@ in {
         Built-in features and their key sequences (`[featuremap]`). They are
         only available on calls dialled with the matching Dial() options
         (`t`/`T` for transfers, `k`/`K` for parkcall, `x`/`X` for automixmon,
-        ...). `parkcall` loads res_parking.so, which provides it.
+        ...). The modules that provide them are loaded: res_parking.so for
+        `parkcall`, bridge_builtin_features.so for `disconnect` and
+        `automixmon`, which also needs app_mixmonitor.so.
       '';
     };
 
@@ -99,7 +110,7 @@ in {
   };
 
   config = mkIf cfg.enable {
-    services.asterisk.modules.load = mkIf parksCalls ["res_parking.so"];
+    services.asterisk.modules.needed = lib.mapAttrs' (key: lib.nameValuePair "services.asterisk.features.featureMap.${key}") usedFeatures;
     # res_parking declines to load without its file
     services.asterisk.settings."res_parking.conf" = mkIf parksCalls {};
 

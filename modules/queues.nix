@@ -172,7 +172,7 @@ in {
 
   config = mkIf (cfg.enable && qcfg.queues != {}) {
     services.asterisk = {
-      modules.load = ["app_queue.so"];
+      modules.needed."services.asterisk.queues.queues" = ["app_queue.so"];
 
       settings."queues.conf" =
         {

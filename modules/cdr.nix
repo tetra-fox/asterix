@@ -12,7 +12,6 @@
     mkIf
     mkMerge
     mkOption
-    optionals
     splitString
     types
     ;
@@ -202,10 +201,11 @@ in {
           enable = mkDefault ecfg.enable;
           events = mkIf ecfg.enable (mkDefault (concatStringsSep "," ecfg.events));
         };
-        modules.load =
-          optionals ccfg.csv.enable ["cdr_csv.so"]
-          ++ optionals ccfg.sqlite.enable ["cdr_sqlite3_custom.so"]
-          ++ optionals ecfg.sqlite.enable ["cel_sqlite3_custom.so"];
+        modules.needed = {
+          "services.asterisk.cdr.csv" = mkIf ccfg.csv.enable ["cdr_csv.so"];
+          "services.asterisk.cdr.sqlite" = mkIf ccfg.sqlite.enable ["cdr_sqlite3_custom.so"];
+          "services.asterisk.cel.sqlite" = mkIf ecfg.sqlite.enable ["cel_sqlite3_custom.so"];
+        };
       };
 
       assertions = [

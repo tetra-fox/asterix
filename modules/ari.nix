@@ -36,6 +36,8 @@
     || (lib.versionAtLeast version "21.10" && lib.versionOlder version "22")
     || (lib.versionAtLeast version "20.15" && lib.versionOlder version "21");
 
+  # res_ari.so is in `needed`; Asterisk reports a missing dependency of it,
+  # and noload can leave out a resource such as res_ari_recordings.so
   ariModules =
     [
       "res_http_websocket.so"
@@ -49,7 +51,6 @@
       "res_stasis_recording.so"
       "res_stasis_snoop.so"
       "app_stasis.so"
-      "res_ari.so"
       "res_ari_model.so"
       "res_ari_applications.so"
       "res_ari_asterisk.so"
@@ -228,6 +229,7 @@ in {
 
     (mkIf acfg.enable {
       services.asterisk = {
+        modules.needed."services.asterisk.ari" = ["res_ari.so"];
         modules.load = ariModules;
 
         # res_websocket_client logs an error when its file is missing; its
@@ -267,7 +269,7 @@ in {
     })
 
     (mkIf (websocketTransports != []) {
-      services.asterisk.modules.load = [
+      services.asterisk.modules.needed."services.asterisk.pjsip.transports (ws, wss)" = [
         "res_http_websocket.so"
         "res_pjsip_transport_websocket.so"
       ];

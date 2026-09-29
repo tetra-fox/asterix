@@ -217,6 +217,12 @@
     then null
     else dialplanSections ++ lib.optionals (loaded "res_parking.so") parkingContexts;
 
+  # pbx_config reads the globals and contexts of extensions.conf
+  hasDialplan =
+    builtins.any (s: s.name != "general") (attrValues dialplan)
+    || (cfg.extraConfig."extensions.conf" or "") != ""
+    || (cfg.includes."extensions.conf" or []) != [];
+
   danglingIncludes = lib.concatMap (
     s:
       map (target: "[${s.name}] include => ${target}") (
@@ -325,6 +331,8 @@ in {
 
   config = mkIf cfg.enable {
     services.asterisk = {
+      modules.needed."the dialplan in extensions.conf" = mkIf hasDialplan ["pbx_config.so"];
+
       dialplan.knownContexts = knownContexts;
 
       dialplan.general = {

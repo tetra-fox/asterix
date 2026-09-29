@@ -130,6 +130,8 @@ in {
   };
 
   config = mkIf cfg.enable {
+    services.asterisk.modules.needed."services.asterisk.confbridge" = mkIf (ccfg.bridges != {} || ccfg.users != {} || ccfg.menus != {}) ["app_confbridge.so"];
+
     services.asterisk.settings."confbridge.conf" = mkMerge [
       (profiles "bridge" ccfg.bridges (b: {
         max_members = b.maxMembers;

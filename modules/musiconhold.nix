@@ -95,6 +95,8 @@ in {
   };
 
   config = mkIf cfg.enable {
+    services.asterisk.modules.needed."services.asterisk.musicOnHold.classes" = mkIf (mcfg.classes != {}) ["res_musiconhold.so"];
+
     services.asterisk.settings."musiconhold.conf" =
       mapAttrs (
         _: c:

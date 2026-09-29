@@ -41,7 +41,6 @@
     optionalAttrs
     splitString
     types
-    unique
     ;
 
   cfg = config.services.asterisk;
@@ -784,7 +783,6 @@
   resolved = format.resolveInheritance (cfg.settings."pjsip.conf" or {});
   objects = resolved.sections;
   ofType = type: filter (s: (s.type or null) == type) objects;
-  namesOfType = type: map (s: s.name) (ofType type);
   endpointObjects = ofType "endpoint";
 
   # the modules the objects need; without res_pjsip_authenticator_digest,
@@ -802,6 +800,11 @@
     "registrations in pjsip.conf" = mkIf (ofType "registration" != []) ["res_pjsip_outbound_registration.so"];
     "acls in pjsip.conf" = mkIf (ofType "acl" != []) ["res_pjsip_acl.so"];
   };
+  # the names of each type's objects as a set, made once, so checking every
+  # reference takes as long as the objects are many, not their square
+  namesByType = lib.mapAttrs (_: sections: lib.genAttrs (map (s: s.name) sections) (_: true)) (
+    builtins.groupBy (s: s.type or "") objects
+  );
 
   # sorcery.conf's sections by name, or null when it includes files
   sorcerySections = format.sectionNames {
@@ -835,9 +838,10 @@
     else [];
 
   danglingRefs = let
+    elsewhere = rawSections ++ map (u: u.name) resolved.unresolved;
     check = s: key: type:
       map (ref: "[${s.name}] (type=${s.type}) ${key} = ${ref}: no ${type} named `${ref}`") (
-        filter (ref: !(builtins.elem ref (namesOfType type ++ rawSections ++ map (u: u.name) resolved.unresolved))) (
+        filter (ref: !((namesByType.${type} or {}) ? ${ref} || builtins.elem ref elsewhere)) (
           refList (s.${key} or null)
         )
       );
@@ -865,7 +869,7 @@
   duplicateObjects = let
     keys = map (s: "${s.type or "?"} ${s.name}") (filter (s: s ? type) objects);
   in
-    unique (filter (k: lib.count (x: x == k) keys > 1) keys);
+    attrNames (filterAttrs (_: same: builtins.length same > 1) (builtins.groupBy (k: k) keys));
 
   # Asterisk refuses to load a registration with `endpoint` but no `line`
   registrationsWithoutLine = map (s: s.name) (

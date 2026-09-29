@@ -317,6 +317,59 @@ mod tests {
     }
 
     #[test]
+    fn hyper_hands_over_only_the_path_of_a_request() {
+        let server = server("open.xml\nkitchen.xml 127.0.0.21\n");
+        for (source, request, expected) in [
+            ("127.0.0.21", "GET /kitchen.xml HTTP/1.1", "200 OK"),
+            ("127.0.0.22", "GET /kitchen.xml HTTP/1.1", "403 Forbidden"),
+            // the absolute form names a host, which is ignored
+            (
+                "127.0.0.22",
+                "GET http://127.0.0.1/kitchen.xml HTTP/1.1",
+                "403 Forbidden",
+            ),
+            (
+                "127.0.0.21",
+                "GET http://other.example/kitchen.xml HTTP/1.1",
+                "200 OK",
+            ),
+            ("127.0.0.22", "GET /open.xml?kitchen.xml HTTP/1.1", "200 OK"),
+            ("127.0.0.22", "GET //open.xml HTTP/1.1", "404 Not Found"),
+            ("127.0.0.22", "GET /./open.xml HTTP/1.1", "404 Not Found"),
+            (
+                "127.0.0.22",
+                "GET /%2e%2e/open.xml HTTP/1.1",
+                "404 Not Found",
+            ),
+            ("127.0.0.22", "GET /open%2Exml HTTP/1.1", "404 Not Found"),
+            ("127.0.0.22", "GET * HTTP/1.1", "404 Not Found"),
+            ("127.0.0.22", "OPTIONS * HTTP/1.1", "405 Method Not Allowed"),
+            (
+                "127.0.0.22",
+                "CONNECT 127.0.0.1:80 HTTP/1.1",
+                "405 Method Not Allowed",
+            ),
+            (
+                "127.0.0.22",
+                "PUT /open.xml HTTP/1.1",
+                "405 Method Not Allowed",
+            ),
+            (
+                "127.0.0.22",
+                "get /open.xml HTTP/1.1",
+                "405 Method Not Allowed",
+            ),
+        ] {
+            let answer = exchange(server, source, request);
+            assert_eq!(
+                answer,
+                format!("HTTP/1.1 {expected}"),
+                "{source}: {request}"
+            );
+        }
+    }
+
+    #[test]
     fn idle_connections_of_one_client_do_not_stall_another() {
         let server = server("open.xml\n");
         let _idle: Vec<_> = (0..=MAX_CONNECTIONS)

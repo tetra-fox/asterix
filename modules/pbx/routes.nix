@@ -268,7 +268,8 @@ in {
       services.asterisk.dialplan.contexts = lib.listToAttrs (map (trunk:
         lib.nameValuePair (pbxLib.objectContext "inbound" trunk) {
           comment = mkDefault "from pbx.inbound: calls from trunk ${trunk}";
-          extensions = mapAttrs (_: inboundSteps) (filterAttrs (_: route: route.trunk == trunk) cfg.inbound);
+          # an incomplete number has no steps, the assertion below names it
+          extensions = mapAttrs (_: inboundSteps) (filterAttrs (_: route: route.trunk == trunk && complete route) cfg.inbound);
         })
       pbxTrunks);
 

@@ -435,6 +435,19 @@
       assertion = "5551000 need either `destination`, or `hours` with `open` and `closed`";
     };
 
+    # the assertion, not an error from the dialplan of a number with no hours
+    inboundWithoutHours = {
+      module.pbx.inbound = {
+        "5551001".trunk = "provider";
+        "5551002" = {
+          trunk = "provider";
+          open.ringGroup = "front";
+          closed.voicemail = "201";
+        };
+      };
+      assertion = "5551001, 5551002 need either `destination`, or `hours` with `open` and `closed`";
+    };
+
     unknownHours = {
       module.pbx.inbound."5551000".hours = lib.mkForce "shop";
       assertion = "5551000 use hours that are not defined in pbx.hours";

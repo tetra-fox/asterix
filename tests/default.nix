@@ -48,6 +48,14 @@ in {
     import ./assertions.nix {inherit pkgs self;}
   );
 
+  pbx-eval = reportFailures "asterisk-pbx-eval-tests" (import ./pbx/eval.nix {inherit pkgs self;});
+
+  pbx-assertions = reportFailures "asterisk-pbx-assertion-tests" (
+    import ./pbx/assertions.nix {inherit pkgs self;}
+  );
+
+  pbx-timezones = import ./pbx/timezones.nix {inherit pkgs self;};
+
   examples = reportFailures "asterisk-examples-eval" examples.problems;
 
   config-check = import ./check.nix {inherit pkgs self;};
@@ -87,6 +95,8 @@ in {
   vm-scale = import ./vm/scale.nix {inherit pkgs self;};
 
   vm-tenants = import ./vm/tenants.nix {inherit pkgs self;};
+
+  vm-pbx = import ./vm/pbx.nix {inherit pkgs self;};
 
   # builds the server and runs its unit tests
   provisioning-server = self.packages.${pkgs.stdenv.hostPlatform.system}.provisioning-server;

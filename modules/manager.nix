@@ -24,6 +24,10 @@
   asteriskLib = import ../lib {inherit lib;};
   inherit (asteriskLib) format;
 
+  # manager.c takes a section called general in any case for its settings and
+  # skips it as a user (main/manager.c __init_manager)
+  reserved = builtins.filter (name: lib.toLower name == "general") (builtins.attrNames acfg.users);
+
   userType = types.submodule {
     options = {
       secret = mkOption {
@@ -109,7 +113,7 @@ in {
           };
         }
       '';
-      description = "AMI users.";
+      description = "AMI users. Asterisk takes `general`, in any case, for its settings.";
     };
 
     settings = mkOption {
@@ -159,8 +163,8 @@ in {
 
     assertions = [
       {
-        assertion = !(acfg.users ? general);
-        message = "services.asterisk.ami.users: `general` is reserved.";
+        assertion = reserved == [];
+        message = "services.asterisk.ami.users: `general` is reserved, in any case: ${concatStringsSep ", " reserved}.";
       }
     ];
   };

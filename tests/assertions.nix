@@ -689,6 +689,20 @@
       assertion = "invalid extension name(s)";
     };
 
+    # manager.c skips a section called general in any case, which it reads as
+    # its settings, so no such user can log in
+    amiUserNamedGeneralInAnotherCase = {
+      module = {config, ...}: {
+        services.asterisk.ami = {
+          enable = true;
+          users = lib.genAttrs ["General" "monitor"] (_: {
+            secret = config.lib.asterisk.secret "/run/secrets/ami";
+          });
+        };
+      };
+      assertion = "services.asterisk.ami.users: `general` is reserved, in any case: General.";
+    };
+
     reservedContextName = {
       module.services.asterisk.dialplan.contexts.globals.extensions.s = ["Answer()"];
       assertion = "`general` and `globals` are reserved";

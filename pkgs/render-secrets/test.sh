@@ -77,3 +77,13 @@ if grep -qF 0123456789 error; then
   exit 1
 fi
 check xml "abcdefghijk$(placeholder long)" "abcdefghijk$long"
+
+# names that gawk or mv would take for an option, or gawk for standard input
+for name in - -- -v -x.cfg; do
+  printf 'x = %s\n' "$(placeholder crlf)" > "./$name"
+  "$render" none manifest "$name" < /dev/null
+  if [ "$(cat "./$name")" != "x = pw" ]; then
+    printf 'render-secrets: file %s holds\n%s\n' "$name" "$(cat "./$name")" >&2
+    exit 1
+  fi
+done

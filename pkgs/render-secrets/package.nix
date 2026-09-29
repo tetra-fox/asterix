@@ -32,9 +32,11 @@ in
       mode=$1 manifest=$2
       shift 2
       for file in "$@"; do
-        LC_ALL=C gawk -v mode="$mode" -v manifest="$manifest" -v pattern=${lib.escapeShellArg secrets.placeholderPattern} \
-          -f ${./render.awk} "$file" > "$file.rendered"
-        mv "$file.rendered" "$file"
+        # the file on standard input, and -- before mv's operands, so that no
+        # name (-, -x) is read as an option or as standard input
+        LC_ALL=C gawk -v mode="$mode" -v manifest="$manifest" -v file="$file" -v pattern=${lib.escapeShellArg secrets.placeholderPattern} \
+          -f ${./render.awk} < "$file" > "$file.rendered"
+        mv -- "$file.rendered" "$file"
       done
     '';
     derivationArgs.postCheck = ''

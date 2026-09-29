@@ -292,8 +292,10 @@ complete example.
 
 ## Development
 
-`nix flake check` runs every check, including NixOS VM tests. The load
-tests are too slow for it and run one at a time, such as
-`nix build .#stressTests.vm-scale` with 256 phones. `nix fmt` formats
-everything, and `nix develop` has the Rust toolchain for the provisioning
-server.
+`nix flake check` runs every check, including NixOS VM tests.
+`nix run nixpkgs#nix-fast-build -- --flake .#checks.x86_64-linux` runs the
+same checks, but evaluates them on several cores where `nix flake check` uses
+one. The load tests are too slow for either and run one at a time, such as
+`nix build .#stressTests.vm-scale` with 256 phones.
+`nix fmt` formats everything, and `nix develop` has the Rust toolchain for
+the provisioning server.

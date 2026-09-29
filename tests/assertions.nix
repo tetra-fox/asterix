@@ -482,34 +482,9 @@
       assertion = "pjsip.endpoints.101.mailboxes: 102@default";
     };
 
-    ht801PlainAdminPasswordWarns = {
-      module.services.asterisk.provisioning = {
-        listenAddress = "10.0.20.10";
-        allowedNetworks = ["10.0.20.0/24"];
-        grandstream.ht801 = {
-          enable = true;
-          adminPassword = "admin";
-          devices."101".mac = "c0:74:ad:00:01:01";
-        };
-      };
-      assertions = [];
-      warning = "ht801.adminPassword is a plain string";
-    };
-
-    # the adapter sends one user name, for the endpoint and its aor
-    ht801EndpointWithRenamedAor = {
-      module.services.asterisk = {
-        pjsip.endpoints."101".aor.name = "kitchen";
-        provisioning = {
-          listenAddress = "10.0.20.10";
-          allowedNetworks = ["10.0.20.0/24"];
-          grandstream.ht801 = {
-            enable = true;
-            devices."101".mac = "c0:74:ad:00:01:01";
-          };
-        };
-      };
-      assertion = "an `aor` named like the endpoint";
+    provisioningMoved = {
+      module.services.asterisk.provisioning.listenAddress = "10.0.20.10";
+      assertion = "Phone provisioning moved to pbx.phones, in nixosModules.pbx.";
     };
 
     voicemailPlainPinWarns = {

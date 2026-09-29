@@ -9,7 +9,7 @@
     restartUnits = ["asterisk-provisioning.service"];
   });
 
-  services.asterisk.provisioning = {
+  pbx.phones = {
     listenAddress = "10.0.20.10";
     allowedNetworks = ["10.0.20.0/24"];
     openFirewall = true;

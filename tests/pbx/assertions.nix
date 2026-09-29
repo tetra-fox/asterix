@@ -248,6 +248,36 @@
       throws = true;
     };
 
+    ht801PlainAdminPasswordWarns = {
+      module.pbx.phones = {
+        listenAddress = "10.0.20.10";
+        allowedNetworks = ["10.0.20.0/24"];
+        grandstream.ht801 = {
+          enable = true;
+          adminPassword = "admin";
+          devices."201".mac = "c0:74:ad:00:02:01";
+        };
+      };
+      assertions = [];
+      warning = "ht801.adminPassword is a plain string";
+    };
+
+    # the adapter sends one user name, for the endpoint and its aor
+    ht801EndpointWithRenamedAor = {
+      module = {
+        services.asterisk.pjsip.endpoints."201".aor.name = "kitchen";
+        pbx.phones = {
+          listenAddress = "10.0.20.10";
+          allowedNetworks = ["10.0.20.0/24"];
+          grandstream.ht801 = {
+            enable = true;
+            devices."201".mac = "c0:74:ad:00:02:01";
+          };
+        };
+      };
+      assertion = "an `aor` named like the endpoint";
+    };
+
     destinationWithTwoKindsThrows = {
       module.pbx.ringGroups.front.noAnswer = {
         voicemail = "201";

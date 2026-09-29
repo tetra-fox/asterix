@@ -109,7 +109,7 @@ A full list of options is in the options reference: `nix build .#docs`.
   and TURN.
 - **Sandboxed.** Asterisk runs as its own user, without extra privileges.
 - **Phone provisioning.** Supported devices fetch their configuration from the
-  PBX. See [PROVISIONING.md](PROVISIONING.md).
+  PBX. It is part of the pbx layer, see [PROVISIONING.md](PROVISIONING.md).
 
 ## Secrets
 

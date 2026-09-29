@@ -1,6 +1,6 @@
 # Provisioning for Grandstream HT801 adapters: each adapter gets a
 # `cfg<mac>.xml` (Grandstream's gs_provision format) with the SIP account of a
-# services.asterisk.pjsip endpoint, served by services.asterisk.provisioning.
+# services.asterisk.pjsip endpoint, served by pbx.phones.
 #
 # Every P-value set here is in Grandstream's HT80x configuration templates for
 # both hardware versions (config-template.zip from grandstream.com/support/tools:
@@ -28,10 +28,10 @@
     types
     ;
 
-  cfg = config.services.asterisk.provisioning.grandstream.ht801;
-  pcfg = config.services.asterisk.provisioning;
+  cfg = config.pbx.phones.grandstream.ht801;
+  pcfg = config.pbx.phones;
   acfg = config.services.asterisk;
-  asteriskLib = import ../../../lib {inherit lib;};
+  asteriskLib = import ../../../../lib {inherit lib;};
   inherit (asteriskLib) format secrets;
 
   valueType =
@@ -145,13 +145,13 @@
     </gs_provision>
   '';
 in {
-  options.services.asterisk.provisioning.grandstream.ht801 = {
+  options.pbx.phones.grandstream.ht801 = {
     enable = mkEnableOption "provisioning of Grandstream HT801 adapters over HTTP";
 
     sipServer = mkOption {
       type = types.str;
       default = pcfg.listenAddress;
-      defaultText = literalExpression "config.services.asterisk.provisioning.listenAddress";
+      defaultText = literalExpression "config.pbx.phones.listenAddress";
       example = "10.0.20.10:5060";
       description = "SIP server the adapters register to (P47).";
     };
@@ -204,30 +204,30 @@ in {
   };
 
   config = mkIf cfg.enable {
-    warnings = lib.optional (builtins.isString cfg.adminPassword) "services.asterisk.provisioning.grandstream.ht801.adminPassword is a plain string, so it is stored world-readable in the Nix store; use config.lib.asterisk.secret instead.";
+    warnings = lib.optional (builtins.isString cfg.adminPassword) "pbx.phones.grandstream.ht801.adminPassword is a plain string, so it is stored world-readable in the Nix store; use config.lib.asterisk.secret instead.";
 
     assertions =
       [
         {
           assertion = lib.allUnique (map (device: normalizeMac device.mac) (attrValues cfg.devices));
-          message = "services.asterisk.provisioning.grandstream.ht801.devices: MAC addresses must be unique.";
+          message = "pbx.phones.grandstream.ht801.devices: MAC addresses must be unique.";
         }
         {
           assertion = builtins.all (p: builtins.match "P[0-9]+" p != null) (
             attrNames cfg.settings ++ lib.concatMap (device: attrNames device.settings) (attrValues cfg.devices)
           );
-          message = "services.asterisk.provisioning.grandstream.ht801: settings keys must be P-values such as P1362.";
+          message = "pbx.phones.grandstream.ht801: settings keys must be P-values such as P1362.";
         }
       ]
       ++ mapAttrsToList (name: device: let
         endpoint = endpointOf device;
       in {
         assertion = endpoint != null && endpoint.auth != null && endpoint.aor != null && endpoint.aor.name == device.endpoint;
-        message = "services.asterisk.provisioning.grandstream.ht801.devices.${name}: endpoint `${device.endpoint}` must exist in pjsip.endpoints, have `auth` set and an `aor` named like the endpoint, since the adapter registers with one user name for both.";
+        message = "pbx.phones.grandstream.ht801.devices.${name}: endpoint `${device.endpoint}` must exist in pjsip.endpoints, have `auth` set and an `aor` named like the endpoint, since the adapter registers with one user name for both.";
       })
       cfg.devices;
 
-    services.asterisk.provisioning = {
+    pbx.phones = {
       enable = true;
       files = mapAttrs' (_: device:
         nameValuePair "cfg${normalizeMac device.mac}.xml" {

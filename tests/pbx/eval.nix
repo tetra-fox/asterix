@@ -52,6 +52,29 @@
   zoneFile = zone: "${pkgs.tzdata}/share/zoneinfo/${zone}";
 in
   lib.runTests {
+    # an adapter registers as the endpoint (and its aor) and authenticates
+    # with the auth user name, which may differ
+    testHt801UserIdIsTheEndpoint = {
+      expr = builtins.filter (line: builtins.match " *<P3[56]>.*" line != null) (
+        lib.splitString "\n"
+        (configOf {
+          services.asterisk.pjsip.endpoints."201".auth.username = "kitchen";
+          pbx.phones = {
+            listenAddress = "10.0.20.10";
+            allowedNetworks = ["10.0.20.0/24"];
+            grandstream.ht801 = {
+              enable = true;
+              devices."201".mac = "c0:74:ad:00:02:01";
+            };
+          };
+        }).pbx.phones.files."cfgc074ad000201.xml".text
+      );
+      expected = [
+        "    <P35>201</P35>"
+        "    <P36>kitchen</P36>"
+      ];
+    };
+
     testExtensionFallsBackToItsMailbox = {
       expr = context "pbx-extension-201" {};
       expected = ''

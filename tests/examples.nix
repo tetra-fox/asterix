@@ -16,8 +16,9 @@
       self.nixosModules.pbx
       ../examples/small-office.nix
     ];
-    # the add-on, with the example it extends
+    # the add-on, with the example it extends; phones are part of pbx
     household-intercom-ht801 = [
+      self.nixosModules.pbx
       ../examples/household-intercom.nix
       ../examples/household-intercom-ht801.nix
     ];

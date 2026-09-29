@@ -734,34 +734,6 @@ in
       ];
     };
 
-    # an adapter registers as the endpoint (and its aor) and authenticates
-    # with the auth user name, which may differ
-    testHt801UserIdIsTheEndpoint = {
-      expr = let
-        config = evalConfig [
-          phone
-          {
-            services.asterisk.pjsip.endpoints."101".auth.username = "kitchen";
-            services.asterisk.provisioning = {
-              listenAddress = "10.0.20.10";
-              allowedNetworks = ["10.0.20.0/24"];
-              grandstream.ht801 = {
-                enable = true;
-                devices."101".mac = "c0:74:ad:00:01:01";
-              };
-            };
-          }
-        ];
-      in
-        builtins.filter (line: builtins.match " *<P3[56]>.*" line != null) (
-          lib.splitString "\n" config.services.asterisk.provisioning.files."cfgc074ad000101.xml".text
-        );
-      expected = [
-        "    <P35>101</P35>"
-        "    <P36>kitchen</P36>"
-      ];
-    };
-
     # cdr_csv writes to <astlogdir>/cdr-csv but does not create it
     testCdrCsvDirectoryIsCreated = {
       expr =

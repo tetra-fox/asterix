@@ -9,14 +9,18 @@ configuration it downloads keeps it pointed there.
 
 ## Supported devices
 
-| Vendor      | Device | Hardware | Option                                             | Tested on real hardware |
-| ----------- | ------ | -------- | -------------------------------------------------- | ----------------------- |
-| Grandstream | HT801  | V1, V2   | `services.asterisk.provisioning.grandstream.ht801` | not yet                 |
+| Vendor      | Device | Hardware | Option                         | Tested on real hardware |
+| ----------- | ------ | -------- | ------------------------------ | ----------------------- |
+| Grandstream | HT801  | V1, V2   | `pbx.phones.grandstream.ht801` | not yet                 |
 
 ## Setup
 
+Provisioning is part of the pbx layer: import `asterix.nixosModules.pbx`
+(it brings the core with it). The pattern options stay off unless you set
+`pbx.enable`.
+
 ```nix
-services.asterisk.provisioning = {
+pbx.phones = {
   listenAddress = "10.0.20.10"; # the PBX's address on the phones' network
   allowedNetworks = [ "10.0.20.0/24" ];
   openFirewall = true;
@@ -55,7 +59,7 @@ Write their files yourself; they are served the same way. The text may contain
 secrets:
 
 ```nix
-services.asterisk.provisioning.files."0015651234ab.cfg" = {
+pbx.phones.files."0015651234ab.cfg" = {
   text = ''
     account.1.password = ${config.lib.asterisk.secret config.sops.secrets.sip-101.path}
   '';
@@ -108,7 +112,7 @@ A device is supported once someone who owns it has tested it:
 
 1. A module in `modules/provisioning/<vendor>/`, imported by
    `modules/provisioning/default.nix`, that writes the device's files into
-   `services.asterisk.provisioning.files`, like
+   `pbx.phones.files`, like
    `modules/provisioning/grandstream/ht801.nix`.
 2. Only settings the vendor documents for that device, with the source (template
    or manual, and its version).

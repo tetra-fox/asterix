@@ -22,7 +22,7 @@ in
     nodes = {
       pbx = {config, ...}: {
         imports = [
-          self.nixosModules.default
+          self.nixosModules.pbx
           ../../examples/household-intercom.nix
           ../../examples/household-intercom-ht801.nix
           ./common.nix
@@ -40,7 +40,7 @@ in
           lan.vlan = 1;
           voip.vlan = 2;
         };
-        services.asterisk.provisioning = {
+        pbx.phones = {
           # adapter 101 has a static lease
           grandstream.ht801.devices."101".allowedAddress = "10.0.20.21";
           # a hand-written file with the admin password, which is not escaped here

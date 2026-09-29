@@ -44,7 +44,8 @@ Secrets: `sip-101`, `sip-102`, `sip-201`, `sip-202`.
 ### household-intercom-ht801.nix
 
 Provisioning for the intercom's two HT801 adapters: they fetch their
-configuration from the host. Add it to your intercom configuration with the
+configuration from the host. Add it to your intercom configuration, together
+with `asterix.nixosModules.pbx`, which provisioning is part of, with the
 adapters' real MAC addresses (on the label under each adapter), then point each
 adapter at `http://10.0.20.10` once, with DHCP option 66 or its web interface.
 

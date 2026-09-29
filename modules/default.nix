@@ -1,4 +1,5 @@
-# services.asterisk: all layers. Replaces nixpkgs' services.asterisk module.
+# services.asterisk, the core: Asterisk's own objects. Replaces nixpkgs'
+# services.asterisk module.
 {lib, ...}: {
   disabledModules = ["services/networking/asterisk.nix"];
 
@@ -13,6 +14,11 @@
       "asterisk"
       "useTheseDefaultConfFiles"
     ] "Every configuration file is generated; none are copied from the package.")
+    (lib.mkRemovedOptionModule [
+      "services"
+      "asterisk"
+      "provisioning"
+    ] "Phone provisioning moved to pbx.phones, in nixosModules.pbx.")
     ./ari.nix
     ./asterisk.nix
     ./cdr.nix
@@ -24,7 +30,6 @@
     ./modules-conf.nix
     ./musiconhold.nix
     ./pjsip.nix
-    ./provisioning
     ./queues.nix
     ./rtp.nix
     ./voicemail.nix

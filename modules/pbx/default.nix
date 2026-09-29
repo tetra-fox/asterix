@@ -1,7 +1,7 @@
-# pbx: extensions, ring groups, queues, conferences, business hours and
-# routes, written into the options of the core module (services.asterisk),
-# which stays usable on its own. Every object gets a context of its own,
-# pbx-<kind>-<name>, and phones dial from pbx-internal.
+# pbx: extensions, ring groups, queues, conferences, business hours, routes
+# and phone provisioning, written into the options of the core module
+# (services.asterisk), which stays usable on its own. Every object gets a
+# context of its own, pbx-<kind>-<name>, and phones dial from pbx-internal.
 {
   config,
   lib,
@@ -18,6 +18,7 @@ in {
     ./extensions.nix
     ./hours.nix
     ./numbering.nix
+    ./phones
     ./queues.nix
     ./ring-groups.nix
     ./routes.nix

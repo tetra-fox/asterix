@@ -28,14 +28,14 @@
     unique
     ;
 
-  cfg = config.services.asterisk.provisioning;
-  asteriskLib = import ../../lib {inherit lib;};
+  cfg = config.pbx.phones;
+  asteriskLib = import ../../../lib {inherit lib;};
   inherit (asteriskLib) format secrets;
-  moduleLib = import ../lib.nix {inherit lib;};
+  moduleLib = import ../../lib.nix {inherit lib;};
 
   runtimeDir = "/run/asterisk-provisioning";
 
-  server = pkgs.callPackage ../../pkgs/provisioning-server/package.nix {};
+  server = pkgs.callPackage ../../../pkgs/provisioning-server/package.nix {};
 
   # one line per file: `NAME`, or `NAME ADDRESS` for a file only ADDRESS may fetch
   manifest = pkgs.writeText "asterisk-provisioning-manifest" (
@@ -91,7 +91,7 @@
     runtimeInputs = with pkgs; [
       coreutils
       gnugrep
-      (callPackage ../../pkgs/render-secrets/package.nix {})
+      (callPackage ../../../pkgs/render-secrets/package.nix {})
     ];
     text = ''
       shopt -s nullglob
@@ -120,7 +120,7 @@
 in {
   imports = [./grandstream/ht801.nix];
 
-  options.services.asterisk.provisioning = {
+  options.pbx.phones = {
     enable = mkEnableOption "serving provisioning files for phones over HTTP";
 
     listenAddress = mkOption {
@@ -187,16 +187,16 @@ in {
       [
         {
           assertion = config.services.asterisk.enable;
-          message = "services.asterisk.provisioning requires services.asterisk.enable.";
+          message = "pbx.phones requires services.asterisk.enable.";
         }
         {
           assertion = builtins.all (name: builtins.match "[A-Za-z0-9_+-][A-Za-z0-9_.+-]*" name != null) (attrNames cfg.files);
-          message = "services.asterisk.provisioning.files: file names may only contain letters, digits and _.+- (no directories).";
+          message = "pbx.phones.files: file names may only contain letters, digits and _.+- (no directories).";
         }
       ]
       ++ map (ref: {
         assertion = !(secrets.isStorePath ref) && secrets.isValidReference ref;
-        message = "services.asterisk.provisioning: invalid secret reference ${secrets.placeholderOf ref}.";
+        message = "pbx.phones: invalid secret reference ${secrets.placeholderOf ref}.";
       })
       secretRefs;
 

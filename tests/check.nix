@@ -7,7 +7,7 @@
   examples,
 }: let
   inherit (pkgs) lib;
-  inherit (import ./eval-lib.nix {inherit pkgs self;}) evalConfig;
+  inherit (import ./eval-lib.nix {inherit pkgs self;}) evalConfig configCheckOf;
 
   base = {config, ...}: {
     services.asterisk = {
@@ -23,7 +23,6 @@
     };
   };
 
-  configCheckOf = config: lib.findFirst (check: lib.hasPrefix "asterisk-config-check" check.name) (throw "no config check") config.system.checks;
   checkOf = module:
     configCheckOf (evalConfig [
       base

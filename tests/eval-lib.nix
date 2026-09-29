@@ -22,6 +22,9 @@ in rec {
 
   rendered = modules: (evalConfig modules).services.asterisk.renderedFiles;
 
+  # the build-time check (services.asterisk.checkConfig) among a system's checks
+  configCheckOf = config: lib.findFirst (check: lib.hasPrefix "asterisk-config-check" check.name) (throw "services.asterisk.checkConfig is off") config.system.checks;
+
   failedAssertions = config: map (a: a.message) (lib.filter (a: !a.assertion) config.assertions);
 
   # failed assertions and warnings of a system, as a list of one problem named

@@ -14,7 +14,7 @@
   self,
 }: let
   inherit (pkgs) lib;
-  inherit (import ../eval-lib.nix {inherit pkgs self;}) evalConfig failedAssertions;
+  inherit (import ../eval-lib.nix {inherit pkgs self;}) evalConfig failedAssertions configCheckOf;
   check = lib.getExe (pkgs.callPackage ../../pkgs/config-check/package.nix {});
   python = lib.getExe pkgs.python3;
 in
@@ -26,7 +26,7 @@ in
   }: let
     config = evalConfig modules;
     failed = failedAssertions config;
-    configCheck = lib.findFirst (c: lib.hasPrefix "asterisk-config-check" c.name) (throw "probe ${name}: services.asterisk.checkConfig is off") config.system.checks;
+    configCheck = configCheckOf config;
     spec = pkgs.writeText "asterisk-probe-${name}.json" (builtins.toJSON {inherit commands calls;});
     drive = pkgs.writeShellScript "asterisk-probe-${name}-drive" ''
       exec ${python} ${./probe.py} drive ${spec} "$out" "$@"

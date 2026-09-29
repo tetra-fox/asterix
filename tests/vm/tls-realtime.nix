@@ -1,6 +1,7 @@
 # The sandbox does not break TLS, SRTP or realtime scheduling: a TLS
 # transport whose certificate and key are root-only files, SRTP (SDES) media,
-# Asterisk running with SCHED_RR, and a call over them. Each TLS method
+# which Asterisk relays although both endpoints have directMedia, Asterisk
+# running with SCHED_RR, and a call over them. Each TLS method
 # accepts the versions it names, and the client and Asterisk's log say why
 # the others are refused; `sslv23` negotiates up to 1.3. With verifyServer,
 # Asterisk connects only to a server with a valid certificate its CA list
@@ -179,6 +180,8 @@ in
                 transport = "tls";
                 auth.password = config.lib.asterisk.secret "/run/test-secrets/sip-${extension}";
                 settings.media_encryption = "sdes";
+                # Asterisk relays encrypted media all the same
+                directMedia = true;
               })
               // lib.genAttrs ["103" "104" "105"] (extension: {
                 context = "phones";
@@ -251,6 +254,8 @@ in
             bob.wait_confirmed(timeout=30)
             invite = bob.received("INVITE")[-1]
             assert "RTP/SAVP" in invite and "a=crypto:" in invite, invite
+            # directMedia would have re-invited both to each other
+            assert (alice.requests("INVITE"), bob.requests("INVITE")) == (0, 1)
             alice.hangup()
             wait_idle(pbx)
 

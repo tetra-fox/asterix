@@ -456,7 +456,10 @@
           verifyClient = mkOption {
             type = types.bool;
             default = false;
-            description = "Verify client certificates.";
+            description = ''
+              Admit only clients that present a certificate the CA list
+              verifies (`verify_client` and `require_client_cert`).
+            '';
           };
           verifyServer = mkOption {
             type = types.bool;
@@ -552,6 +555,11 @@
               then t.tls.method
               else null;
             verify_client =
+              if t.protocol == "tls"
+              then t.tls.verifyClient
+              else null;
+            # verify_client only checks a certificate the client presents
+            require_client_cert =
               if t.protocol == "tls"
               then t.tls.verifyClient
               else null;

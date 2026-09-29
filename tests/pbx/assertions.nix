@@ -549,6 +549,17 @@
       assertions = ["pbx.phones.grandstream.ht801.devices: MAC addresses must be unique."];
     };
 
+    phonesFileNames = {
+      module = {
+        imports = [phones];
+        pbx.phones = {
+          enable = true;
+          files = lib.genAttrs [".hidden" "a/b" "a b"] (_: {text = "x";});
+        };
+      };
+      assertions = ["pbx.phones.files: file names may only contain letters, digits and _.+- (no directories)."];
+    };
+
     # systemd drops every connection with no IPAddressAllow= entry
     phonesWithoutNetworks = {
       module = {

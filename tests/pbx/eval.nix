@@ -210,6 +210,54 @@ in {
       ];
     };
 
+    # the port is opened on firewallInterfaces, or on every interface when
+    # the list is empty
+    testPhonesFirewall = {
+      expr =
+        map (interfaces: let
+          inherit
+            (ht801 {
+              pbx.phones = {
+                port = 8080;
+                openFirewall = true;
+                firewallInterfaces = interfaces;
+              };
+            })
+            networking
+            ;
+        in {
+          everywhere = builtins.elem 8080 networking.firewall.allowedTCPPorts;
+          voip = builtins.elem 8080 (networking.firewall.interfaces.voip.allowedTCPPorts or []);
+        }) [
+          ["voip"]
+          []
+        ];
+      expected = [
+        {
+          everywhere = false;
+          voip = true;
+        }
+        {
+          everywhere = true;
+          voip = false;
+        }
+      ];
+    };
+
+    # names at the edges of the pattern are store path names too
+    testPhonesFileNames = {
+      expr = let
+        service =
+          (ht801 {
+            pbx.phones.files = lib.genAttrs ["-" "--" "+" "_" "0" "a..b" "x." "A-Z_0+9.cfg"] (name: {
+              text = name;
+            });
+          }).systemd.services.asterisk-provisioning.serviceConfig;
+      in
+        (builtins.tryEval (builtins.deepSeq [service.ExecStartPre service.ExecStart] true)).success;
+      expected = true;
+    };
+
     testExtensionFallsBackToItsMailbox = {
       expr = context "pbx-extension-201" {};
       expected = ''

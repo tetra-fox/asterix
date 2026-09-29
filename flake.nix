@@ -34,6 +34,10 @@
 
     checks = forAllSystems (pkgs: import ./tests {inherit pkgs self sops-nix;});
 
+    legacyPackages = forAllSystems (pkgs: {
+      stressTests = import ./tests/stress.nix {inherit pkgs self;};
+    });
+
     packages = forAllSystems (pkgs: {
       docs = import ./docs {inherit pkgs self;};
       provisioning-server = pkgs.callPackage ./pkgs/provisioning-server/package.nix {};

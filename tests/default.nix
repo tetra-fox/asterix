@@ -92,8 +92,6 @@ in {
 
   vm-transports = import ./vm/transports.nix {inherit pkgs self;};
 
-  vm-scale = import ./vm/scale.nix {inherit pkgs self;};
-
   vm-tenants = import ./vm/tenants.nix {inherit pkgs self;};
 
   vm-pbx = import ./vm/pbx.nix {inherit pkgs self;};

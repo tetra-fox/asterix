@@ -75,6 +75,8 @@ in
     musiconhold = import ./musiconhold.nix {inherit pkgs self;};
     pbx-destinations = import ./pbx/destinations.nix {inherit pkgs self;};
     pbx-numbering = import ./pbx/numbering.nix {inherit pkgs self;};
+    pbx-outbound = import ./pbx/outbound.nix {inherit pkgs self;};
+    pbx-extensions = import ./pbx/extensions.nix {inherit pkgs self;};
 
     examples-config-minimal = examples.derivations.minimal;
     examples-config-household-intercom = examples.derivations.household-intercom;

@@ -715,6 +715,55 @@ in
       };
     };
 
+    # a template inheriting a template passes on what it inherited; a section
+    # below one whose parent is missing is left out too
+    testResolveInheritanceFollowsChains = {
+      expr = format.resolveInheritance {
+        base = {
+          template = true;
+          type = "endpoint";
+          context = "nowhere";
+          direct_media = true;
+        };
+        phone = {
+          template = true;
+          inherits = ["base"];
+          type = "aor";
+          context = "internal";
+        };
+        gate = {
+          inherits = ["phone"];
+          aors = "gate";
+        };
+        lost = {
+          template = true;
+          inherits = ["elsewhere"];
+        };
+        door.inherits = ["lost"];
+      };
+      expected = {
+        sections = [
+          {
+            name = "gate";
+            type = "endpoint";
+            context = "internal";
+            direct_media = true;
+            aors = "gate";
+          }
+        ];
+        unresolved = [
+          {
+            name = "lost";
+            inherits = ["elsewhere"];
+          }
+          {
+            name = "door";
+            inherits = ["lost"];
+          }
+        ];
+      };
+    };
+
     # --- secrets ----------------------------------------------------------------
 
     testSecretRendersPlaceholder = {

@@ -114,6 +114,25 @@
       withoutUserNamespaces = true;
       expect = ["(to listen below port 1024)"];
     };
+    # an assertion reports it first; the check shows that Asterisk refuses
+    # the file
+    parentAfterChild = {
+      module.services.asterisk.settings."pjsip.conf" = {
+        early = {
+          order = 0;
+          inherits = ["late"];
+        };
+        late = {
+          template = true;
+          type = "endpoint";
+          context = "internal";
+        };
+      };
+      expect = [
+        "Inheritance requested, but category 'late' does not exist"
+        "Contents of config file 'pjsip.conf' are invalid and cannot be parsed"
+      ];
+    };
   };
 
   # IPv4 addresses become loopback ones, which need no namespace
@@ -170,6 +189,41 @@
         type = "identify";
         endpoint = "gate";
         match = ["10.0.0.5"];
+      };
+    };
+    # sorcery takes `type` from the first section that sets it: gate is an
+    # endpoint (an aor would reject `context`), door an aor (an endpoint
+    # would reject remove_existing)
+    inheritance.services.asterisk.settings."pjsip.conf" = {
+      base = {
+        template = true;
+        type = "endpoint";
+        context = "nowhere";
+      };
+      phone = {
+        template = true;
+        inherits = ["base"];
+        type = "aor";
+        context = "internal";
+      };
+      gate = {
+        inherits = ["phone"];
+        aors = "gate";
+      };
+      "aor:gate" = {
+        name = "gate";
+        type = "aor";
+        max_contacts = 1;
+      };
+      contact = {
+        template = true;
+        type = "aor";
+        max_contacts = 1;
+      };
+      door = {
+        inherits = ["contact"];
+        type = "endpoint";
+        remove_existing = true;
       };
     };
     tlsTransport.services.asterisk.pjsip.transports.tls = {

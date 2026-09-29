@@ -175,6 +175,22 @@
       assertions = [];
     };
 
+    # `early` is rendered before the template it inherits
+    parentRenderedAfterChild = {
+      module.services.asterisk.settings."pjsip.conf" = {
+        early = {
+          order = 0;
+          inherits = ["late"];
+        };
+        late = {
+          template = true;
+          type = "endpoint";
+          context = "internal";
+        };
+      };
+      assertion = "not rendered before them, so Asterisk would not load the file:\n  [early](late)";
+    };
+
     # the raw text comes after every generated section
     parentInExtraConfig = {
       module.services.asterisk = {

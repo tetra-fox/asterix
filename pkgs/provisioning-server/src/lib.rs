@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::convert::Infallible;
 use std::net::IpAddr;
 use std::path::Path;
+use std::sync::Arc;
 use std::time::Duration;
 
 use http_body_util::Full;
@@ -15,11 +16,17 @@ use hyper::service::service_fn;
 use hyper::{Method, Request, Response, StatusCode};
 use hyper_util::rt::TokioIo;
 use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::sync::Semaphore;
 
 // a phone fetches a few kilobytes; slower connections are dropped
 const CONNECTION_TIMEOUT: Duration = Duration::from_secs(30);
 // requests are a request line and a few headers (hyper's minimum is 8 KiB)
 const MAX_REQUEST_BUFFER: usize = 16 * 1024;
+// well below the default file descriptor limit, so accept() cannot run out
+const MAX_CONNECTIONS: usize = 64;
+// a phone opens one connection at a time; further ones from the same address
+// are closed at once, so one client cannot hold the connections of all others
+const CONNECTIONS_PER_PEER: usize = 4;
 
 pub struct File {
     allowed: Option<IpAddr>,
@@ -137,12 +144,52 @@ pub async fn serve_connection(
     }
 }
 
+// answers the connections of a listening socket, each on its own task
+pub async fn serve(listener: std::net::TcpListener, files: Arc<Files>) -> Result<(), String> {
+    let listener = tokio::net::TcpListener::from_std(listener)
+        .map_err(|e| format!("listening socket: {e}"))?;
+    let connections = Arc::new(Semaphore::new(MAX_CONNECTIONS));
+    // the connections each address has open; addresses without any are removed
+    let mut peers: HashMap<IpAddr, Arc<Semaphore>> = HashMap::new();
+    loop {
+        let permit = connections
+            .clone()
+            .acquire_owned()
+            .await
+            .expect("the semaphore is never closed");
+        let (stream, peer) = match listener.accept().await {
+            Ok((stream, peer)) => (stream, peer.ip()),
+            // a connection that failed before it was accepted: only that client is affected
+            Err(e) => {
+                eprintln!("accept: {e}");
+                continue;
+            }
+        };
+        peers.retain(|_, open| open.available_permits() < CONNECTIONS_PER_PEER);
+        let open = peers
+            .entry(peer)
+            .or_insert_with(|| Arc::new(Semaphore::new(CONNECTIONS_PER_PEER)));
+        let Ok(peer_permit) = open.clone().try_acquire_owned() else {
+            eprintln!("{peer}: too many connections");
+            continue;
+        };
+        let files = files.clone();
+        tokio::spawn(async move {
+            serve_connection(stream, peer, &files).await;
+            drop((permit, peer_permit));
+        });
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use std::io::{Read, Write};
+    use std::net::SocketAddr;
+
     use super::*;
 
-    fn files() -> Files {
-        parse_manifest("open.xml\nkitchen.xml 10.0.20.21\n")
+    fn files(manifest: &str) -> Files {
+        parse_manifest(manifest)
             .unwrap()
             .into_iter()
             .map(|(name, allowed)| {
@@ -157,7 +204,8 @@ mod tests {
     }
 
     fn status(method: &Method, path: &str, peer: &str) -> StatusCode {
-        match route(&files(), method, path, peer.parse().unwrap()) {
+        let files = files("open.xml\nkitchen.xml 10.0.20.21\n");
+        match route(&files, method, path, peer.parse().unwrap()) {
             Ok(_) => StatusCode::OK,
             Err(status) => status,
         }
@@ -219,5 +267,62 @@ mod tests {
             parse_manifest("a.xml 10.0.20.1 10.0.20.2").err().as_deref(),
             Some("manifest line 1: expected a file name and at most one address")
         );
+    }
+
+    fn runtime() -> tokio::runtime::Runtime {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_io()
+            .enable_time()
+            .build()
+            .unwrap()
+    }
+
+    // serve() on a port of 127.0.0.1, in a thread that runs until the tests end
+    fn server(manifest: &str) -> SocketAddr {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let files = Arc::new(files(manifest));
+        std::thread::spawn(move || runtime().block_on(serve(listener, files)));
+        address
+    }
+
+    // a connection to server from source, one of the loopback addresses
+    fn connect(server: SocketAddr, source: &str) -> std::net::TcpStream {
+        let stream = runtime().block_on(async {
+            let socket = tokio::net::TcpSocket::new_v4().unwrap();
+            socket
+                .bind(SocketAddr::new(source.parse().unwrap(), 0))
+                .unwrap();
+            socket.connect(server).await.unwrap().into_std().unwrap()
+        });
+        stream.set_nonblocking(false).unwrap();
+        // an answer that takes longer counts as a stalled server
+        stream
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .unwrap();
+        stream
+    }
+
+    // the status line of the answer to request, sent from source
+    fn exchange(server: SocketAddr, source: &str, request: &str) -> String {
+        let mut stream = connect(server, source);
+        stream
+            .write_all(format!("{request}\r\nHost: x\r\n\r\n").as_bytes())
+            .unwrap();
+        let mut response = Vec::new();
+        stream.read_to_end(&mut response).unwrap();
+        let response = String::from_utf8_lossy(&response);
+        response.lines().next().unwrap_or_default().to_string()
+    }
+
+    #[test]
+    fn idle_connections_of_one_client_do_not_stall_another() {
+        let server = server("open.xml\n");
+        let _idle: Vec<_> = (0..=MAX_CONNECTIONS)
+            .map(|_| connect(server, "127.0.0.22"))
+            .collect();
+        let answer = exchange(server, "127.0.0.21", "GET /open.xml HTTP/1.1");
+        assert_eq!(answer, "HTTP/1.1 200 OK");
     }
 }

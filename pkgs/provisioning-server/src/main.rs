@@ -9,13 +9,10 @@ use std::path::Path;
 use std::process::ExitCode;
 use std::sync::Arc;
 
-use provisioning_server::{Files, load, serve_connection};
-use tokio::sync::Semaphore;
+use provisioning_server::{load, serve};
 
 // first file descriptor systemd passes sockets on (sd_listen_fds(3))
 const SD_LISTEN_FDS_START: RawFd = 3;
-// well below the default file descriptor limit, so accept() cannot run out
-const MAX_CONNECTIONS: usize = 64;
 
 fn systemd_listener() -> Result<std::net::TcpListener, String> {
     let for_us = std::env::var("LISTEN_PID").is_ok_and(|pid| pid == std::process::id().to_string());
@@ -28,32 +25,6 @@ fn systemd_listener() -> Result<std::net::TcpListener, String> {
         .set_nonblocking(true)
         .map_err(|e| format!("listening socket: {e}"))?;
     Ok(listener)
-}
-
-async fn serve(listener: std::net::TcpListener, files: Arc<Files>) -> Result<(), String> {
-    let listener = tokio::net::TcpListener::from_std(listener)
-        .map_err(|e| format!("listening socket: {e}"))?;
-    let connections = Arc::new(Semaphore::new(MAX_CONNECTIONS));
-    loop {
-        let permit = connections
-            .clone()
-            .acquire_owned()
-            .await
-            .expect("the semaphore is never closed");
-        let (stream, peer) = match listener.accept().await {
-            Ok(accepted) => accepted,
-            // a connection that failed before it was accepted: only that client is affected
-            Err(e) => {
-                eprintln!("accept: {e}");
-                continue;
-            }
-        };
-        let files = files.clone();
-        tokio::spawn(async move {
-            serve_connection(stream, peer.ip(), &files).await;
-            drop(permit);
-        });
-    }
 }
 
 fn run() -> Result<(), String> {

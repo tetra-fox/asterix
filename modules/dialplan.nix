@@ -205,6 +205,13 @@
     "extensions.ael" = "pbx_ael.so";
     "extensions.lua" = "pbx_lua.so";
   };
+  # Asterisk keeps the first 79 bytes of a section name (main/config.c struct
+  # ast_category), and pbx_config makes sections of one name one context
+  mergedContexts = lib.optionals (dialplanSections != null) (
+    filter (names: builtins.length names > 1) (
+      map (sort (a: b: a < b)) (attrValues (lib.groupBy (builtins.substring 0 79) (unique dialplanSections)))
+    )
+  );
   knownContexts =
     if dialplanSections == null || otherDialplans != {}
     then null
@@ -359,6 +366,13 @@ in {
         message = ''
           services.asterisk: pre-dial subroutines refer to contexts that are not defined:
             ${concatStringsSep "\n  " danglingSubroutines}
+        '';
+      }
+      {
+        assertion = mergedContexts == [];
+        message = ''
+          services.asterisk: dialplan contexts that Asterisk would merge, since it only keeps the first 79 bytes of a context's name:
+            ${concatStringsSep "\n  " (map (concatStringsSep ", ") mergedContexts)}
         '';
       }
       {

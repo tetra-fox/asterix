@@ -551,6 +551,31 @@
       assertion = "`general` and `globals` are reserved";
     };
 
+    # Asterisk keeps 79 bytes of a section name, which makes the long-x contexts
+    # one; a long name of its own works, and so does a context's raw lines block
+    contextsAlikeInTheirFirst79Bytes = let
+      long = "long-" + lib.strings.replicate 74 "x";
+    in {
+      module.services.asterisk = {
+        dialplan.contexts = {
+          "${long}-a".extensions."1" = ["Answer()"];
+          "${long}-b" = {
+            extensions."2" = ["Answer()"];
+            extraConfig = "exten => 4,1,Answer()";
+          };
+          "other-${long}".extensions."3" = ["Answer()"];
+        };
+        extraConfig."extensions.conf" = ''
+          [${long}]
+          exten => 5,1,Answer()
+        '';
+      };
+      assertion = ''
+        services.asterisk: dialplan contexts that Asterisk would merge, since it only keeps the first 79 bytes of a context's name:
+          ${long}, ${long}-a, ${long}-b
+      '';
+    };
+
     trunkEndpointNameClash = {
       module = {config, ...}: {
         services.asterisk.pjsip.trunks."101" = {

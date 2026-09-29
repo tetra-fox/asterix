@@ -430,7 +430,8 @@ in {
     };
 
     # Asterisk raises an RTP port below 1024 to 1024 (res_rtp_asterisk.c,
-    # MINIMUM_RTP_PORT), so such a range needs no capability
+    # MINIMUM_RTP_PORT), so such a range needs no capability. The even end
+    # opens the RTCP port above it too.
     testRtpRangeStartsAt1024 = {
       expr = let
         config = evalConfig [
@@ -453,7 +454,7 @@ in {
         allowedUDPPortRanges = [
           {
             from = 1024;
-            to = 1100;
+            to = 1101;
           }
         ];
         CapabilityBoundingSet = [""];

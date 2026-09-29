@@ -533,8 +533,15 @@
     to = toPort (rtpGeneral.rtpend or 31000);
   };
   # Asterisk raises either end below 1024 to 1024 (res_rtp_asterisk.c,
-  # MINIMUM_RTP_PORT)
-  rtpPorts = lib.mapAttrs (_: lib.max 1024) rtpRange;
+  # MINIMUM_RTP_PORT). RTP takes even ports up to the end, the end included,
+  # and RTCP the port above each, so an even end has its RTCP one past it.
+  rtpPorts = let
+    raised = lib.mapAttrs (_: lib.max 1024) rtpRange;
+  in
+    raised
+    // {
+      to = raised.to + 1 - lib.mod raised.to 2;
+    };
 
   # Ports Asterisk binds at startup (not only the ones opened in the
   # firewall); one below 1024 needs CAP_NET_BIND_SERVICE. RTP ports are never

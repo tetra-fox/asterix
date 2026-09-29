@@ -26,7 +26,11 @@ in {
       to = mkOption {
         type = types.port;
         default = 20000;
-        description = "Last UDP port for RTP and RTCP. Each call leg uses two ports.";
+        description = ''
+          Last UDP port for RTP. Each call leg takes an even port for RTP and
+          the one above it for RTCP, so an even `to` uses `to + 1` as well,
+          which `openFirewall` opens.
+        '';
       };
     };
 

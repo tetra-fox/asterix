@@ -48,6 +48,11 @@
               "Answer()"
               "Wait(30)"
             ];
+            # returns normally when the call is hung up
+            conference = [
+              "Answer()"
+              "ConfBridge(probe)"
+            ];
           };
         };
       }
@@ -85,6 +90,11 @@
       }
       {
         extension = "forever";
+        context = "test";
+        limit = 1;
+      }
+      {
+        extension = "conference";
         context = "test";
         limit = 1;
       }
@@ -188,6 +198,20 @@
         ended = [
           {
             application = "Wait";
+            how = "hangup";
+          }
+        ];
+      }
+      {
+        answered = true;
+        limitReached = true;
+        steps = [
+          "test,conference,1,Answer()"
+          "test,conference,2,ConfBridge(probe)"
+        ];
+        ended = [
+          {
+            application = "ConfBridge";
             how = "hangup";
           }
         ];

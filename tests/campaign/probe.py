@@ -234,6 +234,11 @@ def summary(call, window):
                 if ran and all(e["channel"] != channel for e in ended):
                     ended.append(ran[-1] | {"how": how} | ({"status": match["status"]} if how == "fallthrough" else {}))
                 break
+    # a channel hung up in an application that then returns normally, such as
+    # ConfBridge, ends with a debug message only (main/pbx.c __ast_pbx_run)
+    for channel in dict.fromkeys(s["channel"] for s in steps):
+        if all(e["channel"] != channel for e in ended):
+            ended.append([s for s in steps if s["channel"] == channel][-1] | {"how": "hangup"})
     return call | {
         "channel": steps[0]["channel"] if steps else None,
         "steps": steps,

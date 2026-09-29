@@ -1013,6 +1013,30 @@ in {
       };
     };
 
+    # with checkConfig off, nothing starts Asterisk at build time: a setting it
+    # rejects reaches the host, where Asterisk logs it
+    testCheckConfigSwitchesTheCheck = {
+      expr =
+        map (
+          checkConfig:
+            builtins.filter (lib.hasPrefix "asterisk-") (map (check: check.name)
+              (evalConfig [
+                phone
+                {services.asterisk.checkConfig = checkConfig;}
+              ]).system.checks)
+        ) [
+          true
+          false
+        ];
+      expected = [
+        [
+          "asterisk-modules-check"
+          "asterisk-config-check"
+        ]
+        ["asterisk-modules-check"]
+      ];
+    };
+
     testChanSipAlwaysNoloaded = {
       expr = lib.hasInfix "noload => chan_sip.so" (rendered [phone])."modules.conf";
       expected = true;

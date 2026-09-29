@@ -46,7 +46,11 @@
   failing = {
     misspelledKey = {
       module.services.asterisk.pjsip.endpoints."101".settings.direct_mdia = false;
-      expect = ["Could not create an object of type 'endpoint' with id '101'"];
+      expect = [
+        "Could not find option suitable for category '101' named 'direct_mdia'"
+        "Could not create an object of type 'endpoint' with id '101'"
+        "(services.asterisk.checkConfig = false turns this check off)"
+      ];
     };
     applicationNotLoaded = {
       module.services.asterisk.dialplan.contexts.internal.extensions."411" = ["Directory(default)"];

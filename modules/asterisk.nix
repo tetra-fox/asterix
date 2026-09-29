@@ -736,6 +736,10 @@ in {
         needs unprivileged user namespaces on the build machine, which some
         systems (Ubuntu 24.04) forbid. Files outside the Nix store that the
         configuration names do not exist there.
+
+        Without the check, what Asterisk rejects only shows in its log. A
+        reload that cannot create a PJSIP object still succeeds and keeps the
+        object's previous version until the next start.
       '';
     };
 

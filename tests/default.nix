@@ -99,6 +99,23 @@ in
     # builds the server and runs its unit tests
     provisioning-server = self.packages.${pkgs.stdenv.hostPlatform.system}.provisioning-server;
 
+    # the server's fuzz target on its seeds and on the inputs libFuzzer derives from
+    # them in a fixed number of runs
+    provisioning-server-fuzz = let
+      connection = lib.getExe self.packages.${pkgs.stdenv.hostPlatform.system}.provisioning-server-fuzz;
+    in
+      pkgs.runCommand "provisioning-server-fuzz-check" {} ''
+        mkdir corpus
+        ${connection} -seed=1 -runs=150000 -verbosity=0 -close_fd_mask=2 -print_final_stats=1 \
+          -dict=${../pkgs/provisioning-server/fuzz/connection.dict} \
+          corpus ${../pkgs/provisioning-server/fuzz/seeds/connection} || {
+          # the target's stderr was closed: run the saved input again to show its panic
+          ${connection} crash-*
+          exit 1
+        }
+        touch $out
+      '';
+
     # every option has a description and the reference builds
     docs = import ../docs {inherit pkgs self;};
 

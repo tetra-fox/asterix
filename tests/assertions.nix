@@ -878,6 +878,13 @@
       '';
     };
 
+    # app_voicemail ignores a mailbox whose number starts with *, which
+    # jumps to extension a in VoiceMailMain
+    voicemailMailboxStartingWithStar = {
+      module.services.asterisk.voicemail.mailboxes."*42".pin = "1234";
+      assertion = "mailbox numbers may only contain letters, digits and _*#+-, and not start with *";
+    };
+
     # app_voicemail splits the options at | and each at its first =
     voicemailOptionWithPipe = {
       module = {config, ...}: {

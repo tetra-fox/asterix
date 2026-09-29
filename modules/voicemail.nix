@@ -473,8 +473,10 @@ in {
           }).";
         }
         {
-          assertion = builtins.all (box: builtins.match "[A-Za-z0-9_*#+-]+" box.mailbox != null) mailboxes;
-          message = "services.asterisk.voicemail.mailboxes: mailbox numbers may only contain letters, digits and _*#+-.";
+          # app_voicemail ignores a mailbox that starts with *, the key that
+          # jumps to extension a in VoiceMailMain (apps/app_voicemail.c find_or_create)
+          assertion = builtins.all (box: builtins.match "[A-Za-z0-9_#+-][A-Za-z0-9_*#+-]*" box.mailbox != null) mailboxes;
+          message = "services.asterisk.voicemail.mailboxes: mailbox numbers may only contain letters, digits and _*#+-, and not start with *.";
         }
         {
           assertion = lib.intersectLists reservedSections contexts == [];

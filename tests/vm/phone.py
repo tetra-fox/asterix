@@ -1,5 +1,7 @@
-# Helpers for driving `sip-phone` (tests/vm/phone.nix) from test scripts.
+# Helpers for driving `sip-phone` (tests/vm/phone.nix) and `baresip-phone`
+# (tests/vm/baresip.nix) from test scripts.
 import itertools
+import json
 import re
 import shlex
 import time
@@ -135,6 +137,58 @@ class Phone:
     def wait_disconnected(self, after=0, timeout=90):
         """Wait until more than `after` of the phone's calls have ended."""
         self.wait_count("Call [0-9]+ is DISCONNECTED", after + 1, timeout=timeout)
+
+
+class Baresip:
+    """A baresip instance registered as `user`, which answers every call. Like
+    Phone, it sends a sine of `tone` Hz and records what it hears."""
+
+    def __init__(self, machine, name, user, password, server, sip_port=5090, ctrl_port=4444, tone=None):
+        self.machine = machine
+        self.name = name
+        self.user = user
+        self.password = password
+        self.server = server
+        self.sip_port = sip_port
+        self.ctrl_port = ctrl_port
+        self.tone = PHONE_TONES[next(phones_made) % len(PHONE_TONES)] if tone is None else tone
+        self.log = f"/tmp/baresip-phone-{name}.log"
+        self.recording = f"/tmp/baresip-phone-{name}.wav"
+
+    def start(self):
+        self.machine.succeed(
+            f"baresip-phone start {self.name} {self.user} {shlex.quote(self.password)} "
+            f"{shlex.quote(self.server)} {self.sip_port} {self.ctrl_port} {self.tone}"
+        )
+        self.machine.wait_until_succeeds(f"test -f {self.log}", timeout=60)
+        # baresip does not read /etc/hosts, so it dials the server's address
+        self.address = self.machine.succeed(f"getent ahostsv4 {shlex.quote(self.server)} | awk 'NR == 1 {{ print $1 }}'").strip()
+
+    def stop(self):
+        self.machine.succeed(f"baresip-phone stop {self.name}")
+
+    def command(self, command, params=""):
+        """Runs a baresip command and returns what it answered."""
+        output = self.machine.succeed(f"baresip-phone command {self.name} {command} {shlex.quote(params)}")
+        # ctrl_tcp frames each message as <length>:<json>,
+        while output:
+            length, _, rest = output.partition(":")
+            message = json.loads(rest[: int(length)])
+            output = rest[int(length) + 1 :]
+            if message.get("response"):
+                assert message["ok"], f"baresip {command} {params}: {message}"
+                return message["data"]
+        raise Exception(f"baresip did not answer {command} {params}")
+
+    def wait_registered(self, timeout=120):
+        # baresip logs `<aor>: {0/UDP/v4} 200 OK (<server>) [1 binding]`
+        self.machine.wait_until_succeeds(f"grep -q '}} 200 OK' {self.log}", timeout=timeout)
+
+    def call(self, extension):
+        self.command("dial", f"sip:{extension}@{self.address}")
+
+    def hangup(self):
+        self.command("hangup")
 
 
 def start_phones(phones):

@@ -5,15 +5,15 @@
 # the phones that did not answer, one extension rings on two devices, call
 # forwarding is kept in astdb across a restart, a ringing call is picked up
 # from another phone, an IVR reads RFC 4733 and SIP INFO DTMF, a call
-# survives a lossy network, codecs with different sample rates are transcoded
-# and a call is recorded to the spool
+# survives a lossy network, codecs with different sample rates are transcoded,
+# a call is recorded to the spool, and a baresip phone calls a pjsua one
 {
   pkgs,
   self,
 }: let
   inherit (pkgs) lib;
 
-  # extension -> caller ID name; 209 never registers
+  # extension -> caller ID name; 209 never registers, 212 is baresip
   names = {
     "201" = "Anna";
     "202" = "Ben";
@@ -26,6 +26,7 @@
     "209" = "Ivy";
     "210" = "Jo";
     "211" = "Kim";
+    "212" = "Lou";
   };
 in
   pkgs.testers.runNixOSTest {
@@ -182,6 +183,7 @@ in
         imports = [
           ./common.nix
           ./phone.nix
+          ./baresip.nix
         ];
       };
     };
@@ -371,5 +373,16 @@ in
             wait_idle(pbx)
             # 16-bit samples at 8 kHz: 3 seconds are about 48 kB
             pbx.succeed("find /var/lib/asterisk/spool/monitor -name 'call-*.wav' -size +20k | grep -q .")
+
+        with subtest("a phone on another SIP stack and a pjsua phone hear each other"):
+            lou = Baresip(phones, "212", "212", "pw-212", "pbx")
+            lou.start()
+            lou.wait_registered()
+            lou.call("201")
+            wait_bridged(pbx, "212", "201")
+            wait_hears(lou, [phone["201"].tone])
+            wait_hears(phone["201"], [lou.tone])
+            lou.hangup()
+            wait_idle(pbx)
       '';
   }

@@ -414,21 +414,78 @@
       '';
     };
 
+    # [general], in any case, holds app_queue's own settings
     queueOnlyInPbx = {
-      module.pbx.queues.sales.number = "620";
-      assertion = "sales are not queues of services.asterisk.queues.queues";
+      module.pbx.queues = {
+        sales.number = "620";
+        General.number = "621";
+      };
+      assertion = "General, sales are not queues of queues.conf";
     };
 
-    # default_bridge and default_user exist without configuration
+    # Asterisk cuts the section's name, so Queue() never finds it
+    queueNameTooLong = {
+      module = {
+        pbx.queues.${lib.strings.replicate 80 "q"}.number = "620";
+        services.asterisk.settings."queues.conf".${lib.strings.replicate 80 "q"}.member = ["PJSIP/202"];
+      };
+      assertion = "pbx.queues: names longer than 79 bytes, which Asterisk cuts, so Queue() never finds them: ${lib.strings.replicate 80 "q"}.";
+    };
+
+    # default_bridge and default_user exist without configuration, and a
+    # user profile is no bridge profile
     conferenceProfiles = {
-      module.pbx.conferences.board = {
-        bridgeProfile = "default_bridge";
-        userProfile = "quiet";
+      module = {
+        pbx.conferences = {
+          board = {
+            bridgeProfile = "quiet";
+            userProfile = "default_user";
+          };
+          team = {
+            bridgeProfile = "default_bridge";
+            userProfile = "nobody";
+          };
+        };
+        services.asterisk.confbridge.users.quiet.quiet = true;
       };
       assertion = ''
         pbx.conferences: profiles that are not defined:
-          pbx.conferences.board.userProfile: quiet
+          pbx.conferences.board.bridgeProfile: quiet
+          pbx.conferences.team.userProfile: nobody
       '';
+    };
+
+    # Asterisk reads them the same as the typed ones, and finds queues and
+    # profiles in any case
+    queueAndProfilesFromSettings = {
+      module = {
+        pbx = {
+          queues.Sales.number = "620";
+          conferences.board = {
+            bridgeProfile = "Small";
+            userProfile = "guest";
+          };
+        };
+        services.asterisk.settings = {
+          "queues.conf".sales.member = ["PJSIP/202"];
+          "confbridge.conf" = {
+            # the type comes from the template
+            guests = {
+              template = true;
+              type = "user";
+            };
+            guest = {
+              inherits = ["guests"];
+              startmuted = true;
+            };
+            small = {
+              type = "bridge";
+              max_members = 3;
+            };
+          };
+        };
+      };
+      assertions = [];
     };
 
     inboundWithDestinationAndHours = {

@@ -351,6 +351,16 @@
     base = {};
     # res_parking, which parkcall loads, starts from the file rendered for it
     parkcall.services.asterisk.features.featureMap.parkcall = "#72";
+    # a queue of pbx.queues written in settings, without a typed one to load
+    # app_queue
+    pbxQueueFromSettings = {
+      imports = [self.nixosModules.pbx];
+      pbx = {
+        enable = true;
+        queues.sales.number = "600";
+      };
+      services.asterisk.settings."queues.conf".sales.member = ["PJSIP/101"];
+    };
     # an endpoint in a context only the AEL dialplan defines, and a Lua one
     aelAndLuaDialplans.services.asterisk = {
       pjsip.endpoints."101".context = lib.mkForce "from-ael";

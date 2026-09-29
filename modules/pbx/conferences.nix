@@ -21,7 +21,7 @@
   cfg = config.pbx;
   pbxLib = import ./lib.nix {inherit lib;};
   format = (import ../../lib {inherit lib;}).format;
-  ccfg = config.services.asterisk.confbridge;
+  core = config.services.asterisk;
 
   conferenceType = types.submodule {
     options = {
@@ -34,12 +34,12 @@
       bridgeProfile = mkOption {
         type = types.nullOr types.str;
         default = null;
-        description = "Bridge profile of {option}`services.asterisk.confbridge.bridges`; Asterisk's `default_bridge` without it.";
+        description = "Bridge profile of {file}`confbridge.conf`, from {option}`services.asterisk.confbridge.bridges` or `settings`; Asterisk's `default_bridge` without it.";
       };
       userProfile = mkOption {
         type = types.nullOr types.str;
         default = null;
-        description = "User profile of {option}`services.asterisk.confbridge.users`; Asterisk's `default_user` without it.";
+        description = "User profile of {file}`confbridge.conf`, from {option}`services.asterisk.confbridge.users` or `settings`; Asterisk's `default_user` without it.";
       };
     };
   };
@@ -52,13 +52,25 @@
   longNames = builtins.filter (name: builtins.stringLength name > 79) (builtins.attrNames cfg.conferences);
   alike = builtins.filter (names: builtins.length names > 1) (builtins.attrValues (builtins.groupBy lib.toLower (builtins.attrNames cfg.conferences)));
 
-  # profiles Asterisk has without configuration
+  # the profiles of a type in the final confbridge.conf, with the default one
+  # Asterisk adds, in lower case as ConfBridge finds a profile in any case
+  # (conf_config_parser.c bridge_cmp_cb); null when included files or raw
+  # text can define more
+  profiles = type:
+    if core.includes."confbridge.conf" or [] != [] || core.extraConfig."confbridge.conf" or "" != ""
+    then null
+    else
+      map (section: lib.toLower section.name) (builtins.filter (section: section.type or null == type) (format.resolveInheritance (core.settings."confbridge.conf" or {})).sections)
+      ++ ["default_${type}"];
+  bridges = profiles "bridge";
+  users = profiles "user";
+  undefined = known: profile: profile != null && known != null && !(builtins.elem (lib.toLower profile) known);
   missingProfiles = concatMap (
     name: let
       conference = cfg.conferences.${name};
     in
-      optional (conference.bridgeProfile != null && !(builtins.elem conference.bridgeProfile (builtins.attrNames ccfg.bridges ++ ["default_bridge"]))) "pbx.conferences.${name}.bridgeProfile: ${conference.bridgeProfile}"
-      ++ optional (conference.userProfile != null && !(builtins.elem conference.userProfile (builtins.attrNames ccfg.users ++ ["default_user"]))) "pbx.conferences.${name}.userProfile: ${conference.userProfile}"
+      optional (undefined bridges conference.bridgeProfile) "pbx.conferences.${name}.bridgeProfile: ${conference.bridgeProfile}"
+      ++ optional (undefined users conference.userProfile) "pbx.conferences.${name}.userProfile: ${conference.userProfile}"
   ) (builtins.attrNames cfg.conferences);
 in {
   options.pbx.conferences = mkOption {

@@ -123,6 +123,8 @@ in
 
     vm-nat = import ./vm/nat.nix {inherit pkgs self;};
 
+    vm-media = import ./vm/media.nix {inherit pkgs self;};
+
     vm-transports = import ./vm/transports.nix {inherit pkgs self;};
 
     vm-firewall = import ./vm/firewall.nix {inherit pkgs self;};

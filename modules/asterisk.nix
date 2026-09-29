@@ -157,10 +157,17 @@
       ++ lib.optionals (rtpGeneral ? stunaddr) [rtpGeneral.stunaddr]
       ++ lib.optionals (rtpGeneral ? turnaddr) [rtpGeneral.turnaddr]
     )));
-  configCheck = pkgs.runCommand "asterisk-config-check" {} ''
-    ${lib.getExe (pkgs.callPackage ../pkgs/config-check/package.nix {})} \
-      ${lib.optionalString (builtins.any lowPort listenPorts) "--low-ports"} \
-      ${asteriskBin} ${checkTree} ${lib.escapeShellArgs bindAddresses} || {
+  # the check's arguments are passed on for the probe (tests/campaign/probe.nix),
+  # which boots Asterisk the same way
+  checkArguments =
+    optional (builtins.any lowPort listenPorts) "--low-ports"
+    ++ [
+      asteriskBin
+      "${checkTree}"
+    ]
+    ++ bindAddresses;
+  configCheck = pkgs.runCommand "asterisk-config-check" {passthru.arguments = checkArguments;} ''
+    ${lib.getExe (pkgs.callPackage ../pkgs/config-check/package.nix {})} ${lib.escapeShellArgs checkArguments} || {
       echo "(services.asterisk.checkConfig = false turns this check off)" >&2
       exit 1
     }

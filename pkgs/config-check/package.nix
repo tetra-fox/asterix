@@ -1,4 +1,4 @@
-# asterisk-config-check [--low-ports] ASTERISK CONFIG [ADDRESS...]
+# asterisk-config-check [--low-ports] [--probe PROGRAM] ASTERISK CONFIG [ADDRESS...]
 #
 # Starts ASTERISK with the configuration in CONFIG and fails if Asterisk logs
 # an error or warning while loading it, or if the dialplan uses an application
@@ -12,6 +12,11 @@
 # a user and network namespace of its own, which some machines forbid, to
 # listen on an IPv6 ADDRESS or below port 1024 (--low-ports), or to keep it
 # off the network when the build is not sandboxed.
+#
+# With --probe, a configuration that passes is not stopped at once: PROGRAM
+# runs first, with `ASTERISK -C FILE` appended, the command line that reaches
+# the running Asterisk (tests/campaign/probe.nix), and the check fails if it
+# does.
 {
   lib,
   coreutils,
@@ -41,10 +46,20 @@ in
     text = ''
       arguments=("$@")
       low_ports=
-      if [ "''${1:-}" = --low-ports ]; then
-        low_ports=1
-        shift
-      fi
+      probe=
+      while true; do
+        case ''${1:-} in
+          --low-ports)
+            low_ports=1
+            shift
+            ;;
+          --probe)
+            probe=$2
+            shift 2
+            ;;
+          *) break ;;
+        esac
+      done
       asterisk=$1 config=$2
       shift 2
 
@@ -131,8 +146,6 @@ in
       rx "dialplan show" > "$root/dialplan"
       rx "core show applications" > "$root/applications"
       rx "core show functions" > "$root/functions"
-      rx "core stop now" > /dev/null
-      wait "$pid"
 
       failed=0
       # outbound registrations start 1 to 11 s after their module loads, so on
@@ -148,6 +161,11 @@ in
         -f ${./dialplan.awk} "$root/dialplan" >&2; then
         failed=1
       fi
+      if [ "$failed" = 0 ] && [ -n "$probe" ]; then
+        "$probe" "$asterisk" -C "$root/config/asterisk.conf" || failed=1
+      fi
+      rx "core stop now" > /dev/null
+      wait "$pid"
       exit "$failed"
     '';
   }

@@ -13,15 +13,79 @@
       then builtins.elemAt parts 1
       else "default";
   };
-in {
-  inherit splitMailbox;
 
-  # whether the sections of voicemail.conf in settings, which hold the typed
-  # mailboxes too, have `mailbox`: `200` or `200@sales`
-  hasMailbox = voicemailConf: mailbox: let
+  # the lines of a voicemail.conf text after its first section header, each
+  # with its section
+  voicemailLines = text:
+    (lib.foldl' (
+        acc: line: let
+          header = builtins.match "[[:space:]]*[[]([^]]*)[]].*" line;
+        in
+          if header != null
+          then acc // {section = builtins.head header;}
+          else if acc.section != null
+          then
+            acc
+            // {
+              lines =
+                acc.lines
+                ++ [
+                  {
+                    inherit (acc) section;
+                    inherit line;
+                  }
+                ];
+            }
+          else acc
+      ) {
+        section = null;
+        lines = [];
+      }
+      (lib.splitString "\n" text))
+    .lines;
+
+  # what Asterisk reads of a line: up to a `;` that is not `\;`, split at the
+  # first `=` or `=>`
+  entryOf = line: let
+    parts = builtins.match "([^=]*)=>?(.*)" (builtins.head (builtins.match "((\\\\;|[^;])*).*" line));
+  in
+    if parts == null
+    then null
+    else {
+      key = lib.trim (builtins.head parts);
+      value = lib.trim (builtins.elemAt parts 1);
+    };
+in {
+  inherit splitMailbox voicemailLines entryOf;
+
+  # the mailboxes of voicemail.conf, as { context = { box = true; }; }: the
+  # keys of each context in the rendered file, raw text included, or null
+  # when the file includes others, which can hold any mailbox
+  voicemailMailboxes = core: let
+    entries = lib.concatMap (
+      line: let
+        entry = entryOf line.line;
+      in
+        lib.optional (entry != null) {
+          inherit (line) section;
+          inherit (entry) key;
+        }
+    ) (voicemailLines (core.renderedFiles."voicemail.conf" or ""));
+  in
+    if
+      format.includesFiles {
+        includes = core.includes."voicemail.conf" or [];
+        extraConfig = core.extraConfig."voicemail.conf" or "";
+      }
+    then null
+    else lib.mapAttrs (_: boxes: lib.genAttrs (map (e: e.key) boxes) (_: true)) (builtins.groupBy (e: e.section) entries);
+
+  # whether `mailbox`, `200` or `200@sales`, is one of `mailboxes`, as
+  # voicemailMailboxes makes them
+  hasMailbox = mailboxes: mailbox: let
     ref = splitMailbox mailbox;
   in
-    builtins.any (s: s.name == ref.context && s ? ${ref.box}) (lib.attrValues voicemailConf);
+    mailboxes == null || (mailboxes.${ref.context} or {}) ? ${ref.box};
 
   # typed option values as section keys: scalars become defaults, so settings
   # replace them, lists stay definitions, so settings extend them, and nulls

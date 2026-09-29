@@ -31,7 +31,7 @@
   vcfg = cfg.voicemail;
   asteriskLib = import ../lib {inherit lib;};
   inherit (asteriskLib) format secrets;
-  inherit (import ./lib.nix {inherit lib;}) hasMailbox splitMailbox toSection;
+  inherit (import ./lib.nix {inherit lib;}) entryOf hasMailbox splitMailbox toSection voicemailLines voicemailMailboxes;
 
   mailboxType = types.submodule (
     {name, ...}: let
@@ -165,49 +165,11 @@
 
   # the lines of the generated voicemail.conf with their section; app_voicemail
   # reads the ones outside the reserved sections as `mailbox => PIN,name,...`
-  lines =
-    (lib.foldl' (
-        acc: line: let
-          header = builtins.match "[[:space:]]*[[]([^]]*)[]].*" line;
-        in
-          if header != null
-          then acc // {section = builtins.head header;}
-          else if acc.section != null
-          then
-            acc
-            // {
-              lines =
-                acc.lines
-                ++ [
-                  {
-                    inherit (acc) section;
-                    inherit line;
-                  }
-                ];
-            }
-          else acc
-      ) {
-        section = null;
-        lines = [];
-      }
-      (splitString "\n" (cfg.renderedFiles."voicemail.conf" or "")))
-    .lines;
+  lines = voicemailLines (cfg.renderedFiles."voicemail.conf" or "");
   mailboxLines = filter (mailbox: !(builtins.elem mailbox.section reservedSections)) lines;
 
   # secrets in them, which app_voicemail splits at every comma
   mailboxLineSecrets = lib.concatMap (mailbox: secrets.fromText mailbox.line) mailboxLines;
-
-  # what Asterisk reads of a line: up to a `;` that is not `\;`, split at the
-  # first `=` or `=>`
-  entryOf = line: let
-    parts = builtins.match "([^=]*)=>?(.*)" (builtins.head (builtins.match "((\\\\;|[^;])*).*" line));
-  in
-    if parts == null
-    then null
-    else {
-      key = lib.trim (builtins.head parts);
-      value = lib.trim (builtins.elemAt parts 1);
-    };
 
   # a value app_voicemail keeps `bytes` of; `room` is what the secrets in it
   # may add to its other bytes, where `\;` is one byte
@@ -265,11 +227,12 @@
 
   # mailboxes referenced by typed PJSIP endpoints (MWI) that are not defined
   voicemailConf = cfg.settings."voicemail.conf" or {};
+  knownMailboxes = voicemailMailboxes cfg;
   missingMailboxes = lib.concatLists (
     mapAttrsToList (
       endpoint: e:
         map (ref: "pjsip.endpoints.${endpoint}.mailboxes: ${ref}") (
-          filter (ref: !(hasMailbox voicemailConf ref)) e.mailboxes
+          filter (ref: !(hasMailbox knownMailboxes ref)) e.mailboxes
         )
     )
     cfg.pjsip.endpoints

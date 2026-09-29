@@ -9,7 +9,7 @@
       mailbox = mkOption {
         type = types.str;
         example = "200@sales";
-        description = "Mailbox of voicemail.conf, from {option}`services.asterisk.voicemail.mailboxes` or `settings`: `box` or `box@context`.";
+        description = "Mailbox of voicemail.conf, from {option}`services.asterisk.voicemail.mailboxes`, `settings`, `extraConfig` or an included file: `box` or `box@context`.";
       };
       greeting = mkOption {
         type = types.enum [

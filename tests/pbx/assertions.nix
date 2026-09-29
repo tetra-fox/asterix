@@ -322,6 +322,26 @@
       assertions = [];
     };
 
+    # and one of its raw text, by name
+    voicemailDestinationFromExtraConfig = {
+      module = {
+        pbx.extensions."202" = {
+          noAnswer.voicemail = "300@sales";
+          busy.voicemail = "301@sales";
+        };
+        services.asterisk.extraConfig."voicemail.conf" = ''
+          [sales]
+          300 => 1234,Sales
+        '';
+      };
+      assertions = [
+        ''
+          pbx: destinations that do not exist:
+            pbx.extensions."202".busy: voicemail 301@sales
+        ''
+      ];
+    };
+
     # Asterisk keeps 79 bytes of a caller ID name; each of these characters
     # takes 3
     extensionNameOf79Bytes = {

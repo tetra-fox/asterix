@@ -966,6 +966,41 @@
       assertion = "pjsip.endpoints.101.mailboxes: 102@default";
     };
 
+    # the mailboxes of voicemail.conf's raw text count by name
+    mwiForMailboxInExtraConfig = {
+      module = {config, ...}: {
+        services.asterisk = {
+          voicemail.mailboxes."101".pin = config.lib.asterisk.secret "/run/secrets/vm";
+          pjsip.endpoints."101".mailboxes = [
+            "200@sales"
+            "201@sales"
+          ];
+          extraConfig."voicemail.conf" = ''
+            [sales]
+            200 => 1234,Sales ; the shop
+          '';
+        };
+      };
+      assertions = [
+        ''
+          services.asterisk: PJSIP endpoints reference voicemail boxes that are not defined:
+            pjsip.endpoints.101.mailboxes: 201@sales
+        ''
+      ];
+    };
+
+    # an included file can define any mailbox
+    mwiForMailboxInIncludedFile = {
+      module = {config, ...}: {
+        services.asterisk = {
+          voicemail.mailboxes."101".pin = config.lib.asterisk.secret "/run/secrets/vm";
+          pjsip.endpoints."101".mailboxes = ["200@sales"];
+          includes."voicemail.conf" = ["/var/lib/asterisk/voicemail-local.conf"];
+        };
+      };
+      assertions = [];
+    };
+
     provisioningMoved = {
       module.services.asterisk.provisioning.listenAddress = "10.0.20.10";
       assertion = "Phone provisioning moved to pbx.phones, in nixosModules.pbx.";

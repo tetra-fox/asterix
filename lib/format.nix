@@ -386,6 +386,14 @@ in rec {
     then throw "asterisk config: include path contains a line break"
     else ''${directive} "${escapeValue i.file}"'';
 
+  # whether a file reads other files, through `includes` or a directive in its
+  # raw text
+  includesFiles = {
+    includes ? [],
+    extraConfig ? "",
+  }:
+    includes != [] || builtins.any (directive: hasInfix directive extraConfig) ["#include" "#tryinclude" "#exec"];
+
   # names of a file's sections at runtime: the ones in `sections` and the
   # section headers in its raw text, or null when it includes other files,
   # which can define any section
@@ -394,7 +402,7 @@ in rec {
     includes ? [],
     extraConfig ? "",
   }:
-    if includes != [] || builtins.any (directive: hasInfix directive extraConfig) ["#include" "#tryinclude" "#exec"]
+    if includesFiles {inherit includes extraConfig;}
     then null
     else
       lib.mapAttrsToList (id: section: section.name or id) sections

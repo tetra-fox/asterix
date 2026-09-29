@@ -1026,6 +1026,12 @@
       assertion = "services.asterisk.queues.queues: names longer than 79 bytes, which Asterisk cuts, so Queue() never finds them: ${lib.strings.replicate 80 "q"}.";
     };
 
+    # app_queue reads a section called general in any case as its settings
+    queueNamedGeneralInAnotherCase = {
+      module.services.asterisk.queues.queues.General.members = ["PJSIP/101"];
+      assertion = "services.asterisk.queues.queues: `general` is reserved, in any case: General.";
+    };
+
     # Asterisk waits its default of 5 seconds instead
     queueRetryZeroThrows = {
       module.services.asterisk.queues.queues.support.retry = 0;

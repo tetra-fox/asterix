@@ -124,6 +124,9 @@
   # that makes the next character literal
   escapeField = lib.replaceStrings ["\\" "," "\"" "(" ")" "[" "]"] ["\\\\" "\\," "\\\"" "\\(" "\\)" "\\[" "\\]"];
 
+  # app_queue takes a section called general in any case for its settings
+  # (apps/app_queue.c reload_queues)
+  reserved = builtins.filter (name: lib.toLower name == "general") (builtins.attrNames qcfg.queues);
   # queues.conf keeps the first 79 bytes of a queue's name (main/config.c
   # struct ast_category), and Queue() looks for the whole name
   longNames = builtins.filter (name: builtins.stringLength name > 79) (builtins.attrNames qcfg.queues);
@@ -172,7 +175,8 @@ in {
       '';
       description = ''
         Call queues, used as `Queue(support)` in the dialplan. Asterisk keeps
-        79 bytes of a queue's name.
+        79 bytes of a queue's name, and takes `general`, in any case, for its
+        settings.
       '';
     };
   };
@@ -203,8 +207,8 @@ in {
 
     assertions = [
       {
-        assertion = !(qcfg.queues ? general);
-        message = "services.asterisk.queues.queues: `general` is reserved.";
+        assertion = reserved == [];
+        message = "services.asterisk.queues.queues: `general` is reserved, in any case: ${lib.concatStringsSep ", " reserved}.";
       }
       {
         assertion = longNames == [];

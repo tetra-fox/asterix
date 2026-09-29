@@ -1,20 +1,12 @@
-# Invalid configurations must fail evaluation with a clear message.
-#
-# Each case evaluates the module with a small configuration and expects a
-# substring in a failed assertion (`assertion`), in a warning (`warning`), or
-# evaluation of the generated files to throw (`throws`). The result is the
-# list of cases that did not behave as expected.
+# Invalid configurations must fail evaluation with a clear message. The
+# result is the list of cases that did not behave as expected (see
+# checkCases in eval-lib.nix).
 {
   pkgs,
   self,
 }: let
   inherit (pkgs) lib;
-  inherit
-    (import ./eval-lib.nix {inherit pkgs self;})
-    evalConfig
-    failedAssertions
-    throws
-    ;
+  inherit (import ./eval-lib.nix {inherit pkgs self;}) checkCases;
 
   # A valid baseline each case breaks in one place.
   base = {config, ...}: {
@@ -568,36 +560,5 @@
       throws = true;
     };
   };
-
-  check = name: case: let
-    config = evalConfig [
-      base
-      case.module
-    ];
-    failed = failedAssertions config;
-    inherit (config) warnings;
-    has = needle: haystack: builtins.any (lib.hasInfix needle) haystack;
-    problems =
-      lib.optional (case ? assertion && !(has case.assertion failed)) {
-        expectedAssertion = case.assertion;
-        inherit failed;
-      }
-      ++ lib.optional (case ? assertions && failed != case.assertions) {
-        expectedAssertions = case.assertions;
-        inherit failed;
-      }
-      ++ lib.optional (case ? warning && !(has case.warning warnings)) {
-        expectedWarning = case.warning;
-        inherit warnings;
-      }
-      ++ lib.optional (case ? warnings && warnings != case.warnings) {
-        expectedWarnings = case.warnings;
-        inherit warnings;
-      }
-      ++ lib.optional (case.throws or false && !(throws config.services.asterisk.renderedFiles)) {
-        expectedThrow = true;
-      };
-  in
-    lib.optional (problems != []) {${name} = problems;};
 in
-  lib.concatLists (lib.mapAttrsToList check cases)
+  checkCases base cases

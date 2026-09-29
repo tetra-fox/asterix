@@ -344,7 +344,9 @@
           };
           aorSettings = settingsOption "aor";
         };
-      config.identify.match = mkIf config.matchProviderHost [config.host];
+      # the whole identify is conditional: an identify section that matches
+      # nothing is an error in Asterisk
+      config.identify = mkIf config.matchProviderHost {match = [config.host];};
     }
   );
 

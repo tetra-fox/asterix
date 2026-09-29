@@ -139,6 +139,18 @@
         context = "internal";
       };
     };
+    # a trunk that matches no address has no identify section, which Asterisk
+    # would refuse as matching nothing
+    trunkWithoutAddressMatch = {config, ...}: {
+      services.asterisk.pjsip.trunks.provider = {
+        host = "203.0.113.5";
+        username = "5551000";
+        password = config.lib.asterisk.secret "/run/secrets/trunk";
+        context = "internal";
+        register = false;
+        matchProviderHost = false;
+      };
+    };
     # a digest after its algorithm must have that algorithm's length
     sha256Digest = {config, ...}: {
       services.asterisk.pjsip.endpoints."101".auth.settings.password_digest = "SHA-256:${

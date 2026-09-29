@@ -115,6 +115,15 @@
     }
     // device.settings;
 
+  # adapters with a plain admin password (P2) outside the 4 to 30 characters
+  # V2 hardware takes; a secret's length is only known at runtime
+  invalidAdminPasswords = attrNames (filterAttrs (_: device: let
+    p2 = (commonSettings // device.settings).P2 or null;
+    length = builtins.stringLength (toString p2);
+  in
+    p2 != null && !secrets.isSecret p2 && (length < 4 || length > 30))
+  cfg.devices);
+
   escapeXml = lib.replaceStrings ["&" "<" ">" "\"" "'"] ["&amp;" "&lt;" "&gt;" "&quot;" "&apos;"];
 
   # secrets become placeholders, which the provisioning service XML-escapes
@@ -177,7 +186,8 @@ in {
       description = ''
         Password of the adapters' web interface (P2), normally a secret
         reference. A plain string or integer is stored world-readable in the
-        Nix store and triggers a warning. HT801 V2 requires 4 to 30 characters.
+        Nix store and triggers a warning. HT801 V2 requires 4 to 30
+        characters; a plain value outside that fails evaluation.
       '';
     };
 
@@ -211,6 +221,10 @@ in {
         {
           assertion = lib.allUnique (map (device: normalizeMac device.mac) (attrValues cfg.devices));
           message = "pbx.phones.grandstream.ht801.devices: MAC addresses must be unique.";
+        }
+        {
+          assertion = invalidAdminPasswords == [];
+          message = "pbx.phones.grandstream.ht801: the admin password (P2) of ${lib.concatStringsSep ", " invalidAdminPasswords} is not 4 to 30 characters long, which HT801 V2 hardware requires.";
         }
         {
           assertion = builtins.all (p: builtins.match "P[0-9]+" p != null) (

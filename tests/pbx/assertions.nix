@@ -506,6 +506,34 @@
       warning = "ht801.adminPassword is not a secret reference";
     };
 
+    # V2 hardware takes 4 to 30 characters, from adminPassword or an adapter's
+    # own P2
+    ht801AdminPasswordLength = {
+      module = {
+        imports = [phones];
+        pbx.phones.grandstream.ht801 = {
+          enable = true;
+          adminPassword = 123;
+          devices = lib.mapAttrs (_: device: device // {endpoint = "201";}) {
+            short.mac = "c0:74:ad:00:02:01";
+            four = {
+              mac = "c0:74:ad:00:02:02";
+              settings.P2 = "abcd";
+            };
+            thirty = {
+              mac = "c0:74:ad:00:02:03";
+              settings.P2 = lib.strings.replicate 30 "x";
+            };
+            long = {
+              mac = "c0:74:ad:00:02:04";
+              settings.P2 = lib.strings.replicate 31 "x";
+            };
+          };
+        };
+      };
+      assertions = ["pbx.phones.grandstream.ht801: the admin password (P2) of long, short is not 4 to 30 characters long, which HT801 V2 hardware requires."];
+    };
+
     # systemd drops every connection with no IPAddressAllow= entry
     phonesWithoutNetworks = {
       module = {

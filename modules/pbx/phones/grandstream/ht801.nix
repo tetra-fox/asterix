@@ -86,6 +86,12 @@
 
   endpointOf = device: acfg.pjsip.endpoints.${device.endpoint} or null;
 
+  # the adapter sends one user name, for the endpoint and its aor
+  registers = device: let
+    endpoint = endpointOf device;
+  in
+    endpoint != null && endpoint.auth != null && endpoint.aor != null && endpoint.aor.name == device.endpoint;
+
   commonSettings = filterAttrs (_: v: v != null) (
     {
       P47 = cfg.sipServer; # primary SIP server
@@ -237,23 +243,22 @@ in {
           message = "pbx.phones.grandstream.ht801: settings keys must be P-values such as P1362.";
         }
       ]
-      ++ mapAttrsToList (name: device: let
-        endpoint = endpointOf device;
-      in {
-        assertion = endpoint != null && endpoint.auth != null && endpoint.aor != null && endpoint.aor.name == device.endpoint;
+      ++ mapAttrsToList (name: device: {
+        assertion = registers device;
         message = "pbx.phones.grandstream.ht801.devices.${name}: endpoint `${device.endpoint}` must exist in pjsip.endpoints, have `auth` set and an `aor` named like the endpoint, since the adapter registers with one user name for both.";
       })
       cfg.devices;
 
     pbx.phones = {
       enable = true;
+      # an adapter that cannot register gets no file; the assertion names it
       files = mapAttrs' (_: device:
         nameValuePair "cfg${normalizeMac device.mac}.xml" {
           text = deviceXml device;
           escape = "xml";
           inherit (device) allowedAddress;
         })
-      cfg.devices;
+      (filterAttrs (_: registers) cfg.devices);
     };
   };
 }

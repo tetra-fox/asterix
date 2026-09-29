@@ -734,6 +734,29 @@
       assertion = "an `aor` named like the endpoint";
     };
 
+    # the assertion, not an error from the file of an adapter whose endpoint
+    # does not exist or has no auth
+    ht801EndpointMissing = {
+      module = {
+        services.asterisk.pjsip.endpoints.kitchen.context = "pbx-internal";
+        pbx.phones = {
+          listenAddress = "10.0.20.10";
+          allowedNetworks = ["10.0.20.0/24"];
+          grandstream.ht801 = {
+            enable = true;
+            devices = {
+              "299".mac = "c0:74:ad:00:02:99";
+              kitchen.mac = "c0:74:ad:00:02:98";
+            };
+          };
+        };
+      };
+      assertions = [
+        "pbx.phones.grandstream.ht801.devices.299: endpoint `299` must exist in pjsip.endpoints, have `auth` set and an `aor` named like the endpoint, since the adapter registers with one user name for both."
+        "pbx.phones.grandstream.ht801.devices.kitchen: endpoint `kitchen` must exist in pjsip.endpoints, have `auth` set and an `aor` named like the endpoint, since the adapter registers with one user name for both."
+      ];
+    };
+
     ivrDestinations = {
       module.pbx = {
         ivrs.main = {

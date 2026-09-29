@@ -1,7 +1,7 @@
 # Core service behaviour with a purely freeform (layer 1) configuration: boot,
-# config loading, secrets, runtime file permissions, sandboxing without
-# relaxations, the CLI wrapper for users in and out of the asterisk group, a
-# crash that leaves no core dump.
+# config loading, codecs from several modules, secrets, runtime file
+# permissions, sandboxing without relaxations, the CLI wrapper for users in
+# and out of the asterisk group, a crash that leaves no core dump.
 {
   pkgs,
   self,
@@ -20,6 +20,9 @@ pkgs.testers.runNixOSTest {
         fixed.vm-101 = "1234";
         random = ["sip-101"];
       })
+      # codecs of endpoint 101 from further modules (D22)
+      {services.asterisk.settings."pjsip.conf"."101".allow = pkgs.lib.mkAfter ["gsm"];}
+      {services.asterisk.settings."pjsip.conf"."101".allow = pkgs.lib.mkBefore ["alaw"];}
     ];
 
     users.users = {
@@ -41,6 +44,9 @@ pkgs.testers.runNixOSTest {
     pbx.wait_for_unit("asterisk.service")
 
     with subtest("configuration is loaded"):
+        # the codecs other modules added, in the order they asked for (D22)
+        codecs = ast("pjsip show endpoint 101")
+        assert re.search(r"^ allow +: \(alaw\|g722\|ulaw\|gsm\)$", codecs, re.M), codecs
         endpoints = ast("pjsip show endpoints")
         assert "Endpoint:  101" in endpoints and "Endpoint:  102" in endpoints, endpoints
         dialplan = ast("dialplan show phones")

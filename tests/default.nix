@@ -67,6 +67,7 @@ in
     # commands and calls on Asterisk in the build sandbox (tests/campaign/probe.nix)
     probe = import ./probe.nix {inherit pkgs self;};
     roundtrip = import ./roundtrip.nix {inherit pkgs self;};
+    codec-order = import ./codec-order.nix {inherit pkgs self;};
     pbx-destinations = import ./pbx/destinations.nix {inherit pkgs self;};
     pbx-numbering = import ./pbx/numbering.nix {inherit pkgs self;};
 

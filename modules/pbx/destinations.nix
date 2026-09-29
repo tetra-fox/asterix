@@ -27,6 +27,11 @@
     (concatLists (mapAttrsToList (name: group: use "pbx.ringGroups.${name}.noAnswer" group.noAnswer) cfg.ringGroups))
     (concatLists (mapAttrsToList (name: queue: use "pbx.queues.${name}.noAnswer" queue.noAnswer) cfg.queues))
     (concatLists (mapAttrsToList (number: route: concatMap (field: use ''pbx.inbound."${number}".${field}'' route.${field}) ["destination" "open" "closed"]) cfg.inbound))
+    (concatLists (mapAttrsToList (name: ivr:
+      concatLists (mapAttrsToList (key: use ''pbx.ivrs.${name}.options."${key}"'') ivr.options)
+      ++ use "pbx.ivrs.${name}.noInput" ivr.noInput
+      ++ use "pbx.ivrs.${name}.invalid" ivr.invalid)
+    cfg.ivrs))
   ];
 
   exists = dest:
@@ -38,6 +43,8 @@
     then cfg.queues ? ${dest.queue}
     else if dest ? conference
     then cfg.conferences ? ${dest.conference}
+    else if dest ? ivr
+    then cfg.ivrs ? ${dest.ivr}
     else if dest ? voicemail
     then let
       box = pbxLib.splitMailbox dest.voicemail.mailbox;

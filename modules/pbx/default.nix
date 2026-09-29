@@ -1,14 +1,15 @@
-# pbx: extensions, ring groups, queues, conferences, business hours, routes
-# and phone provisioning, written into the options of the core module
-# (services.asterisk), which stays usable on its own. Every object gets a
-# context of its own, pbx-<kind>-<name>, and phones dial from pbx-internal.
+# pbx: extensions, ring groups, queues, conferences, voice menus, paging,
+# business hours, routes and phone provisioning, written into the options of
+# the core module (services.asterisk), which stays usable on its own. Every
+# object gets a context of its own, pbx-<kind>-<name>, and phones dial from
+# pbx-internal.
 {
   config,
   lib,
   ...
 }: let
   cfg = config.pbx;
-  objects = ["extensions" "ringGroups" "queues" "conferences" "hours" "inbound"];
+  objects = ["extensions" "ringGroups" "queues" "conferences" "ivrs" "paging" "hours" "inbound"];
 in {
   # the core by the path the flake exports it as, so importing both is fine
   imports = [
@@ -17,7 +18,9 @@ in {
     ./destinations.nix
     ./extensions.nix
     ./hours.nix
+    ./ivrs.nix
     ./numbering.nix
+    ./paging.nix
     ./phones
     ./queues.nix
     ./ring-groups.nix

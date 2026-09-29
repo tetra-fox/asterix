@@ -51,6 +51,8 @@
     ++ numbered "ringGroups" "ringgroup"
     ++ numbered "queues" "queue"
     ++ numbered "conferences" "conference"
+    ++ numbered "ivrs" "ivr"
+    ++ numbered "paging" "paging"
     ++ optional (cfg.voicemailMenu != null) {
       number = cfg.voicemailMenu;
       owner = "pbx.voicemailMenu";

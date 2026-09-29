@@ -50,6 +50,10 @@ in rec {
       type = types.str;
       description = "Conference of {option}`pbx.conferences`.";
     };
+    ivr = mkOption {
+      type = types.str;
+      description = "Voice menu of {option}`pbx.ivrs`.";
+    };
     voicemail = mkOption {
       type = types.coercedTo types.str (mailbox: {inherit mailbox;}) mailboxType;
       example = "200";
@@ -95,6 +99,8 @@ in rec {
     then [(goto (objectContext "queue" dest.queue))]
     else if dest ? conference
     then [(goto (objectContext "conference" dest.conference))]
+    else if dest ? ivr
+    then [(goto (objectContext "ivr" dest.ivr))]
     else if dest ? voicemail
     then let
       box = splitMailbox dest.voicemail.mailbox;

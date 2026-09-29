@@ -187,6 +187,15 @@ def asterisk(machine, command):
     return machine.succeed(f"asterisk -rx {shlex.quote(command)}")
 
 
+def netem(machine, interface, *settings):
+    """Delay, loss, reordering and the like, as tc-netem(8) takes them, on
+    what `machine` sends out of `interface`; no settings removes them."""
+    if settings:
+        machine.succeed(f"tc qdisc replace dev {interface} root netem {shlex.join(settings)}")
+    else:
+        machine.succeed(f"tc qdisc del dev {interface} root")
+
+
 CHANNEL_FIELDS = [
     "name", "context", "exten", "priority", "state", "app", "data", "caller",
     "accountcode", "peeraccount", "amaflags", "duration", "bridge", "uniqueid",

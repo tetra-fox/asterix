@@ -4,8 +4,9 @@
 # PIN from a secret as DTMF, a hint lights a busy lamp, a ring group cancels
 # the phones that did not answer, one extension rings on two devices, call
 # forwarding is kept in astdb across a restart, a ringing call is picked up
-# from another phone, an IVR reads RFC 4733 and SIP INFO DTMF, codecs with
-# different sample rates are transcoded and a call is recorded to the spool
+# from another phone, an IVR reads RFC 4733 and SIP INFO DTMF, a call
+# survives a lossy network, codecs with different sample rates are transcoded
+# and a call is recorded to the spool
 {
   pkgs,
   self,
@@ -338,6 +339,18 @@ in
                 wait_bridged(pbx, caller.user, "202")
                 caller.hangup()
                 wait_idle(pbx)
+
+        with subtest("a call survives loss and delay on the phones' network"):
+            # both ways: netem only shapes what leaves an interface
+            for machine in (pbx, phones):
+                netem(machine, "eth1", "delay", "150ms", "20ms", "loss", "10%")
+            phone["201"].call("202")
+            wait_bridged(pbx, "201", "202")
+            wait_for_media_both_ways(pbx, [phone["201"], phone["202"]])
+            phone["201"].hangup()
+            wait_idle(pbx)
+            for machine in (pbx, phones):
+                netem(machine, "eth1")
 
         with subtest("phones without a common codec are transcoded, 8 kHz to 16 kHz"):
             phone["207"].call("208")

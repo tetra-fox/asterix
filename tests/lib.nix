@@ -593,6 +593,14 @@ in
       '';
     };
 
+    # Asterisk strips comments from directives too, and reads `\;` as `;`
+    testSemicolonInIncludeIsEscaped = {
+      expr = render {} {includes = ["/var/lib/asterisk/a;b.conf"];};
+      expected = ''
+        #include "/var/lib/asterisk/a\;b.conf"
+      '';
+    };
+
     testEmptyDocument = {
       expr = render {} {};
       expected = "\n";

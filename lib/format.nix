@@ -384,7 +384,7 @@ in rec {
   in
     if hasNewline i.file
     then throw "asterisk config: include path contains a line break"
-    else ''${directive} "${i.file}"'';
+    else ''${directive} "${escapeValue i.file}"'';
 
   # names of a file's sections at runtime: the ones in `sections` and the
   # section headers in its raw text, or null when it includes other files,

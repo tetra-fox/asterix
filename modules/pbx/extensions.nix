@@ -65,13 +65,21 @@
         type = types.nullOr pbxLib.destination;
         default = null;
         defaultText = lib.literalMD "the mailbox with the unavailable greeting, or hangup without a mailbox";
-        description = "Where a call goes when nobody answers or the phone is not registered.";
+        description = ''
+          Where a call goes when nobody answers within `ringTime`, also when
+          the phone rings while in another call (call waiting), or when the
+          phone is not registered.
+        '';
       };
       busy = mkOption {
         type = types.nullOr pbxLib.destination;
         default = null;
         defaultText = lib.literalMD "the mailbox with the busy greeting, or hangup without a mailbox";
-        description = "Where a call goes when the phone is busy, or every device of the extension is.";
+        description = ''
+          Where a call goes when the phone answers busy, as a phone in a call
+          does without call waiting, or when every device of the extension
+          does.
+        '';
       };
     };
   });

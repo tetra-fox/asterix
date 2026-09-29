@@ -13,7 +13,10 @@
 # characters, some not ASCII, plays. Paging: twenty members hear the pager,
 # who hears nobody unless the page is duplex, the pager's own extension is
 # left out, a member that does not answer rings until the page ends, and
-# headers the configuration sets reach the phones.
+# headers the configuration sets reach the phones. Call pickup, with groups
+# set on the endpoints: a phone outside a ring group takes its call with *8
+# and every member stops ringing, and of two calls ringing in one pickup
+# group *8 takes the one that rang first, then the other.
 #
 #   pbx     the trunks provider (pbx.outbound's) and second lead to carrier-a
 #           and carrier-b on the phones' machine
@@ -224,6 +227,17 @@ in
                 qualifyFrequency = 5;
               })
               carrierPorts;
+            # pickup groups, set on the endpoints as pbx.extensions has none: 209
+            # picks up calls to the ring group everyone, 213 and 214 to 211 and 212
+            endpoints =
+              lib.genAttrs (range 201 208) (_: {settings.named_call_group = "floor";})
+              // {
+                "209".settings.named_pickup_group = "floor";
+                "211".settings.named_call_group = "desk";
+                "212".settings.named_call_group = "desk";
+                "213".settings.named_pickup_group = "desk";
+                "214".settings.named_pickup_group = "desk";
+              };
           };
 
           # where the destinations of the groups and menus lead
@@ -568,6 +582,39 @@ in
             for p in paged:
                 wait_hears(p, [boss.tone] + [q.tone for q in paged if q is not p])
             boss.hangup()
+            wait_idle(pbx)
+
+        with subtest("a phone outside a ring group takes its call with *8, and every member stops ringing"):
+            ringing = members(201, 208)
+            invites = {p.name: p.requests("INVITE") for p in ringing}
+            cancels = {p.name: p.requests("CANCEL") for p in ringing}
+            boss.call("610")
+            for p in ringing:
+                p.wait_request("INVITE", after=invites[p.name])
+            picker = phone["209"]
+            picker.call("*8")
+            wait_bridged(pbx, "200", "209")
+            for p in ringing:
+                p.wait_request("CANCEL", after=cancels[p.name])
+            hear_each_other(boss, picker)
+            boss.hangup()
+            wait_idle(pbx)
+
+        with subtest("two calls ring at once in one pickup group: *8 takes the one that rang first, then the other"):
+            callee = {p.name: p for p in members(211, 212)}
+            invites = {name: p.requests("INVITE") for name, p in callee.items()}
+            second = phone["215"]
+            boss.call("211")
+            callee["211"].wait_request("INVITE", after=invites["211"])
+            second.call("212")
+            callee["212"].wait_request("INVITE", after=invites["212"])
+            phone["213"].call("*8")
+            wait_bridged(pbx, "200", "213")
+            phone["214"].call("*8")
+            wait_bridged(pbx, "215", "214")
+            hear_each_other(boss, phone["213"])
+            hear_each_other(second, phone["214"])
+            cli_parallel([(boss, "call hangup_all"), (second, "call hangup_all")])
             wait_idle(pbx)
       '';
   }

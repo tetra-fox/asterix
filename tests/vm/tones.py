@@ -20,9 +20,11 @@ TOLERANCE = 20
 
 def recorded(phone):
     """Bytes of audio `phone` has recorded so far, a mark for heard()"""
-    # baresip only creates its recording once a call's audio starts
+    # baresip only creates its recording once a call's audio starts, and pjsua
+    # writes its recording through a stdio buffer, so the file stays empty,
+    # header included, until that buffer first fills
     size = phone.machine.succeed(f"if test -e {phone.recording}; then stat -c %s {phone.recording}; else echo {HEADER}; fi")
-    return int(size) - HEADER
+    return max(int(size) - HEADER, 0)
 
 
 def sample_rate(phone):
@@ -34,6 +36,8 @@ def heard(phone, start, end=None):
     """The tones in each 100 ms `phone` heard between two marks, loudest first;
     an empty list is silence"""
     end = recorded(phone) if end is None else end
+    if end <= start:
+        return []
     # dd reads just this range; with tail | head, tail fails on the closed pipe
     # once the phone has recorded a pipe buffer past the range
     raw = base64.b64decode(
@@ -79,12 +83,14 @@ def same(found, expected):
 def wait_hears(phone, expected, seconds=1.0, timeout=30):
     """Wait until every 100 ms of the last `seconds` of `phone`'s calls held
     exactly the tones `expected`, in Hz."""
-    rate = sample_rate(phone)
-    span = round(seconds / WINDOW) * round(rate * WINDOW) * 2
     deadline = time.time() + timeout
+    windows = []
     while True:
         end = recorded(phone)
-        windows = heard(phone, end - span, end) if end >= span else []
+        # the header, which holds the rate, comes with the first audio
+        if end > 0:
+            span = round(seconds / WINDOW) * round(sample_rate(phone) * WINDOW) * 2
+            windows = heard(phone, end - span, end) if end >= span else []
         if windows and all(same(window, expected) for window in windows):
             return windows
         if time.time() > deadline:

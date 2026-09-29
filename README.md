@@ -210,6 +210,60 @@ exten => 800,1,Answer()
 The helpers `var` and `app` are in `config.lib.asterisk.dialplan`, and in
 `asterix.lib` outside a NixOS configuration.
 
+## PBX layer
+
+`nixosModules.pbx` adds `pbx.*` on top of the options above: extensions with
+voicemail, ring groups, queues, conference rooms, opening hours and routes to
+and from trunks, the way a PBX admin thinks of them. It imports the core, so
+it replaces `nixosModules.default` in `imports`.
+
+```nix
+{ config, ... }:
+let
+  secret = name: config.lib.asterisk.secret config.sops.secrets.${name}.path;
+in
+{
+  imports = [ asterix.nixosModules.pbx ];
+
+  pbx = {
+    enable = true;
+    extensions = {
+      "201" = { name = "Reception"; password = secret "sip-201"; voicemail.pin = secret "vm-201"; };
+      "202" = { name = "Sales"; password = secret "sip-202"; voicemail.pin = secret "vm-202"; };
+    };
+    ringGroups.front = { members = [ "201" "202" ]; noAnswer.voicemail = "201"; };
+    hours.office = {
+      timezone = "America/Los_Angeles";
+      open = [ { days = "mon-fri"; time = "09:00-17:00"; } ];
+      closeEarly = "*28";
+    };
+    inbound."5551000" = {
+      trunk = "provider";
+      hours = "office";
+      open.ringGroup = "front";
+      closed.voicemail = "201";
+    };
+    outbound = { prefix = "9"; trunk = "provider"; callerId = "5551000"; };
+  };
+
+  # trunks, transports and everything else stay core options
+  services.asterisk.pjsip = {
+    transports.udp = { };
+    trunks.provider = { host = "sip.provider.example"; username = "5551000"; password = secret "sip-trunk"; };
+  };
+}
+```
+
+Each object becomes a context of its own, `pbx-<kind>-<name>`, with a comment
+saying which option it came from, and phones dial from `pbx-internal`. The
+layer only writes core options, as defaults, so anything it generates can be
+changed with the core options or `settings`. Evaluation fails when a number
+has two owners or a destination, trunk or member does not exist.
+
+Emergency numbers have no defaults, since they depend on where the PBX is:
+see `pbx.emergency`. [small-office.nix](examples/small-office.nix) is a
+complete example.
+
 ## Development
 
 `nix flake check` runs every check, including NixOS VM tests. `nix fmt`

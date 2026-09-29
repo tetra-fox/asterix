@@ -539,6 +539,12 @@
       module.services.asterisk.settings."rtp.conf".general.rtpstart.nested = 1;
       throws = true;
     };
+
+    # Asterisk waits its default of 5 seconds instead
+    queueRetryZeroThrows = {
+      module.services.asterisk.queues.queues.support.retry = 0;
+      throws = true;
+    };
   };
 in {
   run = checkCases base;

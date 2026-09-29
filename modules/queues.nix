@@ -68,7 +68,8 @@
         description = "Seconds a member's phone rings before the next attempt.";
       };
       retry = mkOption {
-        type = types.nullOr types.ints.unsigned;
+        # Asterisk replaces 0 with its default of 5
+        type = types.nullOr types.ints.positive;
         default = null;
         description = "Seconds to wait before trying all members again.";
       };

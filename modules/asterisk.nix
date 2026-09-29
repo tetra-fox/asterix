@@ -438,17 +438,19 @@
   cliWrapper = pkgs.writeShellApplication {
     name = "asterisk";
     text = ''
+      # read the options as Asterisk's getopt does (main/asterisk.c), which
+      # takes `-C -r` as a file named -r and stops at `--`; -r, -R and -x
+      # connect to the daemon, -V and -h print and exit
       remote=0
-      for arg in "$@"; do
-        case $arg in
-          --*) ;;
-          -*[rR]*) remote=1 ;;
+      while getopts ":BC:cde:FfG:ghIiL:M:mnpqRrs:TtU:VvWXx:" option; do
+        case $option in
+          r | R | x) remote=1 ;;
+          V | h) exec ${asteriskBin} "$@" ;;
+          # any other option, unknown or missing its argument, decides nothing
+          *) ;;
         esac
       done
       if [ "$remote" = 0 ]; then
-        case ''${1:-} in
-          -V | -h) exec ${asteriskBin} "$@" ;;
-        esac
         echo "asterisk: this wrapper only connects to the running daemon; use -r, -rvvv or -rx \"command\"." >&2
         echo "The daemon itself is managed by systemd: systemctl status asterisk" >&2
         exit 1

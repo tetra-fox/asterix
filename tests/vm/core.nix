@@ -1,5 +1,6 @@
 # Core service behaviour with a purely freeform (layer 1) configuration: boot,
-# config loading, secrets, runtime file permissions, CLI wrapper, sandboxing.
+# config loading, secrets, runtime file permissions, sandboxing, the CLI
+# wrapper for users in and out of the asterisk group.
 {
   pkgs,
   self,
@@ -19,6 +20,14 @@ pkgs.testers.runNixOSTest {
         random = ["sip-101"];
       })
     ];
+
+    users.users = {
+      operator = {
+        isNormalUser = true;
+        extraGroups = ["asterisk"];
+      };
+      visitor.isNormalUser = true;
+    };
   };
 
   testScript = ''
@@ -92,6 +101,27 @@ pkgs.testers.runNixOSTest {
         pbx.succeed("rasterisk -x 'core show uptime'")
         pbx.fail("asterisk -c")
         pbx.succeed("asterisk -V")
+        # -x implies -r to Asterisk
+        pbx.succeed("asterisk -x 'core show uptime'")
+        # the control socket takes members of the asterisk group, and no one else
+        pbx.succeed("su -l operator -c \"asterisk -rx 'core show uptime'\"")
+        pbx.succeed("su -l operator -c \"rasterisk -x 'core show uptime'\"")
+        refused = pbx.fail("su -l visitor -c \"asterisk -rx 'core show uptime'\" 2>&1")
+        assert "Unable to connect to remote asterisk" in refused, refused
+        # whatever would start a daemon is refused, whoever asks, also an -r
+        # that Asterisk does not read as an option
+        main = pbx.succeed("systemctl show -P MainPID asterisk.service").strip()
+        daemons = ["", "-c", "-- -r", "-C -r", "-Cr"]
+        for user in ["root", "operator", "visitor"]:
+            for arguments in daemons:
+                pbx.fail(f"su -l {user} -c 'asterisk {arguments}'")
+        assert pbx.succeed("pgrep -x asterisk").split() == [main]
+        # and while the service is stopped, when Asterisk finds none running
+        pbx.succeed("systemctl stop asterisk.service")
+        for arguments in daemons:
+            pbx.fail(f"asterisk {arguments}")
+        pbx.fail("pgrep -x asterisk")
+        pbx.succeed("systemctl start asterisk.service")
 
     with subtest("reload re-renders the configuration and rotated secrets"):
         pbx.succeed("printf 'rotated;pw' > /run/test-secrets/sip-102")

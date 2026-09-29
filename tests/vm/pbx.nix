@@ -1,12 +1,13 @@
 # The pbx layer on a running system: opening hours in their time zone with
-# holidays and the close-early toggle, inbound calls routed by them, a hunt
-# group ringing one phone after the other, an external ring group member who
-# has to press 1 before the call is theirs, emergency calls that notify two
-# extensions without waiting for them, the busy and no-answer destinations of
-# an extension, a voice menu driven by DTMF, and pages, which leave out the
-# caller and members in a call. Wherever an extension is called, all of its
-# devices ring. A second Asterisk plays the SIP provider and the mobile phone
-# of the external member.
+# holidays and the close-early toggle, whose busy lamp follows it within 2 s,
+# inbound calls routed by them, a hunt group ringing one phone after the
+# other, an external ring group member who has to press 1 before the call is
+# theirs, emergency calls that notify two extensions without waiting for them,
+# the busy and no-answer destinations of an extension, a voice menu driven by
+# DTMF, and pages, which leave out the caller and members in a call. Wherever
+# an extension is called, all of its devices ring, and its busy lamp shows it
+# ringing and free again within 2 s. A second Asterisk plays the SIP provider
+# and the mobile phone of the external member.
 #
 #   pbx       10.2.0.10, clock set by the test
 #   provider  10.2.0.5
@@ -341,6 +342,15 @@ in
         def calls_of(endpoint):
             return [c for c in channels(pbx) if endpoint_of(c["name"]) == endpoint]
 
+        def lamp(number, note):
+            """Capture times of the NOTIFYs that showed `note` on reception's
+            busy lamp for `number`."""
+            return sip_times(pbx, r"\ANOTIFY sip:201@", f'entity="sip:{re.escape(number)}@', f"<note>{note}</note>")
+
+        def answered(phone):
+            """Capture time of the answer to the last call `phone` placed."""
+            return sip_times(pbx, r"\ASIP/2\.0 200 ", r"^CSeq: \d+ INVITE", rf"^From: .*sip:{phone.user}@")[-1]
+
         with subtest("the trunk and the phones register"):
             pbx.wait_until_succeeds("asterisk -rx 'pjsip show registrations' | grep -q 'Registered'", timeout=180)
             pbx.wait_until_succeeds("asterisk -rx 'pjsip show contacts' | grep -q 'provider/sip:10.2.0.5.* Avail'", timeout=180)
@@ -348,12 +358,16 @@ in
             for phone in (reception, sales, boss, warehouse, sales_mobile, dock):
                 phone.wait_registered()
             reception.watch("*28")
+            # an extension with two devices
+            reception.watch("202")
 
         with subtest("closing early from a phone sends inbound calls to the closed destination"):
             boss.call("*28")
             boss.wait_disconnected()
             pbx.succeed("asterisk -rx 'core show hint *28' | grep -q 'State:InUse'")
             reception.wait_count("<note>On the phone</note>", 1)
+            # the toggle sets the state right after it answers
+            within(2, answered(boss), lamp("*28", "On the phone"))
             assert hours() == "closed"
             before = {p.name: p.requests("INVITE") for p in (reception, sales)}
             provider.succeed("asterisk -rx 'channel originate PJSIP/5551000 extension s@feed'")
@@ -363,9 +377,12 @@ in
 
         with subtest("reopening sends them to the ring group"):
             disconnects = boss.disconnects()
+            lit = len(lamp("*28", "Ready"))
             boss.call("*28")
             boss.wait_disconnected(after=disconnects)
             pbx.succeed("asterisk -rx 'core show hint *28' | grep -q 'State:Idle'")
+            retry(lambda _: len(lamp("*28", "Ready")) > lit, timeout_seconds=30)
+            within(2, answered(boss), lamp("*28", "Ready"))
             assert hours() == "open"
             before = {p.name: p.requests("INVITE") for p in (reception, sales, sales_mobile, boss)}
             provider.succeed("asterisk -rx 'channel originate PJSIP/5551000 extension s@feed'")
@@ -443,13 +460,23 @@ in
             boss.hangup()
             wait_idle(pbx)
 
-        with subtest("a call to an extension rings all of its devices, then its no-answer destination"):
-            invites = {p.name: p.requests("INVITE") for p in (sales, sales_mobile)}
+        with subtest("a call to an extension rings all of its devices, then its no-answer destination, and its busy lamp follows"):
+            devices = (sales, sales_mobile)
+            invites = {p.name: p.requests("INVITE") for p in devices}
+            rang, freed = len(lamp("202", "Ringing")), len(lamp("202", "Ready"))
+            # a device's ringing comes first, then the pbx's to 203
+            ringing = (r"\ASIP/2\.0 180 ", r"^To: .*sip:202@")
+            rings = len(sip_times(pbx, *ringing))
             boss.call("202")
-            for device in (sales, sales_mobile):
+            for device in devices:
                 device.wait_request("INVITE", after=invites[device.name], timeout=30)
+            retry(lambda _: len(lamp("202", "Ringing")) > rang, timeout_seconds=30)
+            within(2, sip_times(pbx, *ringing)[rings], lamp("202", "Ringing"))
             channel = wait_channel(pbx, "203", app="VoiceMail", timeout=30)
             assert channel["data"] == "202@default,u", channel
+            # the lamp goes out once both devices stopped ringing
+            retry(lambda _: len(lamp("202", "Ready")) > freed, timeout_seconds=30)
+            within(2, sip_times(pbx, r"\ACANCEL sip:202@")[-1], lamp("202", "Ready"))
             boss.hangup()
             wait_idle(pbx)
 

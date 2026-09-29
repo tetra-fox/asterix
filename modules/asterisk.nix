@@ -926,7 +926,9 @@ in {
         Open the ports Asterisk is configured to use: PJSIP transports (UDP
         for `udp`, TCP for `tcp`/`tls`), the RTP port range and any ports
         typed modules add (for example AMI or HTTP when their own
-        `openFirewall` is set).
+        `openFirewall` is set). Transports come from `settings`, where the
+        typed options write them; those written in `extraConfig` or in
+        included files are not opened.
       '';
     };
 

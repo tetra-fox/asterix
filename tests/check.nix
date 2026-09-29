@@ -168,6 +168,15 @@
         "Contents of config file 'pjsip.conf' are invalid and cannot be parsed"
       ];
     };
+    # allow takes any string, and Asterisk drops the endpoint whose list
+    # names a codec it does not know
+    unknownCodec = {
+      module.services.asterisk.pjsip.endpoints."101".allow = lib.mkForce [
+        "g722"
+        "g7222"
+      ];
+      expect = ["Cannot allow unknown format 'g7222'"];
+    };
     # the options load the modules they need, but not what those need
     pjsipWithoutDefaultModules = {
       module.services.asterisk.modules.defaultModules = false;

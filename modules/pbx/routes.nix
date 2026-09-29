@@ -168,13 +168,8 @@
     then "\${EXTEN}"
     else "\${EXTEN:${toString (builtins.stringLength prefix)}}";
 
-  trunkUses =
-    mapAttrsToList (number: route: {
-      where = ''pbx.inbound."${number}".trunk'';
-      inherit (route) trunk;
-    })
-    cfg.inbound
-    ++ optional (cfg.outbound != null) {
+  outboundTrunkUses =
+    optional (cfg.outbound != null) {
       where = "pbx.outbound.trunk";
       inherit (cfg.outbound) trunk;
     }
@@ -182,7 +177,23 @@
       where = "pbx.emergency.trunk";
       inherit (cfg.emergency) trunk;
     };
+  trunkUses =
+    mapAttrsToList (number: route: {
+      where = ''pbx.inbound."${number}".trunk'';
+      inherit (route) trunk;
+    })
+    cfg.inbound
+    ++ outboundTrunkUses;
   unknownTrunks = builtins.filter (use: !(trunks ? ${use.trunk})) trunkUses;
+  # trunks pbx dials as PJSIP/<number>@<trunk>; a ring group without a trunk
+  # of its own uses pbx.outbound's
+  badTrunkNames = builtins.filter (use: pbxLib.breaksDialString use.trunk) (
+    outboundTrunkUses
+    ++ mapAttrsToList (name: group: {
+      where = "pbx.ringGroups.${name}.trunk";
+      inherit (group) trunk;
+    }) (filterAttrs (_: group: group.external != [] && group.trunk != null) cfg.ringGroups)
+  );
 
   unknownHours = builtins.filter (number: cfg.inbound.${number}.hours != null && !(cfg.hours ? ${cfg.inbound.${number}.hours})) (builtins.attrNames cfg.inbound);
   unknownNotify = builtins.filter (extension: !(cfg.extensions ? ${extension})) (lib.optionals (cfg.emergency != null) cfg.emergency.notify);
@@ -271,6 +282,13 @@ in {
           message = ''
             pbx: trunks that are not defined in services.asterisk.pjsip.trunks:
               ${concatMapStringsSep "\n  " (use: "${use.where}: ${use.trunk}") unknownTrunks}
+          '';
+        }
+        {
+          assertion = badTrunkNames == [];
+          message = ''
+            pbx: trunk names that Asterisk would misread in a dial string (they may not contain , ; [ ] " \ ''${ $[ & / or an unclosed parenthesis):
+              ${concatMapStringsSep "\n  " (use: "${use.where}: ${use.trunk}") badTrunkNames}
           '';
         }
         {

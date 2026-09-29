@@ -97,6 +97,10 @@ in rec {
     0 (lib.stringToCharacters name)
     != 0;
 
+  # a trunk in Dial(PJSIP/<number>@<trunk>): Dial splits at & (apps/app_dial.c
+  # dial_exec_full) and chan_pjsip at / (channels/chan_pjsip.c request)
+  breaksDialString = name: breaksContext name || breaksArgument name || builtins.match ".*[&/].*" name != null;
+
   # dial string that calls every contact of an extension; PJSIP/<number>
   # calls only the first reachable one
   devices = number: "\${PJSIP_DIAL_CONTACTS(${number})}";

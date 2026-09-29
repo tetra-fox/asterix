@@ -333,6 +333,43 @@
       assertion = "pbx.ringGroups.front.trunk: provder";
     };
 
+    # pbx dials PJSIP/<number>@<trunk>, which Dial splits at & and chan_pjsip
+    # at /; a trunk calls only arrive on is never dialled
+    dialledTrunkNames = {
+      module = {config, ...}: let
+        trunk = {
+          host = "sip.provider.example";
+          username = "5551000";
+          password = config.lib.asterisk.secret "/run/secrets/trunk";
+        };
+      in {
+        services.asterisk.pjsip.trunks = {
+          "a&b" = trunk;
+          "c/d" = trunk;
+          "e\${f}" = trunk;
+          "in&only" = trunk;
+        };
+        pbx = {
+          outbound.trunk = lib.mkForce "a&b";
+          emergency.trunk = lib.mkForce "e\${f}";
+          ringGroups.front = {
+            external = ["5559000"];
+            trunk = "c/d";
+          };
+          inbound."5552000" = {
+            trunk = "in&only";
+            destination.ringGroup = "front";
+          };
+        };
+      };
+      assertion = ''
+        pbx: trunk names that Asterisk would misread in a dial string (they may not contain , ; [ ] " \ ''${ $[ & / or an unclosed parenthesis):
+          pbx.outbound.trunk: a&b
+          pbx.emergency.trunk: e''${f}
+          pbx.ringGroups.front.trunk: c/d
+      '';
+    };
+
     queueOnlyInPbx = {
       module.pbx.queues.sales.number = "620";
       assertion = "sales are not queues of services.asterisk.queues.queues";

@@ -3,6 +3,8 @@
 {
   pkgs,
   self,
+  # the examples' configurations, whose checks run again without user namespaces
+  examples,
 }: let
   inherit (pkgs) lib;
   inherit (import ./eval-lib.nix {inherit pkgs self;}) evalConfig;
@@ -21,14 +23,12 @@
     };
   };
 
+  configCheckOf = config: lib.findFirst (check: lib.hasPrefix "asterisk-config-check" check.name) (throw "no config check") config.system.checks;
   checkOf = module:
-    lib.findFirst (check: lib.hasPrefix "asterisk-config-check" check.name) (throw "no config check")
-    (
-      evalConfig [
-        base
-        module
-      ]
-    ).system.checks;
+    configCheckOf (evalConfig [
+      base
+      module
+    ]);
 
   # the check on a machine that forbids unprivileged user namespaces, as
   # Ubuntu 24.04 does: the build may not create any below its own
@@ -114,6 +114,14 @@
       withoutUserNamespaces = true;
       expect = ["(to listen below port 1024)"];
     };
+    # AMI only takes ports from 1024 up, whatever the privileges
+    amiBelowPort1024 = {
+      module.services.asterisk.ami = {
+        enable = true;
+        port = 1000;
+      };
+      expect = ["Invalid port number '1000'"];
+    };
     # an assertion reports it first; the check shows that Asterisk refuses
     # the file
     parentAfterChild = {
@@ -140,6 +148,24 @@
     ipv4Addresses.services.asterisk.pjsip.transports = {
       udp.address = "10.0.10.10";
       voip.address = "10.0.20.10";
+    };
+    # [::] and ::1 need no namespace either: the build's loopback interface
+    # has ::1
+    ipv6WildcardAndLoopback.services.asterisk = {
+      pjsip.transports.udp.address = "::";
+      http = {
+        enable = true;
+        address = "::1";
+        tls = {
+          enable = true;
+          certFile = "/var/lib/acme/pbx/cert.pem";
+          keyFile = "/var/lib/acme/pbx/key.pem";
+        };
+      };
+      ami = {
+        enable = true;
+        address = "::1";
+      };
     };
   };
 
@@ -310,5 +336,6 @@ in
     : ${lib.concatMapStringsSep " " (module: "${withoutUserNamespaces (checkOf module)}") (
       lib.attrValues passingWithoutUserNamespaces
     )}
+    : ${lib.concatMapStringsSep " " (config: "${withoutUserNamespaces (configCheckOf config)}") (lib.attrValues examples)}
     touch $out
   ''

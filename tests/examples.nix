@@ -27,6 +27,8 @@
   # the examples take their secrets from sops-nix; nothing is decrypted here
   configs = lib.mapAttrs (_: modules: evalConfig ([(sopsSecrets {})] ++ modules)) examples;
 in {
+  inherit configs;
+
   # evaluation of the whole system, without building it
   problems = lib.concatLists (
     lib.mapAttrsToList (

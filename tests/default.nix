@@ -58,7 +58,10 @@ in
 
     examples = reportFailures "asterisk-examples-eval" examples.problems;
 
-    config-check = import ./check.nix {inherit pkgs self;};
+    config-check = import ./check.nix {
+      inherit pkgs self;
+      examples = examples.configs;
+    };
 
     # commands and calls on Asterisk in the build sandbox (tests/campaign/probe.nix)
     probe = import ./probe.nix {inherit pkgs self;};
@@ -67,6 +70,7 @@ in
 
     examples-config-minimal = examples.derivations.minimal;
     examples-config-household-intercom = examples.derivations.household-intercom;
+    examples-config-household-intercom-ht801 = examples.derivations.household-intercom-ht801;
     examples-config-small-office = examples.derivations.small-office;
 
     vm-core = import ./vm/core.nix {inherit pkgs self;};

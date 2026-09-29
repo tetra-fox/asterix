@@ -79,10 +79,12 @@
           description = "Address receiving a short notification (pager e-mail). Asterisk keeps 79 bytes of it.";
         };
         options = mkOption {
+          # volgain takes a fraction
           type = types.attrsOf (
             types.oneOf [
               types.bool
               types.int
+              types.float
               types.str
             ]
           );

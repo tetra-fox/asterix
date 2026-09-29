@@ -628,7 +628,10 @@ in {
                   pin = config.lib.asterisk.secret "/run/secrets/vm-101";
                   fullName = "Alice";
                   email = "alice@example.org";
-                  options.attach = true;
+                  options = {
+                    attach = true;
+                    volgain = 0.5;
+                  };
                 };
                 "200@sales".pin = config.lib.asterisk.secret "/run/secrets/vm-200";
               };
@@ -642,7 +645,7 @@ in {
       expected = [
         "[general]"
         "[default]"
-        "101 => -${placeholderFor "/run/secrets/vm-101"},Alice,alice@example.org,,attach=yes"
+        "101 => -${placeholderFor "/run/secrets/vm-101"},Alice,alice@example.org,,attach=yes|volgain=0.500000"
         "[sales]"
         "200 => -${placeholderFor "/run/secrets/vm-200"},200"
       ];

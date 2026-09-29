@@ -6,8 +6,8 @@
 }: let
   inherit (pkgs) lib;
 in rec {
-  evalConfig = modules:
-    (import "${pkgs.path}/nixos/lib/eval-config.nix" {
+  evalSystem = modules:
+    import "${pkgs.path}/nixos/lib/eval-config.nix" {
       inherit (pkgs.stdenv.hostPlatform) system;
       modules =
         [
@@ -18,7 +18,9 @@ in rec {
           }
         ]
         ++ modules;
-    }).config;
+    };
+
+  evalConfig = modules: (evalSystem modules).config;
 
   rendered = modules: (evalConfig modules).services.asterisk.renderedFiles;
 

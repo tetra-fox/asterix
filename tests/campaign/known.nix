@@ -67,10 +67,8 @@
   "services.asterisk.modules.autoload = true" = "P2: does not load";
   "services.asterisk.modules.defaultModules = false" = "rejected by asterisk-config-check";
   "services.asterisk.modules.load = [\"q7_no_such_module.so\"]" = "rejected by asterisk-modules-check";
-  "services.asterisk.modules.load = example [\"app_system.so\",\"cdr_csv.so\"]" = "P2: does not load";
   "services.asterisk.modules.noload = [\"res_pjsip.so\"]" = "rejected by asterisk-config-check";
   "services.asterisk.modules.preload = [\"q7_no_such_module.so\"]" = "rejected by asterisk-modules-check";
-  "services.asterisk.modules.preload = example [\"res_odbc.so\"]" = "P2: does not load";
   "services.asterisk.musicOnHold.classes.<name>.application = \"<store>/coreutils-9.11/bin/cat /dev/zero\" with services.asterisk.musicOnHold.classes.office.mode" = "P2: does not load";
   "services.asterisk.musicOnHold.classes.<name>.directory = \"q7-no-such-directory\"" = "rejected by asterisk-config-check";
   "services.asterisk.musicOnHold.classes.<name>.mode = \"custom\" with services.asterisk.musicOnHold.classes.office.application" = "P2: does not load";

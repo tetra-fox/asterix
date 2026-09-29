@@ -208,7 +208,7 @@ in {
       default = [];
       example = [
         "app_system.so"
-        "cdr_csv.so"
+        "app_directory.so"
       ];
       description = ''
         Modules to load (`load =>`). Typed options add the modules they need.
@@ -244,7 +244,12 @@ in {
     preload = mkOption {
       type = moduleListType;
       default = [];
-      example = ["res_odbc.so"];
+      # the HTTP realtime driver and the modules it needs
+      example = [
+        "res_curl.so"
+        "func_curl.so"
+        "res_config_curl.so"
+      ];
       description = "Modules loaded before the core initializes (`preload =>`), such as realtime drivers.";
     };
   };

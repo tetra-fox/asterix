@@ -7,7 +7,7 @@
   examples,
 }: let
   inherit (pkgs) lib;
-  inherit (import ./eval-lib.nix {inherit pkgs self;}) evalConfig configCheckOf;
+  inherit (import ./eval-lib.nix {inherit pkgs self;}) evalConfig evalSystem configCheckOf;
 
   base = {config, ...}: {
     services.asterisk = {
@@ -504,6 +504,13 @@
         context = "internal";
         identify.match = ["sip.provider.example"];
       };
+    };
+    # the examples of the module lists load as they are
+    moduleListExamples.services.asterisk.modules = let
+      options = (evalSystem []).options.services.asterisk.modules;
+    in {
+      load = options.load.example;
+      preload = options.preload.example;
     };
     # a digest after its algorithm must have that algorithm's length
     sha256Digest = {config, ...}: {

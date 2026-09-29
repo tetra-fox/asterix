@@ -130,6 +130,18 @@
     in
       length all > n && (lib.take n all == own || lib.drop (length all - n) all == own)
   ) (builtins.attrNames generated);
+  # each step is one line of extensions.conf, so a number with more lines than
+  # steps has lines from settings
+  settingsLines = concatMap (s: lib.toList (s.exten or [])) (
+    filter (s: s.name == "pbx-internal") (builtins.attrValues (core.settings."extensions.conf" or {}))
+  );
+  linesOf = number:
+    length (filter (line: let
+      exten = format.splitExten (toString line);
+    in
+      exten != null && exten.extension == number && exten.priority != "hint")
+    settingsLines);
+  extendedInSettings = filter (number: linesOf number > length (merged.${number} or [])) (builtins.attrNames generated);
 in {
   config = mkIf cfg.enable {
     services.asterisk.dialplan.contexts.pbx-internal = {
@@ -163,6 +175,10 @@ in {
       {
         assertion = extended == [];
         message = "pbx: steps were added to pbx-internal/${concatStringsSep ", " extended} from elsewhere. Change these numbers through the pbx options, or replace their steps with lib.mkForce.";
+      }
+      {
+        assertion = extendedInSettings == [];
+        message = "pbx: steps were added to pbx-internal/${concatStringsSep ", " extendedInSettings} from elsewhere, as lines of services.asterisk.settings.\"extensions.conf\". Change these numbers through the pbx options.";
       }
     ];
   };

@@ -225,9 +225,20 @@
       assertions = [];
     };
 
+    # and lines of settings follow them
+    stepsAddedThroughSettings = {
+      module.services.asterisk.settings."extensions.conf".pbx-internal.exten = ["201,2,NoOp(extra)"];
+      assertion = "steps were added to pbx-internal/201 from elsewhere";
+    };
+
     # numbers the pbx does not own can be added to pbx-internal
     numberAddedToPbxInternal = {
       module.services.asterisk.dialplan.contexts.pbx-internal.extensions."*72" = ["Playback(beep)"];
+      assertions = [];
+    };
+
+    numberAddedToPbxInternalThroughSettings = {
+      module.services.asterisk.settings."extensions.conf".pbx-internal.exten = ["*72,1,Playback(beep)"];
       assertions = [];
     };
 

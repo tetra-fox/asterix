@@ -201,6 +201,15 @@
       assertions = [];
     };
 
+    # a mailbox of voicemail.conf is one, whichever option wrote it
+    voicemailDestinationFromSettings = {
+      module = {config, ...}: {
+        pbx.extensions."202".noAnswer.voicemail = "300@sales";
+        services.asterisk.settings."voicemail.conf".sales."300" = "${config.lib.asterisk.secret "/run/secrets/vm-300"},Sales";
+      };
+      assertions = [];
+    };
+
     memberIsNoExtension = {
       module.pbx.ringGroups.front.members = lib.mkForce [
         "201"

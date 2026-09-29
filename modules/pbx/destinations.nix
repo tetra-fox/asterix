@@ -17,8 +17,9 @@
 
   cfg = config.pbx;
   pbxLib = import ./lib.nix {inherit lib;};
+  inherit (import ../lib.nix {inherit lib;}) hasMailbox;
 
-  mailboxes = map (box: "${box.mailbox}@${box.context}") (builtins.attrValues config.services.asterisk.voicemail.mailboxes);
+  voicemailConf = config.services.asterisk.settings."voicemail.conf" or {};
   knownContexts = config.services.asterisk.dialplan.knownContexts;
 
   use = where: dest: optional (dest != null) {inherit where dest;};
@@ -46,10 +47,7 @@
     else if dest ? ivr
     then cfg.ivrs ? ${dest.ivr}
     else if dest ? voicemail
-    then let
-      box = pbxLib.splitMailbox dest.voicemail.mailbox;
-    in
-      builtins.elem "${box.box}@${box.context}" mailboxes
+    then hasMailbox voicemailConf dest.voicemail.mailbox
     else if dest ? context
     then knownContexts == null || builtins.elem dest.context.context knownContexts
     else true;

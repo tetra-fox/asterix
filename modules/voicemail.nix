@@ -31,25 +31,22 @@
   vcfg = cfg.voicemail;
   asteriskLib = import ../lib {inherit lib;};
   inherit (asteriskLib) format secrets;
-  inherit (import ./lib.nix {inherit lib;}) toSection;
+  inherit (import ./lib.nix {inherit lib;}) hasMailbox splitMailbox toSection;
 
   mailboxType = types.submodule (
     {name, ...}: let
-      parts = splitString "@" name;
+      ref = splitMailbox name;
     in {
       options = {
         mailbox = mkOption {
           type = types.str;
-          default = elemAt parts 0;
+          default = ref.box;
           defaultText = lib.literalMD "the part of the attribute name before `@`";
           description = "Mailbox number.";
         };
         context = mkOption {
           type = types.str;
-          default =
-            if builtins.length parts > 1
-            then elemAt parts 1
-            else "default";
+          default = ref.context;
           defaultText = lib.literalMD "the part of the attribute name after `@`, or `default`";
           description = "Voicemail context the mailbox belongs to.";
         };
@@ -66,7 +63,7 @@
         };
         fullName = mkOption {
           type = types.str;
-          default = elemAt parts 0;
+          default = ref.box;
           defaultText = lib.literalMD "the mailbox number";
           description = "Owner's name, used by the directory and in e-mails.";
         };
@@ -178,18 +175,7 @@
     mapAttrsToList (
       endpoint: e:
         map (ref: "pjsip.endpoints.${endpoint}.mailboxes: ${ref}") (
-          filter (
-            ref: let
-              p = splitString "@" ref;
-              box = elemAt p 0;
-              context =
-                if builtins.length p > 1
-                then elemAt p 1
-                else "default";
-            in
-              !(builtins.any (s: s.name == context && s ? ${box}) (attrValues voicemailConf))
-          )
-          e.mailboxes
+          filter (ref: !(hasMailbox voicemailConf ref)) e.mailboxes
         )
     )
     cfg.pjsip.endpoints

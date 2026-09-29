@@ -2,13 +2,14 @@
 # a destination turns into.
 {lib}: let
   inherit (lib) mkOption types;
+  inherit (import ../lib.nix {inherit lib;}) splitMailbox;
 
   mailboxType = types.submodule {
     options = {
       mailbox = mkOption {
         type = types.str;
         example = "200@sales";
-        description = "Mailbox of {option}`services.asterisk.voicemail.mailboxes`: `box` or `box@context`.";
+        description = "Mailbox of voicemail.conf, from {option}`services.asterisk.voicemail.mailboxes` or `settings`: `box` or `box@context`.";
       };
       greeting = mkOption {
         type = types.enum [
@@ -21,17 +22,6 @@
     };
   };
 in rec {
-  # `200` or `200@sales` as the mailbox and its voicemail context
-  splitMailbox = mailbox: let
-    parts = lib.splitString "@" mailbox;
-  in {
-    box = builtins.head parts;
-    context =
-      if builtins.length parts > 1
-      then builtins.elemAt parts 1
-      else "default";
-  };
-
   destination = types.attrTag {
     extension = mkOption {
       type = types.str;

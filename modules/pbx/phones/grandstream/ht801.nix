@@ -50,7 +50,7 @@
         mac = mkOption {
           type = types.strMatching "([0-9a-fA-F]{2}[:-]?){5}[0-9a-fA-F]{2}";
           example = "c0:74:ad:12:34:56";
-          description = "MAC address of the adapter (any of the usual notations).";
+          description = "MAC address of the adapter: twelve hexadecimal digits, in pairs separated by `:` or `-`, or not separated.";
         };
         endpoint = mkOption {
           type = types.str;

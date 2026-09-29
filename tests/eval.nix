@@ -516,18 +516,25 @@ in {
       expr =
         map
         (
-          port:
+          module:
             (unitOf [
               phone
-              {services.asterisk.pjsip.transports.udp.port = lib.mkForce port;}
+              module
             ]).serviceConfig.CapabilityBoundingSet
         )
         [
-          5060
-          443
+          {}
+          {services.asterisk.pjsip.transports.udp.port = lib.mkForce 443;}
+          {
+            services.asterisk.http = {
+              enable = true;
+              port = 80;
+            };
+          }
         ];
       expected = [
         [""]
+        ["CAP_NET_BIND_SERVICE"]
         ["CAP_NET_BIND_SERVICE"]
       ];
     };

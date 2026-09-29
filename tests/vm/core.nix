@@ -1,7 +1,7 @@
 # Core service behaviour with a purely freeform (layer 1) configuration: boot,
-# config loading, secrets, runtime file permissions, sandboxing, the CLI
-# wrapper for users in and out of the asterisk group, a crash that leaves no
-# core dump.
+# config loading, secrets, runtime file permissions, sandboxing without
+# relaxations, the CLI wrapper for users in and out of the asterisk group, a
+# crash that leaves no core dump.
 {
   pkgs,
   self,
@@ -88,10 +88,25 @@ pkgs.testers.runNixOSTest {
     with subtest("daemon runs unprivileged and sandboxed"):
         pid = pbx.succeed("systemctl show -P MainPID asterisk.service").strip()
         pbx.succeed(f"test \"$(stat -c %U /proc/{pid})\" = asterisk")
-        pbx.succeed(f"grep -q '^CapEff:\\s*0*$' /proc/{pid}/status")
+        for field in ["CapEff", "CapBnd", "CapAmb"]:
+            pbx.succeed(f"grep -q '^{field}:\\s*0*$' /proc/{pid}/status")
         pbx.succeed(f"grep -q '^NoNewPrivs:\\s*1$' /proc/{pid}/status")
         pbx.succeed(f"grep -q '^Seccomp:\\s*2$' /proc/{pid}/status")
-        print(pbx.succeed("systemd-analyze security asterisk.service | tail -1"))
+        # none of the relaxations of D16: no capability and no realtime
+        # scheduling
+        properties = dict(
+            line.split("=", 1)
+            for line in pbx.succeed("systemctl show -p CapabilityBoundingSet -p AmbientCapabilities -p RestrictRealtime -p CPUSchedulingPolicy -p LimitRTPRIO asterisk.service").splitlines()
+        )
+        assert properties == {
+            "CapabilityBoundingSet": "",
+            "AmbientCapabilities": "",
+            "RestrictRealtime": "yes",
+            "CPUSchedulingPolicy": "0",
+            "LimitRTPRIO": "0",
+        }, properties
+        # an exposure of 1.5 at most
+        print(pbx.succeed("systemd-analyze security --threshold=15 asterisk.service").splitlines()[-1])
 
     with subtest("state directories"):
         pbx.succeed("test -d /var/lib/asterisk/spool/voicemail")

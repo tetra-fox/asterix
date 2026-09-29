@@ -145,6 +145,14 @@ class Phone:
         )
         return match.group(1) if match else None
 
+    def confirmed(self):
+        """Calls that got their ACK, for a callee, or sent it, for a caller."""
+        return self.count("Call [0-9]+ state changed to CONFIRMED")
+
+    def wait_confirmed(self, after=0, timeout=90):
+        """Wait until more than `after` of the phone's calls are confirmed."""
+        self.wait_count("Call [0-9]+ state changed to CONFIRMED", after + 1, timeout=timeout)
+
     def disconnects(self):
         return self.count("Call [0-9]+ is DISCONNECTED")
 
@@ -155,9 +163,11 @@ class Phone:
 
 class Baresip:
     """A baresip instance registered as `user`, which answers every call. Like
-    Phone, it sends a sine of `tone` Hz and records what it hears."""
+    Phone, it sends a sine of `tone` Hz and records what it hears. The server
+    URI picks the transport (tests/vm/baresip.nix), and a wss phone verifies
+    the server's certificate against `ca_file`."""
 
-    def __init__(self, machine, name, user, password, server, sip_port=5090, ctrl_port=4444, tone=None):
+    def __init__(self, machine, name, user, password, server, sip_port=5090, ctrl_port=4444, tone=None, ca_file=""):
         self.machine = machine
         self.name = name
         self.user = user
@@ -165,6 +175,7 @@ class Baresip:
         self.server = server
         self.sip_port = sip_port
         self.ctrl_port = ctrl_port
+        self.ca_file = ca_file
         self.tone = PHONE_TONES[next(phones_made) % len(PHONE_TONES)] if tone is None else tone
         self.log = f"/tmp/baresip-phone-{name}.log"
         self.recording = f"/tmp/baresip-phone-{name}.wav"
@@ -172,11 +183,12 @@ class Baresip:
     def start(self):
         self.machine.succeed(
             f"baresip-phone start {self.name} {self.user} {shlex.quote(self.password)} "
-            f"{shlex.quote(self.server)} {self.sip_port} {self.ctrl_port} {self.tone}"
+            f"{shlex.quote(self.server)} {self.sip_port} {self.ctrl_port} {self.tone} {shlex.quote(self.ca_file)}"
         )
         self.machine.wait_until_succeeds(f"test -f {self.log}", timeout=60)
-        # baresip does not read /etc/hosts, so it dials the server's address
-        self.address = self.machine.succeed(f"getent ahostsv4 {shlex.quote(self.server)} | awk 'NR == 1 {{ print $1 }}'").strip()
+        # baresip does not read /etc/hosts, so it dials the server's address,
+        # followed by the port and parameters of `server`
+        self.address = self.machine.succeed(f"cat /run/baresip-phone/{self.name}/server").strip()
 
     def stop(self):
         self.machine.succeed(f"baresip-phone stop {self.name}")
@@ -212,6 +224,18 @@ def sipp(machine, scenario, remote, *args):
         f"sipp -sf /etc/sipp/{scenario}.xml -m 1 -nostdin -timeout 60 -timeout_error "
         f"-trace_msg -message_file /tmp/sipp-{scenario}.log {shlex.join(args)} {remote}"
     )
+
+
+def pjsua_tls(certificates, certificate=None):
+    """pjsua arguments for TLS with tests/vm/certificates.nix in
+    `certificates`: verify the server against the test CA, and present
+    `certificate` as client and as server. A TLS callee needs one, as the ACK
+    for its answer comes over a connection the PBX opens to its listening
+    port."""
+    arguments = f"--use-tls --tls-ca-file={certificates}/ca.pem --tls-verify-server"
+    if certificate:
+        arguments += f" --tls-cert-file={certificates}/{certificate}.pem --tls-privkey-file={certificates}/{certificate}.key"
+    return arguments
 
 
 def start_phones(phones):

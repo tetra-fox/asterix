@@ -1,6 +1,7 @@
 # pbx.paging: one number that makes several phones answer by themselves, in
-# pbx-paging-<name>. Page() sends each phone the headers phones take as an
-# auto-answer request, from its pre-dial routine (the `headers` extension).
+# pbx-paging-<name>. The `member` routine collects every device of the
+# members, and Page() sends each the headers phones take as an auto-answer
+# request, from its pre-dial routine (the `headers` extension).
 {
   config,
   lib,
@@ -63,21 +64,38 @@
 
   pagingSection = name: paging: let
     context = pbxLib.objectContext "paging" name;
+    # Page() finds the caller's phone, and with `s` busy ones, by the device a
+    # dial string names, which a contact's does not, so `member` does both
     options =
       "i"
       + lib.optionalString paging.duplex "d"
-      + lib.optionalString paging.skipBusy "s"
       + "b(${context}^headers^1)";
   in {
     comment = mkDefault "from pbx.paging.${name}";
     extensions = {
-      s = [
-        (pbxLib.app "Page" [
-          (concatStringsSep "&" (map (member: "PJSIP/${member}") paging.members))
-          options
-        ])
-        (pbxLib.app "Hangup" [])
-      ];
+      s =
+        [(pbxLib.app "Set" ["PBX_PAGE="])]
+        ++ map (member: pbxLib.app "Gosub" ["member" "1(${member})"]) paging.members
+        ++ [
+          (pbxLib.app "Page" ["\${PBX_PAGE}" options])
+          (pbxLib.app "Hangup" [])
+        ];
+      # adds the devices of extension ARG1 to PBX_PAGE, unless it is the
+      # caller's own or, with skipBusy, not idle
+      member =
+        [(pbxLib.app "GotoIf" [''$["''${CUT(CHANNEL,-,1)}" = "PJSIP/''${ARG1}"]?done''])]
+        ++ lib.optionals paging.skipBusy [
+          (pbxLib.app "Set" ["PBX_STATE=\${DEVICE_STATE(PJSIP/\${ARG1})}"])
+          (pbxLib.app "GotoIf" [''$["''${PBX_STATE}" != "NOT_INUSE" & "''${PBX_STATE}" != "UNKNOWN"]?done''])
+        ]
+        ++ [
+          (pbxLib.app "Set" ["PBX_PAGE=\${PBX_PAGE}&${pbxLib.devices "\${ARG1}"}"])
+          {
+            app = "Return";
+            args = [];
+            label = "done";
+          }
+        ];
       headers =
         map (header: let
           m = builtins.match "([A-Za-z-]+): (.*)" header;

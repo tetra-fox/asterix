@@ -2,14 +2,16 @@
 # holidays and the close-early toggle, inbound calls routed by them, a hunt
 # group ringing one phone after the other, an external ring group member who
 # has to press 1 before the call is theirs, emergency calls that notify two
-# phones without waiting for them, the busy and no-answer destinations of an
-# extension, a voice menu driven by DTMF, and a page to two phones. A second Asterisk plays the SIP provider and the mobile
-# phone of the external member.
+# extensions without waiting for them, the busy and no-answer destinations of
+# an extension, a voice menu driven by DTMF, and pages, which leave out the
+# caller and members in a call. Wherever an extension is called, all of its
+# devices ring. A second Asterisk plays the SIP provider and the mobile phone
+# of the external member.
 #
 #   pbx       10.2.0.10, clock set by the test
 #   provider  10.2.0.5
-#   phones    10.2.0.21, runs 201 and 202 (ring without answering), 203 and
-#             204 (busy)
+#   phones    10.2.0.21, runs 201, 202 on a desk phone and a mobile (all ring
+#             without answering), 203, and 204 on two phones (both busy)
 {
   pkgs,
   self,
@@ -68,7 +70,10 @@ in
                 voicemail.pin = secret "vm-${extension}";
               })
               extensions)
-            {"201".ringTime = 5;}
+            {
+              "201".ringTime = 5;
+              "202".ringTime = 5;
+            }
           ];
 
           ringGroups = {
@@ -133,12 +138,24 @@ in
             invalid.context.context = "ivr-invalid";
           };
 
-          paging.all = {
-            number = "650";
-            members = [
-              "201"
-              "202"
-            ];
+          paging = {
+            all = {
+              number = "650";
+              members = [
+                "201"
+                "202"
+              ];
+            };
+            # paged by 203, which is listed first, so a page to it would go
+            # out before the others
+            team = {
+              number = "660";
+              members = [
+                "203"
+                "202"
+              ];
+              skipBusy = false;
+            };
           };
 
           emergency = {
@@ -164,6 +181,11 @@ in
           settings."asterisk.conf".options.verbose = 3;
           pjsip = {
             transports.udp = {};
+            # extensions with two devices
+            endpoints = {
+              "202".aor.maxContacts = 2;
+              "204".aor.maxContacts = 2;
+            };
             trunks.provider = {
               host = "10.2.0.5";
               username = "5551000";
@@ -312,12 +334,18 @@ in
         sales = Phone(phones, "202", "202", "pw-202", "10.2.0.10", sip_port=5061, cli_port=2301, auto_answer=180)
         boss = Phone(phones, "203", "203", "pw-203", "10.2.0.10", sip_port=5062, cli_port=2302)
         warehouse = Phone(phones, "204", "204", "pw-204", "10.2.0.10", sip_port=5063, cli_port=2303, auto_answer=486)
+        # the second devices of 202 and 204
+        sales_mobile = Phone(phones, "202-mobile", "202", "pw-202", "10.2.0.10", sip_port=5064, cli_port=2304, auto_answer=180)
+        dock = Phone(phones, "204-dock", "204", "pw-204", "10.2.0.10", sip_port=5065, cli_port=2305, auto_answer=486)
+
+        def calls_of(endpoint):
+            return [c for c in channels(pbx) if endpoint_of(c["name"]) == endpoint]
 
         with subtest("the trunk and the phones register"):
             pbx.wait_until_succeeds("asterisk -rx 'pjsip show registrations' | grep -q 'Registered'", timeout=180)
             pbx.wait_until_succeeds("asterisk -rx 'pjsip show contacts' | grep -q 'provider/sip:10.2.0.5.* Avail'", timeout=180)
-            start_phones([reception, sales, boss, warehouse])
-            for phone in (reception, sales, boss, warehouse):
+            start_phones([reception, sales, boss, warehouse, sales_mobile, dock])
+            for phone in (reception, sales, boss, warehouse, sales_mobile, dock):
                 phone.wait_registered()
             reception.watch("*28")
 
@@ -339,24 +367,26 @@ in
             boss.wait_disconnected(after=disconnects)
             pbx.succeed("asterisk -rx 'core show hint *28' | grep -q 'State:Idle'")
             assert hours() == "open"
-            before = {p.name: p.requests("INVITE") for p in (reception, sales, boss)}
+            before = {p.name: p.requests("INVITE") for p in (reception, sales, sales_mobile, boss)}
             provider.succeed("asterisk -rx 'channel originate PJSIP/5551000 extension s@feed'")
-            for phone in (reception, sales):
+            for phone in (reception, sales, sales_mobile):
                 phone.wait_request("INVITE", after=before[phone.name], timeout=60)
             assert boss.requests("INVITE") == before["203"], "203 is not in the ring group"
             wait_idle(pbx, timeout=60)
             pbx.fail("test -f /var/lib/asterisk/spool/voicemail/default/200/INBOX/msg0001.txt")
 
         with subtest("a hunt group rings its members one after the other"):
-            invites = {p.name: p.requests("INVITE") for p in (reception, sales)}
-            cancels = sales.requests("CANCEL")
+            invites = {p.name: p.requests("INVITE") for p in (reception, sales, sales_mobile)}
+            cancels = {p.name: p.requests("CANCEL") for p in (sales, sales_mobile)}
             boss.call("620")
-            sales.wait_request("INVITE", after=invites["202"])
+            for device in (sales, sales_mobile):
+                device.wait_request("INVITE", after=invites[device.name])
             # `call new` itself takes a while, well inside the 10 s
             time.sleep(2)
             assert reception.requests("INVITE") == invites["201"], "201 rang together with 202"
             reception.wait_request("INVITE", after=invites["201"], timeout=30)
-            assert sales.requests("CANCEL") > cancels, "202 still rang when 201 started"
+            for device in (sales, sales_mobile):
+                assert device.requests("CANCEL") > cancels[device.name], f"{device.name} still rang when 201 started"
             pbx.wait_until_succeeds("asterisk -rx 'database get test hunt' | grep -q 'Value: done'", timeout=30)
             boss.hangup()
             wait_idle(pbx)
@@ -380,11 +410,11 @@ in
             assert boss.count("state changed to CONFIRMED") == confirmed, "the call was answered"
             wait_idle(pbx)
 
-        with subtest("an emergency call goes out at once and notifies two phones"):
-            invites = {p.name: p.requests("INVITE") for p in (reception, sales)}
+        with subtest("an emergency call goes out at once and notifies two extensions"):
+            invites = {p.name: p.requests("INVITE") for p in (reception, sales, sales_mobile)}
             boss.call("911")
             provider.wait_until_succeeds("asterisk -rx 'database get calls last' | grep -q 'Value: 5551000:911$'", timeout=60)
-            for phone in (reception, sales):
+            for phone in (reception, sales, sales_mobile):
                 phone.wait_request("INVITE", after=invites[phone.name], timeout=30)
                 invite = phone.received("INVITE")[-1]
                 assert '"Boss" <sip:203@' in invite, invite
@@ -392,20 +422,34 @@ in
             ringing = {endpoint_of(c["name"]) for c in channels(pbx)}
             assert {"201", "202", "provider"} <= ringing, ringing
             # declined, so the test does not wait out their 30 s of ringing
-            for phone in (reception, sales):
+            for phone in (reception, sales, sales_mobile):
                 phone.hangup()
             boss.hangup()
             wait_idle(pbx, timeout=60)
 
         with subtest("an extension's busy and no-answer destinations"):
+            # busy: both devices of 204 are
+            invites = {p.name: p.requests("INVITE") for p in (warehouse, dock)}
             boss.call("204")
             channel = wait_channel(pbx, "203", app="VoiceMail")
             assert channel["data"] == "204@default,b", channel
+            for device in (warehouse, dock):
+                assert device.requests("INVITE") > invites[device.name], f"{device.name} was not called"
             boss.hangup()
             wait_idle(pbx)
             boss.call("201")
             channel = wait_channel(pbx, "203", app="VoiceMail", timeout=30)
             assert channel["data"] == "201@default,u", channel
+            boss.hangup()
+            wait_idle(pbx)
+
+        with subtest("a call to an extension rings all of its devices, then its no-answer destination"):
+            invites = {p.name: p.requests("INVITE") for p in (sales, sales_mobile)}
+            boss.call("202")
+            for device in (sales, sales_mobile):
+                device.wait_request("INVITE", after=invites[device.name], timeout=30)
+            channel = wait_channel(pbx, "203", app="VoiceMail", timeout=30)
+            assert channel["data"] == "202@default,u", channel
             boss.hangup()
             wait_idle(pbx)
 
@@ -435,14 +479,34 @@ in
             assert menu("55") == ("invalid", 2)
 
         with subtest("a page rings its members at once and asks them to answer by themselves"):
-            invites = {p.name: p.requests("INVITE") for p in (reception, sales)}
+            invites = {p.name: p.requests("INVITE") for p in (reception, sales, sales_mobile)}
             boss.call("650")
             # the members ring without answering, so they have to ring together
-            for phone in (reception, sales):
+            for phone in (reception, sales, sales_mobile):
                 phone.wait_request("INVITE", after=invites[phone.name], timeout=30)
                 invite = phone.received("INVITE")[-1]
                 assert "Call-Info: <sip:pbx>;answer-after=0" in invite, invite
                 assert "Alert-Info: <http://example.com>;info=alert-autoanswer;delay=0" in invite, invite
+            boss.hangup()
+            wait_idle(pbx)
+
+        with subtest("a page leaves out members in a call, and the caller's own extension"):
+            reception.call("203")
+            wait_bridged(pbx, "201", "203")
+            invites = {p.name: p.requests("INVITE") for p in (sales, sales_mobile)}
+            warehouse.call("650")
+            for device in (sales, sales_mobile):
+                device.wait_request("INVITE", after=invites[device.name], timeout=30)
+            # 201 comes first in the group, so a page to it would already be out
+            assert len(calls_of("201")) == 1, calls_of("201")
+            warehouse.hangup()
+            reception.hangup()
+            wait_idle(pbx)
+            invites = {p.name: p.requests("INVITE") for p in (sales, sales_mobile)}
+            boss.call("660")
+            for device in (sales, sales_mobile):
+                device.wait_request("INVITE", after=invites[device.name], timeout=30)
+            assert len(calls_of("203")) == 1, calls_of("203")
             boss.hangup()
             wait_idle(pbx)
       '';

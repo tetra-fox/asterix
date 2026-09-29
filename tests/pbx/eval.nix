@@ -81,7 +81,7 @@ in {
       expected = ''
         ; from pbx.extensions."201"
         [pbx-extension-201]
-        exten => s,1,Dial(PJSIP/201,20)
+        exten => s,1,Dial(''${PJSIP_DIAL_CONTACTS(201)},20)
          same => n,GotoIf($["''${DIALSTATUS}" = "BUSY"]?busy)
          same => n,VoiceMail(201@default,u)
          same => n,Hangup()
@@ -99,7 +99,7 @@ in {
       expected = ''
         ; from pbx.extensions."202"
         [pbx-extension-202]
-        exten => s,1,Dial(PJSIP/202,30)
+        exten => s,1,Dial(''${PJSIP_DIAL_CONTACTS(202)},30)
          same => n,GotoIf($["''${DIALSTATUS}" = "BUSY"]?busy)
          same => n,Hangup()
          same => n(busy),Goto(pbx-extension-201,s,1)'';
@@ -186,7 +186,7 @@ in {
           exten => 5559000,1,Set(CALLERID(num)=5551000)
            same => n,Dial(PJSIP/''${EXTEN}@provider,20,U(pbx-confirm^s^1))
            same => n,Hangup()
-          exten => s,1,Dial(PJSIP/201&PJSIP/202&Local/5559000@pbx-ringgroup-front/n,20)
+          exten => s,1,Dial(''${PJSIP_DIAL_CONTACTS(201)}&''${PJSIP_DIAL_CONTACTS(202)}&Local/5559000@pbx-ringgroup-front/n,20)
            same => n,VoiceMail(201@default,b)
            same => n,Hangup()'';
         confirm = ''
@@ -213,8 +213,8 @@ in {
       expected = ''
         ; from pbx.ringGroups.hunt
         [pbx-ringgroup-hunt]
-        exten => s,1,Dial(PJSIP/202,10)
-         same => n,Dial(PJSIP/201,10)
+        exten => s,1,Dial(''${PJSIP_DIAL_CONTACTS(202)},10)
+         same => n,Dial(''${PJSIP_DIAL_CONTACTS(201)},10)
          same => n,Hangup()'';
     };
 
@@ -373,6 +373,7 @@ in {
       expr = {
         internal = context "pbx-internal" module;
         emergency = context "pbx-emergency" module;
+        notify = context "pbx-emergency-notify" module;
       };
       expected = {
         internal = ''
@@ -397,15 +398,22 @@ in {
         emergency = ''
           ; from pbx.emergency
           [pbx-emergency]
-          exten => 112,1,Originate(PJSIP/201,app,SayDigits,''${CALLERID(num)},,30,acn)
-           same => n,Originate(PJSIP/202,app,SayDigits,''${CALLERID(num)},,30,acn)
+          exten => 112,1,Originate(Local/201@pbx-emergency-notify,app,SayDigits,''${CALLERID(num)},,30,acn)
+           same => n,Originate(Local/202@pbx-emergency-notify,app,SayDigits,''${CALLERID(num)},,30,acn)
            same => n,Set(CALLERID(num)=5551000)
            same => n,Dial(PJSIP/112@provider)
            same => n,Hangup()
-          exten => 911,1,Originate(PJSIP/201,app,SayDigits,''${CALLERID(num)},,30,acn)
-           same => n,Originate(PJSIP/202,app,SayDigits,''${CALLERID(num)},,30,acn)
+          exten => 911,1,Originate(Local/201@pbx-emergency-notify,app,SayDigits,''${CALLERID(num)},,30,acn)
+           same => n,Originate(Local/202@pbx-emergency-notify,app,SayDigits,''${CALLERID(num)},,30,acn)
            same => n,Set(CALLERID(num)=5551000)
            same => n,Dial(PJSIP/911@provider)
+           same => n,Hangup()'';
+        notify = ''
+          ; from pbx.emergency.notify
+          [pbx-emergency-notify]
+          exten => 201,1,Dial(''${PJSIP_DIAL_CONTACTS(201)})
+           same => n,Hangup()
+          exten => 202,1,Dial(''${PJSIP_DIAL_CONTACTS(202)})
            same => n,Hangup()'';
       };
     };
@@ -607,14 +615,27 @@ in {
           exten => headers,1,Set(PJSIP_HEADER(add,Alert-Info)=<http://example.com>\;info=alert-autoanswer\;delay=0)
            same => n,Set(PJSIP_HEADER(add,Call-Info)=<sip:pbx>\;answer-after=0)
            same => n,Return()
-          exten => s,1,Page(PJSIP/201&PJSIP/202,isb(pbx-paging-all^headers^1))
+          exten => member,1,GotoIf($["''${CUT(CHANNEL,-,1)}" = "PJSIP/''${ARG1}"]?done)
+           same => n,Set(PBX_STATE=''${DEVICE_STATE(PJSIP/''${ARG1})})
+           same => n,GotoIf($["''${PBX_STATE}" != "NOT_INUSE" & "''${PBX_STATE}" != "UNKNOWN"]?done)
+           same => n,Set(PBX_PAGE=''${PBX_PAGE}&''${PJSIP_DIAL_CONTACTS(''${ARG1})})
+           same => n(done),Return()
+          exten => s,1,Set(PBX_PAGE=)
+           same => n,Gosub(member,1(201))
+           same => n,Gosub(member,1(202))
+           same => n,Page(''${PBX_PAGE},ib(pbx-paging-all^headers^1))
            same => n,Hangup()'';
         talk = ''
           ; from pbx.paging.talk
           [pbx-paging-talk]
           exten => headers,1,Set(PJSIP_HEADER(add,Alert-Info)=intercom)
            same => n,Return()
-          exten => s,1,Page(PJSIP/202,idb(pbx-paging-talk^headers^1))
+          exten => member,1,GotoIf($["''${CUT(CHANNEL,-,1)}" = "PJSIP/''${ARG1}"]?done)
+           same => n,Set(PBX_PAGE=''${PBX_PAGE}&''${PJSIP_DIAL_CONTACTS(''${ARG1})})
+           same => n(done),Return()
+          exten => s,1,Set(PBX_PAGE=)
+           same => n,Gosub(member,1(202))
+           same => n,Page(''${PBX_PAGE},idb(pbx-paging-talk^headers^1))
            same => n,Hangup()'';
         internal = true;
       };

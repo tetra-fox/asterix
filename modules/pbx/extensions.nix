@@ -67,7 +67,7 @@
         type = types.nullOr pbxLib.destination;
         default = null;
         defaultText = lib.literalMD "the mailbox with the busy greeting, or hangup without a mailbox";
-        description = "Where a call goes when the phone is busy.";
+        description = "Where a call goes when the phone is busy, or every device of the extension is.";
       };
     };
   });
@@ -98,7 +98,10 @@ in {
       description = ''
         Phones, keyed by the number that reaches them. Each is a PJSIP
         endpoint named like its number, which dials from `pbx-internal`, with
-        a hint for busy lamps and, with `voicemail`, a mailbox.
+        a hint for busy lamps and, with `voicemail`, a mailbox. Calls ring
+        every device registered as the extension, as many as
+        {option}`services.asterisk.pjsip.endpoints.<name>.aor.maxContacts`
+        allows (one by default).
       '';
     };
 
@@ -137,7 +140,7 @@ in {
               extensions.s =
                 [
                   (pbxLib.app "Dial" [
-                    "PJSIP/${number}"
+                    (pbxLib.devices number)
                     e.ringTime
                   ])
                   (pbxLib.app "GotoIf" [''$["''${DIALSTATUS}" = "BUSY"]?busy''])

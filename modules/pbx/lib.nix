@@ -89,6 +89,10 @@ in rec {
   # the generated context of a pbx object
   objectContext = kind: name: "pbx-${kind}-${name}";
 
+  # dial string that calls every contact of an extension; PJSIP/<number>
+  # calls only the first reachable one
+  devices = number: "\${PJSIP_DIAL_CONTACTS(${number})}";
+
   # dialplan steps a destination turns into; the call never comes back
   steps = dest:
     if dest ? extension

@@ -137,10 +137,12 @@
 
   setCallerId = callerId: optional (callerId != null) (pbxLib.app "Set" ["CALLERID(num)=${callerId}"]);
 
+  # Originate() calls one channel, so a Local channel into
+  # pbx-emergency-notify rings every device of the extension
   emergencySteps = e: number:
     map (extension:
       pbxLib.app "Originate" [
-        "PJSIP/${extension}"
+        "Local/${extension}@pbx-emergency-notify"
         "app"
         "SayDigits"
         "\${CALLERID(num)}"
@@ -286,9 +288,20 @@ in {
     })
 
     (mkIf (cfg.emergency != null) {
-      services.asterisk.dialplan.contexts.pbx-emergency = {
-        comment = mkDefault "from pbx.emergency";
-        extensions = genAttrs cfg.emergency.numbers (emergencySteps cfg.emergency);
+      services.asterisk.dialplan.contexts = {
+        pbx-emergency = {
+          comment = mkDefault "from pbx.emergency";
+          extensions = genAttrs cfg.emergency.numbers (emergencySteps cfg.emergency);
+        };
+        # Dial() has no timeout: Originate() hangs up the Local channel after
+        # its own
+        pbx-emergency-notify = mkIf (cfg.emergency.notify != []) {
+          comment = mkDefault "from pbx.emergency.notify";
+          extensions = genAttrs cfg.emergency.notify (extension: [
+            (pbxLib.app "Dial" [(pbxLib.devices extension)])
+            (pbxLib.app "Hangup" [])
+          ]);
+        };
       };
 
       assertions = [

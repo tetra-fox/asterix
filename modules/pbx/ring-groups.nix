@@ -88,7 +88,7 @@
     else null;
 
   channels = name: group:
-    map (member: "PJSIP/${member}") group.members
+    map pbxLib.devices group.members
     ++ map (number: "Local/${number}@${pbxLib.objectContext "ringgroup" name}/n") group.external;
 
   groupSection = name: group: let

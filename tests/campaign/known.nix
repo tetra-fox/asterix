@@ -4,12 +4,6 @@
 # file to OUT/known.nix.
 {
   "pbx.hours.<name>.timezone = \"Mars/Olympus_Mons\"" = "rejected by pbx-hours-timezones";
-  "pbx.phones.grandstream.ht801.adminPassword = string lineBreak" = "P3: loads";
-  "pbx.phones.grandstream.ht801.devices.<name>.settings = string lineBreak" = "P3: loads";
-  "pbx.phones.grandstream.ht801.ntpServer = string lineBreak" = "P3: loads";
-  "pbx.phones.grandstream.ht801.settings = string lineBreak" = "P3: loads";
-  "pbx.phones.grandstream.ht801.sipServer = string lineBreak" = "P3: loads";
-  "pbx.phones.grandstream.ht801.timeZone = string lineBreak" = "P3: loads";
   "services.asterisk.ami.address = \"127.0.0.1:5038\"" = "rejected by asterisk-config-check";
   "services.asterisk.ami.address = \"300.0.0.1\"" = "rejected by asterisk-config-check";
   "services.asterisk.ami.address = \"pbx\"" = "rejected by asterisk-config-check";

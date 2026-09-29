@@ -712,6 +712,27 @@
       assertions = ["pbx.phones.grandstream.ht801: the admin password (P2) of long, short is not 4 to 30 characters long, which HT801 V2 hardware requires."];
     };
 
+    # XML holds no control character but tab and line breaks, and a P-value
+    # is one line: from the options, and from the endpoint's user name
+    ht801ControlCharacters = {
+      module = {
+        imports = [phones];
+        services.asterisk.pjsip.endpoints."202".auth.username = lib.mkForce "202${builtins.fromJSON ''"\u0007"''}";
+        pbx.phones.grandstream.ht801 = {
+          enable = true;
+          timeZone = "CET-1CEST\n";
+          devices = {
+            "201" = {
+              mac = "c0:74:ad:00:02:01";
+              settings.P1362 = "de\tx";
+            };
+            "202".mac = "c0:74:ad:00:02:02";
+          };
+        };
+      };
+      assertions = ["pbx.phones.grandstream.ht801: P-values cannot contain control characters: 201 P64, 201 P1362, 202 P36, 202 P64."];
+    };
+
     # two spellings of one address would be one file
     ht801SameMacTwice = {
       module = {

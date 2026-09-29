@@ -19,6 +19,7 @@ secret xml $'a&b<c>"d\'e]]>\n'
 secret lines $'one\ntwo\n'
 secret space $' padded\n'
 secret lookalike "$(placeholder semicolon)"
+secret bell $'ding\adong\n'
 secret comma $'a,b\n'
 secret pin $'1234\n' field
 secret commapin $'12,34\n' field
@@ -61,6 +62,10 @@ check none "$(placeholder lines)|$(placeholder space)" $'one\ntwo| padded'
 check asterisk "password = $(placeholder comma)"$'\n'"101 => $(placeholder pin),Sales"$'\n' $'password = a,b\n101 => 1234,Sales\n'
 
 fails asterisk "x = $(placeholder lines)" "secret /run/secrets/lines contains a line break"
+# XML holds no control character but tab and line breaks, and a value in a
+# provisioning file is one line
+fails xml "<P34>$(placeholder bell)</P34>" "secret /run/secrets/bell contains a control character"
+fails xml "<P34>$(placeholder lines)</P34>" "secret /run/secrets/lines contains a control character"
 fails asterisk "x = $(placeholder space)" "secret /run/secrets/space has leading or trailing whitespace"
 fails asterisk "101 => $(placeholder commapin),Sales" "secret /run/secrets/commapin is one field of a comma-separated value, so it cannot contain a comma"
 # the bytes Asterisk keeps of a secret, before `;` becomes `\;`

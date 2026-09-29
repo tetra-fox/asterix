@@ -134,6 +134,19 @@
     p2 != null && !secrets.isSecret p2 && (length < 4 || length > 30))
   cfg.devices);
 
+  # the P-values of each adapter with a control character, which XML holds
+  # none of but tab and line breaks, and a P-value is one line; render-secrets
+  # refuses them in secrets
+  controlCharacters = lib.concatLists (mapAttrsToList (name: device: let
+    values = deviceSettings device;
+  in
+    map (p: "${name} ${p}") (
+      builtins.filter (p: builtins.isString values.${p} && builtins.match ".*[[:cntrl:]].*" values.${p} != null) (
+        lib.sort (a: b: pNumber a < pNumber b) (attrNames values)
+      )
+    ))
+  (filterAttrs (_: registers) cfg.devices));
+
   escapeXml = lib.replaceStrings ["&" "<" ">" "\"" "'"] ["&amp;" "&lt;" "&gt;" "&quot;" "&apos;"];
 
   # secrets become placeholders, which the provisioning service XML-escapes
@@ -235,6 +248,10 @@ in {
         {
           assertion = invalidAdminPasswords == [];
           message = "pbx.phones.grandstream.ht801: the admin password (P2) of ${lib.concatStringsSep ", " invalidAdminPasswords} is not 4 to 30 characters long, which HT801 V2 hardware requires.";
+        }
+        {
+          assertion = controlCharacters == [];
+          message = "pbx.phones.grandstream.ht801: P-values cannot contain control characters: ${lib.concatStringsSep ", " controlCharacters}.";
         }
         {
           assertion = builtins.all (p: builtins.match "P[0-9]+" p != null) (

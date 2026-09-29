@@ -522,8 +522,8 @@ in {
       ];
     };
 
-    # what a secret may add to the other bytes of a PIN (a typed one's `-`) to
-    # reach the 79 Asterisk keeps; a name has no such limit here
+    # what a secret may add to the other bytes of a PIN (a typed one's `-`), a
+    # name, a pager or sender address to reach the 79 Asterisk keeps of each
     testPinSecretLengths = {
       expr = let
         config = evalConfig [
@@ -532,9 +532,12 @@ in {
             {config, ...}: {
               services.asterisk = {
                 voicemail.mailboxes."101".pin = config.lib.asterisk.secret "/run/secrets/vm-101";
-                settings."voicemail.conf".sales = {
-                  "200" = "0;${config.lib.asterisk.secret "/run/secrets/vm-200"},Sales";
-                  "201" = "1234,${config.lib.asterisk.secret "/run/secrets/name"}";
+                settings."voicemail.conf" = {
+                  general.serveremail = config.lib.asterisk.secret "/run/secrets/from";
+                  sales = {
+                    "200" = "0;${config.lib.asterisk.secret "/run/secrets/vm-200"},Sales";
+                    "201" = "1234,${config.lib.asterisk.secret "/run/secrets/name"},${config.lib.asterisk.secret "/run/secrets/email"},pager-${config.lib.asterisk.secret "/run/secrets/pager"}";
+                  };
                 };
                 extraConfig."voicemail.conf" = ''
                   [support]
@@ -547,8 +550,11 @@ in {
       in
         config.services.asterisk.secretMaxLengths;
       expected = {
+        ${placeholderFor "/run/secrets/from"} = 79;
         ${placeholderFor "/run/secrets/vm-101"} = 78;
         ${placeholderFor "/run/secrets/vm-200"} = 77;
+        ${placeholderFor "/run/secrets/name"} = 79;
+        ${placeholderFor "/run/secrets/pager"} = 73;
         ${placeholderFor "/run/secrets/vm-300"} = 79;
       };
     };

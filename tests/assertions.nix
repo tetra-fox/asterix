@@ -695,7 +695,49 @@
           '';
         };
       };
-      assertion = "services.asterisk: voicemail PINs longer than the 79 bytes Asterisk keeps, the `-` before a typed mailbox's PIN included: 101@default, 200@sales, 300@support.";
+      assertion = ''
+        services.asterisk: voicemail values that Asterisk would cut (the `-` before a typed mailbox's PIN counts):
+          PIN of 101@default, to 79 bytes
+          PIN of 200@sales, to 79 bytes
+          PIN of 300@support, to 79 bytes
+      '';
+    };
+
+    # as long as the PIN: a mailbox's name and pager address, from typed and
+    # layer-1 mailboxes, and the sender address; the sender name has 99 bytes
+    voicemailValuesLongerThanAsteriskKeeps = {
+      module = {config, ...}: {
+        services.asterisk = {
+          voicemail = {
+            mailboxes = {
+              "101" = {
+                pin = config.lib.asterisk.secret "/run/secrets/vm-101";
+                fullName = lib.strings.replicate 80 "n";
+                pagerEmail = lib.strings.replicate 68 "p" + "@example.org";
+              };
+              "102" = {
+                pin = config.lib.asterisk.secret "/run/secrets/vm-102";
+                fullName = lib.strings.replicate 79 "n";
+                pagerEmail = lib.strings.replicate 67 "p" + "@example.org";
+              };
+            };
+            email = {
+              command = "/run/current-system/sw/bin/msmtp -t";
+              fromAddress = lib.strings.replicate 68 "f" + "@example.org";
+              fromName = lib.strings.replicate 100 "s";
+            };
+          };
+          settings."voicemail.conf".sales."200" = "1234,${lib.strings.replicate 80 "n"}";
+        };
+      };
+      assertion = ''
+        services.asterisk: voicemail values that Asterisk would cut (the `-` before a typed mailbox's PIN counts):
+          [general] fromstring, to 99 bytes
+          [general] serveremail, to 79 bytes
+          name of 101@default, to 79 bytes
+          pager address of 101@default, to 79 bytes
+          name of 200@sales, to 79 bytes
+      '';
     };
 
     voicemailEmailWithoutCommand = {

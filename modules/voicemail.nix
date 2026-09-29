@@ -66,7 +66,7 @@
           type = types.str;
           default = ref.box;
           defaultText = lib.literalMD "the mailbox number";
-          description = "Owner's name, used by the directory and in e-mails.";
+          description = "Owner's name, used by the directory and in e-mails. Asterisk keeps 79 bytes of it.";
         };
         email = mkOption {
           type = types.nullOr types.str;
@@ -76,7 +76,7 @@
         pagerEmail = mkOption {
           type = types.nullOr types.str;
           default = null;
-          description = "Address receiving a short notification (pager e-mail).";
+          description = "Address receiving a short notification (pager e-mail). Asterisk keeps 79 bytes of it.";
         };
         options = mkOption {
           type = types.attrsOf (
@@ -151,16 +151,16 @@
     "zonemessages"
   ];
 
-  # the lines of the generated voicemail.conf's mailbox sections with their
-  # context, which app_voicemail reads as `mailbox => PIN,name,email,...`
-  mailboxLines =
+  # the lines of the generated voicemail.conf with their section; app_voicemail
+  # reads the ones outside the reserved sections as `mailbox => PIN,name,...`
+  lines =
     (lib.foldl' (
         acc: line: let
           header = builtins.match "[[:space:]]*[[]([^]]*)[]].*" line;
         in
           if header != null
-          then acc // {context = builtins.head header;}
-          else if acc.context != null && !(builtins.elem acc.context reservedSections)
+          then acc // {section = builtins.head header;}
+          else if acc.section != null
           then
             acc
             // {
@@ -168,42 +168,88 @@
                 acc.lines
                 ++ [
                   {
-                    inherit (acc) context;
+                    inherit (acc) section;
                     inherit line;
                   }
                 ];
             }
           else acc
       ) {
-        context = null;
+        section = null;
         lines = [];
       }
       (splitString "\n" (cfg.renderedFiles."voicemail.conf" or "")))
     .lines;
+  mailboxLines = filter (mailbox: !(builtins.elem mailbox.section reservedSections)) lines;
 
   # secrets in them, which app_voicemail splits at every comma
   mailboxLineSecrets = lib.concatMap (mailbox: secrets.fromText mailbox.line) mailboxLines;
 
-  # app_voicemail keeps 79 bytes of a PIN, the value up to its first comma
-  # (apps/app_voicemail.c append_mailbox); `room` is what the secrets in a PIN
-  # may add to its other bytes
-  pins =
+  # what Asterisk reads of a line: up to a `;` that is not `\;`, split at the
+  # first `=` or `=>`
+  entryOf = line: let
+    parts = builtins.match "([^=]*)=>?(.*)" (builtins.head (builtins.match "((\\\\;|[^;])*).*" line));
+  in
+    if parts == null
+    then null
+    else {
+      key = lib.trim (builtins.head parts);
+      value = lib.trim (builtins.elemAt parts 1);
+    };
+
+  # a value app_voicemail keeps `bytes` of; `room` is what the secrets in it
+  # may add to its other bytes, where `\;` is one byte
+  limited = what: bytes: text: {
+    inherit what bytes;
+    refs = secrets.fromText text;
+    room = bytes - builtins.stringLength (lib.replaceStrings ["\\;"] [";"] (lib.concatStrings (filter isString (builtins.split secrets.placeholderPattern text))));
+  };
+
+  # [general] keys app_voicemail copies into a buffer of fixed size, and the
+  # bytes it keeps of them (apps/app_voicemail.c load_config)
+  generalBytes = {
+    serveremail = 79;
+    fromstring = 99;
+  };
+  # the same for the fields of a mailbox line (struct ast_vm_user, filled by
+  # append_mailbox), where a typed PIN starts with its `-`
+  mailboxFieldBytes = [
+    {
+      index = 0;
+      name = "PIN";
+      bytes = 79;
+    }
+    {
+      index = 1;
+      name = "name";
+      bytes = 79;
+    }
+    {
+      index = 3;
+      name = "pager address";
+      bytes = 79;
+    }
+  ];
+  limitedValues =
     lib.concatMap (
-      mailbox: let
-        # the line up to a `;` that is not `\;`, at its first `=` or `=>`
-        entry = builtins.match "([^=]*)=>?(.*)" (builtins.head (builtins.match "((\\\\;|[^;])*).*" mailbox.line));
-        pin = builtins.head (splitString "," (lib.trim (builtins.elemAt entry 1)));
-        # `\;` is one byte to Asterisk
-        plain = lib.replaceStrings ["\\;"] [";"] (lib.concatStrings (filter isString (builtins.split secrets.placeholderPattern pin)));
+      line: let
+        entry = entryOf line.line;
+        fields = splitString "," entry.value;
       in
-        lib.optional (entry != null) {
-          mailbox = "${lib.trim (builtins.head entry)}@${mailbox.context}";
-          refs = secrets.fromText pin;
-          room = 79 - builtins.stringLength plain;
-        }
+        if entry == null || line.section == "zonemessages"
+        then []
+        else if line.section == "general"
+        then lib.optional (generalBytes ? ${lib.toLower entry.key}) (limited "[general] ${entry.key}" generalBytes.${lib.toLower entry.key} entry.value)
+        else
+          lib.concatMap (
+            field:
+              lib.optional (builtins.length fields > field.index)
+              (limited "${field.name} of ${entry.key}@${line.section}" field.bytes (builtins.elemAt fields field.index))
+          )
+          mailboxFieldBytes
     )
-    mailboxLines;
-  longPins = map (pin: pin.mailbox) (filter (pin: pin.room < 0) pins);
+    lines;
+  cutValues = filter (value: value.room < 0) limitedValues;
 
   # mailboxes referenced by typed PJSIP endpoints (MWI) that are not defined
   voicemailConf = cfg.settings."voicemail.conf" or {};
@@ -325,13 +371,13 @@ in {
         type = types.nullOr types.str;
         default = null;
         example = "pbx@example.org";
-        description = "Sender address of notification e-mails (`serveremail`).";
+        description = "Sender address of notification e-mails (`serveremail`). Asterisk keeps 79 bytes of it.";
       };
       fromName = mkOption {
         type = types.nullOr types.str;
         default = null;
         example = "Voicemail";
-        description = "Sender name of notification e-mails (`fromstring`).";
+        description = "Sender name of notification e-mails (`fromstring`). Asterisk keeps 99 bytes of it.";
       };
       attach = mkOption {
         type = types.bool;
@@ -356,16 +402,19 @@ in {
     (mkIf cfg.enable {
       services.asterisk = {
         fieldSecrets = mailboxLineSecrets;
-        # a secret in several PINs has the least room of them
+        # a secret in several values has the least room of them
         secretMaxLengths = lib.zipAttrsWith (_: rooms: lib.foldl' lib.min (builtins.head rooms) rooms) (
-          lib.concatMap (pin: map (ref: {${secrets.placeholderOf ref} = pin.room;}) pin.refs) (filter (pin: pin.room >= 0) pins)
+          lib.concatMap (value: map (ref: {${secrets.placeholderOf ref} = value.room;}) value.refs) (filter (value: value.room >= 0) limitedValues)
         );
       };
 
       assertions = [
         {
-          assertion = longPins == [];
-          message = "services.asterisk: voicemail PINs longer than the 79 bytes Asterisk keeps, the `-` before a typed mailbox's PIN included: ${concatStringsSep ", " longPins}.";
+          assertion = cutValues == [];
+          message = ''
+            services.asterisk: voicemail values that Asterisk would cut (the `-` before a typed mailbox's PIN counts):
+              ${lib.concatMapStringsSep "\n  " (value: "${value.what}, to ${toString value.bytes} bytes") cutValues}
+          '';
         }
       ];
     })

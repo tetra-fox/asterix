@@ -217,6 +217,13 @@
       assertions = [];
     };
 
+    # a pickup code inside the outbound pattern takes the one number outside
+    # it matches, like a pbx number there, as pbx.outbound.prefix says
+    callPickupInsideOutboundPattern = {
+      module.services.asterisk.features.general.pickupexten = "981";
+      assertions = [];
+    };
+
     # calls from trunks are picked up too
     callPickupOnInboundNumber = {
       module.services.asterisk.features.general.pickupexten = "5551000";

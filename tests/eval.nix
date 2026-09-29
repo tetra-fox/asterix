@@ -806,7 +806,7 @@ in {
                 dtmf = "*9";
                 activateOn = "peer";
                 app = "Playback";
-                args = "tt-monkeys";
+                args = "tt-monkeys,skip";
               };
             };
           }
@@ -817,7 +817,7 @@ in {
           [general]
 
           [applicationmap]
-          monkeys => *9,peer,Playback,tt-monkeys
+          monkeys => *9,peer,Playback(tt-monkeys,skip)
 
           [featuremap]
           automixmon = *3

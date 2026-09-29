@@ -5,7 +5,6 @@
 }: let
   inherit
     (lib)
-    concatStringsSep
     mapAttrs
     mkDefault
     mkIf
@@ -55,8 +54,8 @@
       args = mkOption {
         type = types.str;
         default = "";
-        example = "tt-monkeys";
-        description = "Arguments of the application.";
+        example = "tt-monkeys,skip";
+        description = "Arguments of the application, separated by commas as in the dialplan.";
       };
     };
   };
@@ -122,19 +121,10 @@ in {
         featuremap = toSection fcfg.featureMap;
       }
       // lib.optionalAttrs (fcfg.applications != {}) {
+        # arguments in parentheses: otherwise Asterisk takes only the next field as
+        # the argument, and the one after it as a music class (applicationmap_handler)
         applicationmap =
-          mapAttrs (
-            _: a:
-              mkDefault (
-                concatStringsSep "," [
-                  a.dtmf
-                  a.activateOn
-                  a.app
-                  a.args
-                ]
-              )
-          )
-          fcfg.applications;
+          mapAttrs (_: a: mkDefault "${a.dtmf},${a.activateOn},${a.app}(${a.args})") fcfg.applications;
       };
   };
 }

@@ -216,7 +216,12 @@
         ]
       );
       default = null;
-      description = "DTMF mode; Asterisk's default is `rfc4733`.";
+      description = ''
+        DTMF mode; Asterisk's default is `rfc4733`. Asterisk hears keys sent
+        as tones (`inband`, and `auto` for a device that offers no RFC 4733)
+        only in ulaw and alaw calls, so give an `inband` endpoint
+        `allow = [ "ulaw" "alaw" ]`: in a g722 call its keys are lost.
+      '';
     };
     behindNat = mkOption {
       type = types.bool;
@@ -996,6 +1001,17 @@
     in
       lib.concatMap (part: lib.optional (builtins.stringLength parts.${part} > 79) "[${s.name}] ${part} of ${toString (builtins.stringLength parts.${part})} bytes") ["name" "number"]
   ) (filter (s: isString (s.callerid or null) && asteriskLib.secrets.fromText s.callerid == []) endpointObjects);
+
+  # Asterisk's DSP reads tones in 8 kHz signed linear, ulaw and alaw only
+  # (main/dsp.c ast_dsp_process), and drops the keys of a call in any other codec
+  inbandCodecs =
+    lib.concatMap (
+      s: let
+        others = filter (codec: !(builtins.elem codec ["ulaw" "alaw" "slin"])) (refList (s.allow or null));
+      in
+        optional ((s.dtmf_mode or null) == "inband" && others != []) "[${s.name}] ${concatStringsSep ", " others}"
+    )
+    endpointObjects;
 in {
   options.services.asterisk.pjsip = {
     global = mkOption {
@@ -1176,5 +1192,11 @@ in {
         }.";
       }
     ];
+
+    warnings = optional (inbandCodecs != []) ''
+      services.asterisk: Asterisk hears keys sent as tones only in ulaw and alaw calls, so endpoints with dtmf_mode = inband lose the keys of calls in the other codecs they allow:
+        ${concatStringsSep "\n  " inbandCodecs}
+      Allow only ulaw and alaw there, or use another dtmfMode.
+    '';
   };
 }

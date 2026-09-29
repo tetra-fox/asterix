@@ -1212,6 +1212,26 @@
       ];
     };
 
+    # Asterisk hears inband DTMF in ulaw and alaw calls only, and the default
+    # codecs put g722 first
+    inbandDtmfWithTheDefaultCodecsWarns = {
+      module.services.asterisk.pjsip.endpoints."101".dtmfMode = "inband";
+      assertions = [];
+      warning = "dtmf_mode = inband lose the keys of calls in the other codecs they allow:\n  [101] g722";
+    };
+
+    inbandDtmfWithUlawAndAlawDoesNotWarn = {
+      module.services.asterisk.pjsip.endpoints."101" = {
+        dtmfMode = "inband";
+        allow = [
+          "ulaw"
+          "alaw"
+        ];
+      };
+      assertions = [];
+      warnings = [];
+    };
+
     newlineInValueThrows = {
       module.services.asterisk.pjsip.endpoints."101".callerId = "a\nb";
       throws = true;

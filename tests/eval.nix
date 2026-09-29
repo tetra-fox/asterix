@@ -495,6 +495,33 @@ in {
       ];
     };
 
+    # typed, layer-1 and raw mailbox lines; not the endpoint's password
+    testMailboxLineSecretsAreFields = {
+      expr = let
+        config = evalConfig [
+          phone
+          (
+            {config, ...}: {
+              services.asterisk = {
+                voicemail.mailboxes."101".pin = config.lib.asterisk.secret "/run/secrets/vm-101";
+                settings."voicemail.conf".sales."200" = "${config.lib.asterisk.secret "/run/secrets/vm-200"},Sales";
+                extraConfig."voicemail.conf" = ''
+                  [support]
+                  300 => @NIX_ASTERISK_SECRET:file:/run/secrets/vm-300@,Support
+                '';
+              };
+            }
+          )
+        ];
+      in
+        config.services.asterisk.fieldSecrets;
+      expected = map (path: {_secret = path;}) [
+        "/run/secrets/vm-101"
+        "/run/secrets/vm-200"
+        "/run/secrets/vm-300"
+      ];
+    };
+
     testConfbridgeProfiles = {
       expr =
         (rendered [

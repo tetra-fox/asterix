@@ -81,7 +81,7 @@
   );
 
   secretRefs = unique (lib.concatMap (file: secrets.fromText file.text) (attrValues cfg.files));
-  secretManifest = pkgs.writeText "asterisk-provisioning-secrets" (secrets.manifest secretRefs);
+  secretManifest = pkgs.writeText "asterisk-provisioning-secrets" (secrets.manifest [] secretRefs);
 
   # files with secrets, by how their values are escaped
   filesFor = escape: attrNames (filterAttrs (_: file: file.escape == escape && secrets.fromText file.text != []) cfg.files);

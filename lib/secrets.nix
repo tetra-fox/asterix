@@ -87,10 +87,12 @@ in rec {
     else ref._credential;
 
   # what pkgs/render-secrets reads: a line per reference with its
-  # placeholder, credential name and a description for error messages
-  manifest = refs:
+  # placeholder, credential name, a description for error messages and
+  # `field` for the references in `fields`, which are one field of a
+  # comma-separated value
+  manifest = fields: refs:
     lib.concatMapStrings (
-      ref: "${placeholderOf ref}\t${credentialName ref}\t${ref._secret or "credential ${ref._credential}"}\n"
+      ref: "${placeholderOf ref}\t${credentialName ref}\t${ref._secret or "credential ${ref._credential}"}\t${lib.optionalString (builtins.elem ref fields) "field"}\n"
     )
     refs;
 

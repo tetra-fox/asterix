@@ -3,8 +3,9 @@
 # Replaces the secret placeholders (lib/secrets.nix) in each FILE, in place,
 # with the systemd credentials MANIFEST names, read from
 # $CREDENTIALS_DIRECTORY. MANIFEST has one line per secret: the placeholder,
-# the credential name and a description for error messages, separated by
-# tabs. MODE says how values are written:
+# the credential name, a description for error messages and `field` for a
+# secret that is one field of a comma-separated value and so cannot contain a
+# comma, separated by tabs. MODE says how values are written:
 #
 #   asterisk  a single line without leading or trailing whitespace, `;` as `\;`
 #   xml       `&<>"'` as entities

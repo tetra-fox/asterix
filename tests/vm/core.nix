@@ -14,7 +14,8 @@ pkgs.testers.runNixOSTest {
       ./common.nix
       (import ./secrets.nix {
         # characters that need care in Asterisk config files and in shells
-        fixed.sip-102 = ''p;w&d\x"$HOME'';
+        fixed.sip-102 = ''p;w&d,\x"$HOME'';
+        fixed.vm-101 = "1234";
         random = ["sip-101"];
       })
     ];
@@ -44,9 +45,12 @@ pkgs.testers.runNixOSTest {
 
     with subtest("secrets reach Asterisk unchanged"):
         auth = ast("pjsip show auth 102")
-        assert 'p;w&d\\x"$HOME' in auth, auth
+        assert 'p;w&d,\\x"$HOME' in auth, auth
         random = pbx.succeed("cat /run/test-secrets/sip-101").strip()
         assert random in ast("pjsip show auth 101")
+        pin = ast("dialplan eval function VM_INFO(101@default,password)")
+        assert "Result: 1234\n" in pin, pin
+        assert "Result: Front desk\n" in ast("dialplan eval function VM_INFO(101@default,fullname)")
 
     with subtest("secrets never reach the store or the logs"):
         template = pbx.succeed("readlink -f /etc/asterisk").strip()
@@ -92,6 +96,19 @@ pkgs.testers.runNixOSTest {
         pbx.succeed("systemctl reload asterisk.service")
         assert pid == pbx.succeed("systemctl show -P MainPID asterisk.service").strip()
         pbx.wait_until_succeeds("asterisk -rx 'pjsip show auth 102' | grep -F 'rotated;pw'")
+
+    with subtest("a comma in a secret that is one field of a mailbox line fails the reload"):
+        # app_voicemail splits mailbox lines at every comma, which would make
+        # this PIN 12 and the name 34
+        pbx.succeed("printf '12,34' > /run/test-secrets/vm-101")
+        pbx.fail("systemctl reload asterisk.service")
+        # returns once journald has read what the reload wrote to its output
+        pbx.succeed("journalctl --sync")
+        pbx.succeed("journalctl -u asterisk.service | grep -F 'secret /run/test-secrets/vm-101 is one field of a comma-separated value'")
+        pin = ast("dialplan eval function VM_INFO(101@default,password)")
+        assert "Result: 1234\n" in pin, pin
+        pbx.succeed("printf 1234 > /run/test-secrets/vm-101")
+        pbx.succeed("systemctl reload asterisk.service")
 
     with subtest("restart keeps working"):
         pbx.succeed("systemctl restart asterisk.service")

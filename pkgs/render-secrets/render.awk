@@ -30,6 +30,8 @@ function value(placeholder,    name, path, line, lines, count, status, v, parts,
         v = v (i > 1 ? "\n" : "") lines[i]
     sub(/\r$/, "", v)
 
+    if (isField[placeholder] && index(v, ","))
+        fail("secret " source[placeholder] " is one field of a comma-separated value, so it cannot contain a comma")
     if (mode == "asterisk") {
         if (count > 1 || index(v, "\r"))
             fail("secret " source[placeholder] " contains a line break")
@@ -57,6 +59,7 @@ BEGIN {
         split(line, fields, "\t")
         credential[fields[1]] = fields[2]
         source[fields[1]] = fields[3]
+        isField[fields[1]] = fields[4] == "field"
     }
     if (status < 0)
         fail("cannot read " manifest)

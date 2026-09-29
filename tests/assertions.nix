@@ -449,6 +449,11 @@
       assertion = "names and e-mail addresses cannot contain commas (101@default)";
     };
 
+    voicemailPinWithComma = {
+      module.services.asterisk.voicemail.mailboxes."101".pin = "12,34";
+      assertion = "PINs, names and e-mail addresses cannot contain commas (101@default)";
+    };
+
     voicemailEmailWithoutCommand = {
       module = {config, ...}: {
         services.asterisk.voicemail.mailboxes."101" = {

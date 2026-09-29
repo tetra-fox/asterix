@@ -172,7 +172,7 @@
   refsByFile = lib.genAttrs fileNames (file: secrets.fromText cfg.renderedFiles.${file});
   secretRefs = unique (concatLists (attrValues refsByFile));
   filesWithSecrets = attrNames (filterAttrs (_: refs: refs != []) refsByFile);
-  secretManifest = pkgs.writeText "asterisk-secrets" (secrets.manifest secretRefs);
+  secretManifest = pkgs.writeText "asterisk-secrets" (secrets.manifest cfg.fieldSecrets secretRefs);
 
   # Keys that hold credentials; a plain string there lands in the store.
   secretKeys = [
@@ -800,6 +800,17 @@ in {
       readOnly = true;
       internal = true;
       description = "Text of every generated configuration file (with secret placeholders).";
+    };
+
+    fieldSecrets = mkOption {
+      type = types.listOf (types.attrsOf types.str);
+      default = [];
+      internal = true;
+      description = ''
+        Secret references that are one field of a comma-separated value, from
+        the modules that know the file's format. The service does not start
+        when one of them contains a comma.
+      '';
     };
 
     generatedConfig = mkOption {

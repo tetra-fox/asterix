@@ -124,7 +124,9 @@ services.asterisk.pjsip.endpoints."101".auth.password = config.lib.asterisk.secr
 
 The file can stay readable by root only. With `reloadUnits`, a changed password
 is applied on the next deploy without restarting Asterisk. A secret can also be
-part of a longer value, as in `"${secret path},Front desk"`.
+part of a longer value, as in the voicemail mailbox line
+`"${secret path},Front desk"`. Asterisk splits that line at every comma, so the
+service does not start when a secret in it contains one.
 
 Other secret managers work the same way, since `secret` only takes a path.
 

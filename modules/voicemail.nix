@@ -58,7 +58,8 @@
           example = lib.literalExpression "config.lib.asterisk.secret config.sops.secrets.vm-101.path";
           description = ''
             Mailbox PIN, normally a secret reference. A plain string is stored in
-            the world-readable Nix store and triggers a warning.
+            the world-readable Nix store and triggers a warning. It cannot
+            contain a comma, which ends the PIN in the mailbox line.
           '';
         };
         fullName = mkOption {
@@ -135,13 +136,39 @@
   badFields =
     filter (
       box:
-        builtins.any (field: field != null && hasInfix "," field) [
+        builtins.any (field: isString field && hasInfix "," field) [
+          box.pin
           box.fullName
           box.email
           box.pagerEmail
         ]
     )
     mailboxes;
+
+  # voicemail.conf sections that are not voicemail contexts
+  reservedSections = [
+    "general"
+    "zonemessages"
+  ];
+
+  # secrets in the mailbox lines of the generated voicemail.conf, which
+  # app_voicemail splits at every comma
+  mailboxLineSecrets =
+    (lib.foldl' (
+        acc: line: let
+          header = builtins.match "[[:space:]]*[[]([^]]*)[]].*" line;
+        in
+          if header != null
+          then acc // {inMailboxes = !(builtins.elem (builtins.head header) reservedSections);}
+          else if acc.inMailboxes
+          then acc // {refs = acc.refs ++ secrets.fromText line;}
+          else acc
+      ) {
+        inMailboxes = false;
+        refs = [];
+      }
+      (splitString "\n" (cfg.renderedFiles."voicemail.conf" or "")))
+    .refs;
 
   # mailboxes referenced by typed PJSIP endpoints (MWI) that are not defined
   voicemailConf = cfg.settings."voicemail.conf" or {};
@@ -170,7 +197,7 @@
   mailedBoxes = lib.concatLists (
     mapAttrsToList (
       _: section:
-        lib.optionals (!(builtins.elem section.name ["general" "zonemessages"])) (
+        lib.optionals (!(builtins.elem section.name reservedSections)) (
           mapAttrsToList (box: _: "${box}@${section.name}") (
             filterAttrs (
               _: line: let
@@ -284,66 +311,73 @@ in {
     };
   };
 
-  config = mkIf (cfg.enable && vcfg.enable) {
-    services.asterisk = {
-      modules.load = ["app_voicemail.so"];
+  config = mkMerge [
+    # settings."voicemail.conf" can hold mailboxes without the typed options
+    (mkIf cfg.enable {
+      services.asterisk.fieldSecrets = mailboxLineSecrets;
+    })
 
-      settings."voicemail.conf" = mkMerge (
-        [
-          {
-            general = mkMerge [
-              (toSection {
-                format = concatStringsSep "|" vcfg.format;
-                maxmsg = vcfg.maxMessages;
-                maxsecs = vcfg.maxSeconds;
-                mailcmd = vcfg.email.command;
-                serveremail = vcfg.email.fromAddress;
-                fromstring = vcfg.email.fromName;
-                attach = vcfg.email.attach;
-              })
-              vcfg.settings
-            ];
-          }
-        ]
-        ++ map (box: {
-          ${box.context}.${box.mailbox} = mkDefault (mailboxLine box);
-        })
-        mailboxes
-      );
+    (mkIf (cfg.enable && vcfg.enable) {
+      services.asterisk = {
+        modules.load = ["app_voicemail.so"];
 
-      syntax."voicemail.conf".arrowSections = contexts;
-    };
+        settings."voicemail.conf" = mkMerge (
+          [
+            {
+              general = mkMerge [
+                (toSection {
+                  format = concatStringsSep "|" vcfg.format;
+                  maxmsg = vcfg.maxMessages;
+                  maxsecs = vcfg.maxSeconds;
+                  mailcmd = vcfg.email.command;
+                  serveremail = vcfg.email.fromAddress;
+                  fromstring = vcfg.email.fromName;
+                  attach = vcfg.email.attach;
+                })
+                vcfg.settings
+              ];
+            }
+          ]
+          ++ map (box: {
+            ${box.context}.${box.mailbox} = mkDefault (mailboxLine box);
+          })
+          mailboxes
+        );
 
-    assertions = [
-      {
-        assertion = badFields == [];
-        message = "services.asterisk.voicemail.mailboxes: names and e-mail addresses cannot contain commas (${
-          concatStringsSep ", " (map (box: "${box.mailbox}@${box.context}") badFields)
-        }).";
-      }
-      {
-        assertion = builtins.all (box: builtins.match "[A-Za-z0-9_*#+-]+" box.mailbox != null) mailboxes;
-        message = "services.asterisk.voicemail.mailboxes: mailbox numbers may only contain letters, digits and _*#+-.";
-      }
-      {
-        assertion = !(builtins.elem "general" contexts || builtins.elem "zonemessages" contexts);
-        message = "services.asterisk.voicemail.mailboxes: `general` and `zonemessages` cannot be used as voicemail contexts.";
-      }
-      {
-        assertion = !mailCommandKnown || mailedBoxes == [] || (voicemailConf.general.mailcmd or null) != null;
-        message = "services.asterisk.voicemail: mailboxes with an e-mail address (${concatStringsSep ", " mailedBoxes}) need voicemail.email.command; without it Asterisk runs /usr/sbin/sendmail, which NixOS does not have.";
-      }
-      {
-        assertion = missingMailboxes == [];
-        message = ''
-          services.asterisk: PJSIP endpoints reference voicemail boxes that are not defined:
-            ${concatStringsSep "\n  " missingMailboxes}
-        '';
-      }
-    ];
+        syntax."voicemail.conf".arrowSections = contexts;
+      };
 
-    warnings = map (
-      box: "services.asterisk.voicemail.mailboxes.\"${box.mailbox}@${box.context}\".pin is a plain string, so it is stored world-readable in the Nix store; use config.lib.asterisk.secret instead."
-    ) (filter (box: isString box.pin) mailboxes);
-  };
+      assertions = [
+        {
+          assertion = badFields == [];
+          message = "services.asterisk.voicemail.mailboxes: PINs, names and e-mail addresses cannot contain commas (${
+            concatStringsSep ", " (map (box: "${box.mailbox}@${box.context}") badFields)
+          }).";
+        }
+        {
+          assertion = builtins.all (box: builtins.match "[A-Za-z0-9_*#+-]+" box.mailbox != null) mailboxes;
+          message = "services.asterisk.voicemail.mailboxes: mailbox numbers may only contain letters, digits and _*#+-.";
+        }
+        {
+          assertion = lib.intersectLists reservedSections contexts == [];
+          message = "services.asterisk.voicemail.mailboxes: `general` and `zonemessages` cannot be used as voicemail contexts.";
+        }
+        {
+          assertion = !mailCommandKnown || mailedBoxes == [] || (voicemailConf.general.mailcmd or null) != null;
+          message = "services.asterisk.voicemail: mailboxes with an e-mail address (${concatStringsSep ", " mailedBoxes}) need voicemail.email.command; without it Asterisk runs /usr/sbin/sendmail, which NixOS does not have.";
+        }
+        {
+          assertion = missingMailboxes == [];
+          message = ''
+            services.asterisk: PJSIP endpoints reference voicemail boxes that are not defined:
+              ${concatStringsSep "\n  " missingMailboxes}
+          '';
+        }
+      ];
+
+      warnings = map (
+        box: "services.asterisk.voicemail.mailboxes.\"${box.mailbox}@${box.context}\".pin is a plain string, so it is stored world-readable in the Nix store; use config.lib.asterisk.secret instead."
+      ) (filter (box: isString box.pin) mailboxes);
+    })
+  ];
 }

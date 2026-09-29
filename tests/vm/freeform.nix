@@ -61,6 +61,10 @@ in {
         rtpstart = 10000;
         rtpend = 10999;
       };
+
+      # a secret next to plain text: the PIN of a mailbox line
+      "voicemail.conf".default."101" = "${secret "/run/test-secrets/vm-101"},Front desk";
+      "modules.conf".modules.load = ["app_voicemail.so"];
     };
   };
 }

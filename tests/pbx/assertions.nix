@@ -89,6 +89,15 @@
     allowedNetworks = lib.mkDefault ["10.0.20.0/24"];
   };
 
+  # the baseline without pbx.enable and without its objects
+  disabled =
+    lib.genAttrs ["extensions" "ringGroups" "queues" "conferences" "ivrs" "paging" "hours" "inbound"] (_: lib.mkForce {})
+    // {
+      enable = lib.mkForce false;
+      outbound = lib.mkForce null;
+      emergency = lib.mkForce null;
+    };
+
   cases = {
     baselineIsValid = {
       module = {};
@@ -440,6 +449,40 @@
 
     objectsWithoutEnable = {
       module.pbx.enable = lib.mkForce false;
+      warning = "pbx objects are defined, but pbx.enable is not set";
+    };
+
+    nothingWithoutEnable = {
+      module.pbx = disabled;
+      warnings = [];
+    };
+
+    outboundWithoutEnable = {
+      module.pbx =
+        disabled
+        // {
+          outbound = lib.mkForce {
+            prefix = "9";
+            trunk = "provider";
+          };
+        };
+      warning = "pbx objects are defined, but pbx.enable is not set";
+    };
+
+    emergencyWithoutEnable = {
+      module.pbx =
+        disabled
+        // {
+          emergency = lib.mkForce {
+            numbers = ["911"];
+            trunk = "provider";
+          };
+        };
+      warning = "pbx objects are defined, but pbx.enable is not set";
+    };
+
+    voicemailMenuWithoutEnable = {
+      module.pbx = disabled // {voicemailMenu = "*97";};
       warning = "pbx objects are defined, but pbx.enable is not set";
     };
 

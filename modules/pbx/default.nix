@@ -9,7 +9,7 @@
   ...
 }: let
   cfg = config.pbx;
-  objects = ["extensions" "ringGroups" "queues" "conferences" "ivrs" "paging" "hours" "inbound"];
+  objects = ["extensions" "ringGroups" "queues" "conferences" "ivrs" "paging" "hours" "inbound" "outbound" "emergency" "voicemailMenu"];
 in {
   # the core by the path the flake exports it as, so importing both is fine
   imports = [
@@ -34,7 +34,7 @@ in {
       services.asterisk.enable = lib.mkDefault true;
     })
     {
-      warnings = lib.optional (!cfg.enable && builtins.any (name: cfg.${name} != {}) objects) "pbx objects are defined, but pbx.enable is not set, so they do nothing.";
+      warnings = lib.optional (!cfg.enable && builtins.any (name: !(builtins.elem cfg.${name} [{} null])) objects) "pbx objects are defined, but pbx.enable is not set, so they do nothing.";
     }
   ];
 }

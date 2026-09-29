@@ -1,0 +1,6 @@
+0?GET /cfgc074ad000101.xml HTTP/1.1
+Host: 10.0.20.10
+User-Agent: Grandstream Model HW HT801 V2.1A SW 1.0.51.3 DevId c074ad000101
+Accept: */*
+Connection: Keep-Alive
+

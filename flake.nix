@@ -41,12 +41,17 @@
     packages = forAllSystems (pkgs: {
       docs = import ./docs {inherit pkgs self;};
       provisioning-server = pkgs.callPackage ./pkgs/provisioning-server/package.nix {};
+      provisioning-server-fuzz = pkgs.callPackage ./pkgs/provisioning-server/fuzz/package.nix {};
     });
 
-    # the same toolchain that builds the package, plus the tools to work on it
+    # the same toolchain that builds the server and its fuzz target (with
+    # cargo-fuzz), plus the tools to work on them
     devShells = forAllSystems (pkgs: {
       default = pkgs.mkShell {
-        inputsFrom = [self.packages.${pkgs.stdenv.hostPlatform.system}.provisioning-server];
+        inputsFrom = with self.packages.${pkgs.stdenv.hostPlatform.system}; [
+          provisioning-server
+          provisioning-server-fuzz
+        ];
         packages = [
           pkgs.clippy
           pkgs.rust-analyzer

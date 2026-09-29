@@ -855,6 +855,15 @@
       '';
     };
 
+    # ConfBridge refuses a name of 80 bytes or more
+    conferenceNameLongerThan79Bytes = {
+      module.pbx.conferences = {
+        ${lib.strings.replicate 80 "c"} = {};
+        ${lib.strings.replicate 79 "d"} = {};
+      };
+      assertion = "pbx.conferences: names longer than 79 bytes, which ConfBridge refuses: ${lib.strings.replicate 80 "c"}.";
+    };
+
     # Queue's argument parser drops backslashes, and an unclosed parenthesis
     # takes the timeout into the name
     queueNames = {

@@ -46,6 +46,9 @@
 
   # ConfBridge needs a conference name
   badNames = builtins.filter (name: name == "" || pbxLib.breaksContext name || pbxLib.breaksArgument name) (builtins.attrNames cfg.conferences);
+  # ConfBridge refuses a name of 80 bytes or more (apps/app_confbridge.c
+  # confbridge_exec)
+  longNames = builtins.filter (name: builtins.stringLength name > 79) (builtins.attrNames cfg.conferences);
 
   # profiles Asterisk has without configuration
   missingProfiles = concatMap (
@@ -60,7 +63,10 @@ in {
     type = types.attrsOf conferenceType;
     default = {};
     example = lib.literalExpression ''{ board = { number = "800"; }; }'';
-    description = "Conference rooms, keyed by room name.";
+    description = ''
+      Conference rooms, keyed by room name. ConfBridge takes names of up to
+      79 bytes.
+    '';
   };
 
   config = mkIf cfg.enable {
@@ -102,6 +108,10 @@ in {
           pbx.conferences: names that Asterisk would misread in the dialplan (they may not be empty, or contain , ; [ ] " \ ''${ $[ or an unclosed parenthesis):
             ${concatMapStringsSep "\n  " (name: lib.showOption ["pbx" "conferences" name]) badNames}
         '';
+      }
+      {
+        assertion = longNames == [];
+        message = "pbx.conferences: names longer than 79 bytes, which ConfBridge refuses: ${concatStringsSep ", " longNames}.";
       }
       {
         assertion = missingProfiles == [];

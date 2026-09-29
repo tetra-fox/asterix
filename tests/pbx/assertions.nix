@@ -280,6 +280,41 @@
       throws = true;
     };
 
+    # GotoIfTime skips a time past 23:59, so these hours would never open
+    openUntil24Throws = {
+      module.pbx.hours.office.open = lib.mkForce [
+        {
+          days = "mon-fri";
+          time = "09:00-24:00";
+        }
+      ];
+      throws = true;
+    };
+
+    # GotoIfTime skips day 0, so the holiday would never close
+    holidayDayZeroThrows = {
+      module.pbx.hours.office.holidays = ["apr 0"];
+      throws = true;
+    };
+
+    # feb 30 never comes, and GotoIfTime reads dec 30-2 as dec 1, 2, 30 and
+    # 31; feb 29 comes in leap years, apr 30-31 closes on apr 30
+    holidaysThatNeverCome = {
+      module.pbx.hours.office.holidays = [
+        "feb 30"
+        "dec 30-2"
+        "feb 29"
+        "apr 30-31"
+      ];
+      assertions = [
+        ''
+          pbx.hours: holidays on a day their month does not have, or that end before they start:
+            pbx.hours.office.holidays: feb 30
+            pbx.hours.office.holidays: dec 30-2
+        ''
+      ];
+    };
+
     ht801PlainAdminPasswordWarns = {
       module.pbx.phones = {
         listenAddress = "10.0.20.10";

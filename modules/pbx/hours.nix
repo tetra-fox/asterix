@@ -10,14 +10,18 @@
 }: let
   inherit
     (lib)
+    concatLists
+    elemAt
     escapeShellArgs
     mapAttrs'
+    mapAttrsToList
     mkDefault
     mkIf
     mkOption
     nameValuePair
     optional
     optionalAttrs
+    showOption
     types
     unique
     ;
@@ -27,7 +31,26 @@
 
   day = "(sun|mon|tue|wed|thu|fri|sat)";
   days = "${day}(-${day})?";
-  month = "(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)";
+  # GotoIfTime skips a time past 23:59 or a day outside 1 to 31
+  # (main/pbx_timing.c get_timerange and lookup_name)
+  timeOfDay = "([01][0-9]|2[0-3]):[0-5][0-9]";
+  monthDay = "(0?[1-9]|[12][0-9]|3[01])";
+  # the days of each month, with feb 29 of leap years
+  monthDays = {
+    jan = 31;
+    feb = 29;
+    mar = 31;
+    apr = 30;
+    may = 31;
+    jun = 30;
+    jul = 31;
+    aug = 31;
+    sep = 30;
+    oct = 31;
+    nov = 30;
+    dec = 31;
+  };
+  month = "(${lib.concatStringsSep "|" (builtins.attrNames monthDays)})";
 
   rangeType = types.submodule {
     options = {
@@ -37,9 +60,9 @@
         description = "Days of the week: `mon-fri`, `sat`, `mon&wed`, or `*` for every day.";
       };
       time = mkOption {
-        type = types.strMatching "[0-2][0-9]:[0-5][0-9]-[0-2][0-9]:[0-5][0-9]";
+        type = types.strMatching "${timeOfDay}-${timeOfDay}";
         example = "09:00-17:00";
-        description = "Opening hours of those days, in `timezone`.";
+        description = "Opening hours of those days, in `timezone`, up to the end of the last minute: `00:00-23:59` is the whole day.";
       };
     };
   };
@@ -65,7 +88,7 @@
         description = "Opening hours; outside them it is closed.";
       };
       holidays = mkOption {
-        type = types.listOf (types.strMatching "${month} [0-3]?[0-9](-[0-3]?[0-9])?");
+        type = types.listOf (types.strMatching "${month} ${monthDay}(-${monthDay})?");
         default = [];
         example = [
           "dec 24-26"
@@ -88,6 +111,21 @@
   };
 
   zoneFile = zone: "${pkgs.tzdata}/share/zoneinfo/${zone}";
+
+  # a day its month lacks never comes, and GotoIfTime wraps a range that
+  # ends before it starts within the month (main/pbx_timing.c get_range)
+  badHolidays = concatLists (mapAttrsToList (name: hours:
+    map (date: "${showOption ["pbx" "hours" name "holidays"]}: ${date}") (builtins.filter (date: let
+      m = builtins.match "([a-z]+) ([0-9]+)(-([0-9]+))?" date;
+      first = lib.toIntBase10 (elemAt m 1);
+      last =
+        if elemAt m 3 == null
+        then first
+        else lib.toIntBase10 (elemAt m 3);
+    in
+      first > monthDays.${elemAt m 0} || last < first)
+    hours.holidays))
+  cfg.hours);
 
   hoursSection = name: hours: let
     state = "Custom:${pbxLib.objectContext "hours" name}";
@@ -172,6 +210,16 @@ in {
 
   config = mkIf cfg.enable {
     services.asterisk.dialplan.contexts = mapAttrs' (name: hours: nameValuePair (pbxLib.objectContext "hours" name) (hoursSection name hours)) cfg.hours;
+
+    assertions = [
+      {
+        assertion = badHolidays == [];
+        message = ''
+          pbx.hours: holidays on a day their month does not have, or that end before they start:
+            ${lib.concatStringsSep "\n  " badHolidays}
+        '';
+      }
+    ];
 
     system.checks = optional (zones != []) (
       pkgs.runCommand "pbx-hours-timezones" {} ''

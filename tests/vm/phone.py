@@ -135,6 +135,16 @@ class Phone:
         """Wait until the phone has received more than `after` requests of `method`."""
         self.wait_count(f"RX [0-9]+ bytes Request msg {method}/", after + 1, timeout=timeout)
 
+    def contact_status(self, machine):
+        """Status (Avail, NonQual, ...) of this phone's contact in `pjsip show
+        contacts` on `machine`, or None when Asterisk holds none for it."""
+        match = re.search(
+            rf"^ *Contact: +{self.user}/sip:{self.user}@[^:]+:{self.sip_port}\S* +\S+ +(\S+)",
+            asterisk(machine, "pjsip show contacts"),
+            re.M,
+        )
+        return match.group(1) if match else None
+
     def disconnects(self):
         return self.count("Call [0-9]+ is DISCONNECTED")
 
@@ -212,6 +222,29 @@ def start_phones(phones):
     for machine, group in by_machine.items():
         machine.succeed("\n".join(phone.start_command() for phone in group))
         machine.wait_until_succeeds(" && ".join(f"test -f {phone.log}" for phone in group), timeout=60)
+
+
+def wait_registrations(expected, timeout=60):
+    """Wait until the first registration of each phone in `expected` ({phone:
+    SIP status}) ended with that status, as pjsua holds it: its CLI reopens the
+    log right after the first REGISTER went out, and loses what pjsua logs
+    meanwhile. Anything pjsua logs after this returns reaches its log."""
+    for phone in expected:
+        # the CLI logs this into the reopened log
+        phone.machine.wait_until_succeeds(f"grep -q 'Module \"mod-pjsua-log\" unregistered' {phone.log}", timeout=timeout)
+    deadline = time.time() + timeout
+    while True:
+        answers = cli_parallel([(phone, "acc show") for phone in expected])
+        found = {}
+        for phone in expected:
+            # ` *[ 1] sip:201@pbx: 403/Forbidden (expires=-1)`, 100 while in progress
+            match = re.search(r"^ \*\[ *\d+\] \S+: (\d+)/", answers[phone.name], re.M)
+            found[phone.name] = int(match.group(1)) if match else None
+        if all(found[phone.name] == status for phone, status in expected.items()):
+            return
+        if time.time() > deadline:
+            raise Exception(f"registrations ended with {found}, expected {({p.name: s for p, s in expected.items()})}")
+        time.sleep(1)
 
 
 def cli_parallel(commands):

@@ -10,7 +10,10 @@
 # is picked up from another phone, an IVR reads RFC 4733 and SIP INFO DTMF, a
 # call survives a lossy network, codecs with different sample rates are
 # transcoded, a call is recorded to the spool, and a baresip phone calls a
-# pjsua one
+# pjsua one. Registrations get the status Asterisk documents: a wrong password
+# or user, an aor that takes none, a device past maxContacts refused or
+# replacing the contact that expires soonest, qualify on and off, a refresh,
+# an unregistration and an expiry.
 {
   pkgs,
   self,
@@ -32,6 +35,21 @@
     "211" = "Kim";
     "212" = "Lou";
   };
+
+  # extension -> aor of the endpoints only the registration subtests use.
+  # minimum_expiration lets a phone ask for 10 second registrations, which
+  # it refreshes every 5 seconds
+  registrationAors = {
+    "213".maxContacts = 0;
+    # the typed defaults: one contact, which a new device takes over
+    "214".settings.minimum_expiration = 10;
+    "215".removeExisting = false;
+    "216" = {
+      qualifyFrequency = 0;
+      settings.minimum_expiration = 10;
+    };
+    "217".maxContacts = 2;
+  };
 in
   pkgs.testers.runNixOSTest {
     name = "asterisk-calls";
@@ -49,7 +67,8 @@ in
                 "sip-${extension}" = "pw-${extension}";
                 "vm-${extension}" = "9${extension}";
               })
-              names;
+              names
+              // lib.mapAttrs' (extension: _: lib.nameValuePair "sip-${extension}" "pw-${extension}") registrationAors;
           })
         ];
 
@@ -87,6 +106,12 @@ in
                   mailboxes = ["${extension}@default"];
                 })
                 names)
+              (lib.mapAttrs (extension: aor: {
+                  context = "office";
+                  auth.password = secret "/run/test-secrets/sip-${extension}";
+                  inherit aor;
+                })
+                registrationAors)
               {
                 "207".allow = ["alaw"];
                 "208".allow = ["g722"];
@@ -531,5 +556,80 @@ in
             wait_hears(phone["201"], [lou.tone])
             lou.hangup()
             wait_idle(pbx)
+
+        with subtest("registrations get the status Asterisk documents for their credentials and aor"):
+            cursor = journal_cursor(pbx)
+            wrong = Phone(phones, "214-wrong", "214", "not-the-password", "pbx", sip_port=5100, cli_port=2330)
+            stranger = Phone(phones, "299", "299", "pw-299", "pbx", sip_port=5101, cli_port=2331)
+            closed = Phone(phones, "213", "213", "pw-213", "pbx", sip_port=5102, cli_port=2332)
+            first = Phone(phones, "215-first", "215", "pw-215", "pbx", sip_port=5103, cli_port=2333)
+            old = Phone(phones, "214-old", "214", "pw-214", "pbx", sip_port=5104, cli_port=2334)
+            lasting = Phone(phones, "217-lasting", "217", "pw-217", "pbx", sip_port=5105, cli_port=2335)
+            quiet = Phone(phones, "216", "216", "pw-216", "pbx", sip_port=5106, cli_port=2336)
+            start_phones([wrong, stranger, closed, first, old])
+            lasting.start("--reg-timeout=3600")
+            quiet.start("--reg-timeout=10")
+            # refused credentials get a 401 after the challenge, an unknown user too
+            wait_registrations({wrong: 401, stranger: 401, closed: 403, first: 200, old: 200, lasting: 200, quiet: 200})
+            # one device too many on 215 and on 214, and 217's second one
+            second = Phone(phones, "215-second", "215", "pw-215", "pbx", sip_port=5107, cli_port=2337)
+            brief = Phone(phones, "217-brief", "217", "pw-217", "pbx", sip_port=5108, cli_port=2338)
+            new = Phone(phones, "214-new", "214", "pw-214", "pbx", sip_port=5109, cli_port=2339)
+            start_phones([second, brief])
+            new.start("--reg-timeout=10")
+            wait_registrations({second: 403, brief: 200, new: 200})
+            for line in [
+                r"from '<sip:214@pbx>' failed for '[0-9.]+:5100' .* - Failed to authenticate",
+                r"from '<sip:299@pbx>' failed for '[0-9.]+:5101' .* - No matching endpoint found",
+                r"AOR '213' has no configured max_contacts",
+                r"endpoint '215' \([0-9.]+:5107\) to AOR '215' will exceed max contacts of 1",
+                r"Removed contact 'sip:214@[0-9.]+:5104;ob' from AOR '214' due to remove existing",
+                r"Added contact 'sip:214@[0-9.]+:5109;ob' to AOR '214' with expiration of 10 seconds",
+                r"Added contact 'sip:216@[0-9.]+:5106;ob' to AOR '216' with expiration of 10 seconds",
+            ]:
+                wait_journal(pbx, cursor, line)
+            for holder in (first, new, lasting, brief, desk, mobile):
+                assert holder.contact_status(pbx), f"{holder.name} holds no contact"
+            for refused in (wrong, closed, second, old):
+                assert refused.contact_status(pbx) is None, f"{refused.name} holds a contact"
+            # 215 does not take a restarted phone for one device too many: its
+            # Contact is the same, so the registration updates it
+            first.stop()
+            again = Phone(phones, "215-again", "215", "pw-215", "pbx", sip_port=first.sip_port, cli_port=2341)
+            again.start()
+            wait_registrations({again: 200})
+            assert again.contact_status(pbx)
+
+        with subtest("a device past maxContacts replaces the contact that expires soonest, not the oldest"):
+            # lasting registered first for an hour, brief after it for 300 seconds
+            cursor = journal_cursor(pbx)
+            third = Phone(phones, "217-third", "217", "pw-217", "pbx", sip_port=5110, cli_port=2340)
+            third.start()
+            wait_registrations({third: 200})
+            wait_journal(pbx, cursor, r"Removed contact 'sip:217@[0-9.]+:5108;ob' from AOR '217' due to remove existing")
+            assert lasting.contact_status(pbx) and third.contact_status(pbx)
+            assert brief.contact_status(pbx) is None
+
+        with subtest("a qualified contact answers OPTIONS and is available, an unqualified one is never qualified"):
+            # Asterisk qualifies a new contact at once, and only an answered
+            # OPTIONS makes it Avail. quiet registered before new.
+            retry(lambda _: new.contact_status(pbx) == "Avail", timeout_seconds=30)
+            assert quiet.contact_status(pbx) == "NonQual"
+
+        with subtest("a phone refreshes and ends its registration, another goes away without ending it"):
+            cursor = journal_cursor(pbx)
+            # its last refresh was at most 5 seconds ago
+            quiet.stop()
+            assert quiet.contact_status(pbx) == "NonQual"
+            # pjsua cannot unregister while a refresh is in progress, so do it
+            # right after one, 5 seconds before the next
+            refreshes = new.count(": registration success")
+            new.wait_count(": registration success", refreshes + 1, timeout=30)
+            new.cli("acc unreg")
+            wait_journal(pbx, cursor, r"Removed contact 'sip:214@[0-9.]+:5109;ob' from AOR '214' due to request")
+            assert new.contact_status(pbx) is None
+
+        with subtest("the registration of the phone that went away expires"):
+            retry(lambda _: quiet.contact_status(pbx) is None, timeout_seconds=30)
       '';
   }

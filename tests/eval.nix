@@ -1091,6 +1091,39 @@ in {
       };
     };
 
+    # ami.openFirewall and http.openFirewall are read whether or not
+    # services.asterisk.openFirewall is set, so a value of another type fails
+    testOpenFirewallFlagsAreRead = {
+      expr =
+        map (
+          module: (builtins.tryEval (evalConfig [phone module]).system.build.toplevel.drvPath).success
+        ) [
+          {
+            services.asterisk.ami = {
+              enable = true;
+              openFirewall = "yes";
+            };
+          }
+          {
+            services.asterisk.http = {
+              enable = true;
+              openFirewall = "yes";
+            };
+          }
+          {
+            services.asterisk.ami = {
+              enable = true;
+              openFirewall = true;
+            };
+          }
+        ];
+      expected = [
+        false
+        false
+        true
+      ];
+    };
+
     # the module reads its read-only options, so the system does not evaluate
     # with a definition of one elsewhere, instead of ignoring it
     testReadOnlyOptionsCannotBeSet = {

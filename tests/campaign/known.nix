@@ -7,7 +7,6 @@
   "services.asterisk.ami.address = \"127.0.0.1:5038\"" = "rejected by asterisk-config-check";
   "services.asterisk.ami.address = \"300.0.0.1\"" = "rejected by asterisk-config-check";
   "services.asterisk.ami.address = \"pbx\"" = "rejected by asterisk-config-check";
-  "services.asterisk.ami.openFirewall = \"yes\"" = "P3: loads";
   "services.asterisk.ami.port = 0" = "P2: does not load";
   "services.asterisk.ami.port = 1" = "P2: does not load";
   "services.asterisk.ami.port = 1023" = "P2: does not load";
@@ -44,7 +43,6 @@
   "services.asterisk.features.general = {\"q7unknown\":\"x\"}" = "rejected by asterisk-config-check";
   "services.asterisk.http.address = \"300.0.0.1\"" = "rejected by asterisk-config-check";
   "services.asterisk.http.address = \"pbx\"" = "rejected by asterisk-config-check";
-  "services.asterisk.http.openFirewall = \"yes\"" = "P3: loads";
   "services.asterisk.http.settings = {\"q7unknown\":\"x\"}" = "rejected by asterisk-config-check";
   "services.asterisk.http.tls.address = \"pbx\"" = "rejected by asterisk-config-check";
   "services.asterisk.includes.<name>.*.optional = default" = "limitation (D43: the included file is not in the build)";

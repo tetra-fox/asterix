@@ -219,6 +219,9 @@ in {
         firewall.http = hcfg.openFirewall;
       };
 
+      # the flag comes first, so its type is checked when openFirewall is off
+      warnings = lib.optional (hcfg.openFirewall && !cfg.openFirewall) "services.asterisk.http.openFirewall opens the HTTP ports only together with services.asterisk.openFirewall, which is off.";
+
       assertions = [
         {
           assertion = hcfg.tls.enable -> (hcfg.tls.certFile != null && hcfg.tls.keyFile != null);

@@ -691,6 +691,24 @@
 
     # manager.c skips a section called general in any case, which it reads as
     # its settings, so no such user can log in
+    # their ports are only opened together with services.asterisk.openFirewall
+    amiAndHttpOpenFirewallAlone = {
+      module.services.asterisk = {
+        ami = {
+          enable = true;
+          openFirewall = true;
+        };
+        http = {
+          enable = true;
+          openFirewall = true;
+        };
+      };
+      warnings = [
+        "services.asterisk.ami.openFirewall opens the AMI port only together with services.asterisk.openFirewall, which is off."
+        "services.asterisk.http.openFirewall opens the HTTP ports only together with services.asterisk.openFirewall, which is off."
+      ];
+    };
+
     amiUserNamedGeneralInAnotherCase = {
       module = {config, ...}: {
         services.asterisk.ami = {

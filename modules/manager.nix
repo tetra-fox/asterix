@@ -161,6 +161,9 @@ in {
       firewall.ami = acfg.openFirewall;
     };
 
+    # the flag comes first, so its type is checked when openFirewall is off
+    warnings = lib.optional (acfg.openFirewall && !cfg.openFirewall) "services.asterisk.ami.openFirewall opens the AMI port only together with services.asterisk.openFirewall, which is off.";
+
     assertions = [
       {
         assertion = reserved == [];

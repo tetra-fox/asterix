@@ -117,6 +117,8 @@ in
 
     vm-conference = import ./vm/conference.nix {inherit pkgs self;};
 
+    vm-recordings = import ./vm/recordings.nix {inherit pkgs self;};
+
     vm-queues = import ./vm/queues.nix {inherit pkgs self;};
 
     vm-nat = import ./vm/nat.nix {inherit pkgs self;};

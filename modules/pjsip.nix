@@ -273,7 +273,12 @@
             type = types.listOf types.str;
             default = [];
             example = ["101@default"];
-            description = "Voicemail boxes whose message-waiting state is sent to the device.";
+            description = ''
+              Voicemail boxes whose message-waiting state is sent to the device,
+              in NOTIFYs it did not ask for. Asterisk refuses a device's own
+              subscription to message-summary with 404, so the device has to take
+              these NOTIFYs.
+            '';
           };
         };
     }

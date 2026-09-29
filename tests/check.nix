@@ -52,6 +52,13 @@
       ''}/lib/slow-log.so";
     };
 
+  # the check stopped after `seconds`, for a case that must fail sooner than
+  # the check's own time limits
+  withTimeLimit = seconds: check:
+    check.overrideAttrs (old: {
+      buildCommand = "timeout ${toString seconds} bash -euo pipefail -c ${lib.escapeShellArg old.buildCommand}";
+    });
+
   failing = {
     misspelledKey = {
       module.services.asterisk.pjsip.endpoints."101".settings.direct_mdia = false;
@@ -159,6 +166,26 @@
       expect = [
         "Inheritance requested, but category 'late' does not exist"
         "Contents of config file 'pjsip.conf' are invalid and cannot be parsed"
+      ];
+    };
+    # Asterisk exits while loading: res_websocket_client fails without
+    # res_sorcery_config, which it does not declare as a dependency. The
+    # check says so at once instead of waiting for Asterisk to be ready
+    ariWithoutDefaultModules = {
+      module = {config, ...}: {
+        services.asterisk = {
+          modules.defaultModules = false;
+          http.enable = true;
+          ari = {
+            enable = true;
+            users.app.password = config.lib.asterisk.secret "/run/secrets/ari";
+          };
+        };
+      };
+      timeLimit = 60;
+      expect = [
+        "asterisk-config-check: Asterisk did not finish loading:"
+        "Failed to load module res_websocket_client.so"
       ];
     };
   };
@@ -331,8 +358,8 @@
   };
 in {
   # each case is { module; expect ? [ lines ]; withoutUserNamespaces ? false;
-  # slowLogger ? false; }, with an example's evaluated `config` in place of a
-  # module on top of base
+  # slowLogger ? false; timeLimit ? seconds; }, with an example's evaluated
+  # `config` in place of a module on top of base
   tests =
     failing
     // lib.mapAttrs (_: module: {inherit module;}) passing
@@ -363,6 +390,8 @@ in {
               then withoutUserNamespaces configCheck
               else if case.slowLogger or false
               then withSlowLogger configCheck
+              else if case ? timeLimit
+              then withTimeLimit case.timeLimit configCheck
               else configCheck;
             log = "${pkgs.testers.testBuildFailure check}/testBuildFailure.log";
           in

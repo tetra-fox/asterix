@@ -10,7 +10,9 @@
 # member's name with a comma is read whole, an agent logs in with a feature
 # code and stays a member across a restart (persistent members), a caller
 # waits in line while the only agent is busy and during its wrap-up time, and
-# the queue log records it all
+# the queue log records it all. The numbers of pbx.queues reach the same
+# queues: rrmemory goes on across both ways in, a caller waits in line without
+# a timeout and goes to noAnswer after one while the member still rings
 {
   pkgs,
   self,
@@ -69,6 +71,15 @@
     retry = 1;
     settings.ringinuse = false;
   };
+
+  # where calls of pbx.queues that no member takes end up: landed/<extension>
+  # notes the extension
+  landed = extension: {
+    context = {
+      inherit extension;
+      context = "landed";
+    };
+  };
 in
   pkgs.testers.runNixOSTest {
     name = "asterisk-queues";
@@ -76,15 +87,28 @@ in
     nodes = {
       pbx = {config, ...}: {
         imports = [
-          self.nixosModules.default
+          self.nixosModules.pbx
           ./common.nix
           (import ./secrets.nix {
             fixed = lib.listToAttrs (map (extension: lib.nameValuePair "sip-${extension}" "pw-${extension}") extensions);
           })
         ];
 
-        services.asterisk = {
+        # numbers for the queues, with where a call goes that no member takes
+        pbx = {
           enable = true;
+          queues = {
+            support.number = "700";
+            ring516 = {
+              number = "703";
+              timeout = 3;
+              noAnswer = landed "timeout";
+            };
+            hotline.number = "704";
+          };
+        };
+
+        services.asterisk = {
           openFirewall = true;
 
           # the test follows calls through verbose messages in the journal
@@ -191,6 +215,12 @@ in
               };
             };
           };
+          # a queue written in settings, as pbx.queues.ring516 names it; 516
+          # rings for 10 s at a time
+          settings."queues.conf".ring516 = {
+            timeout = 10;
+            member = ["PJSIP/516"];
+          };
 
           dialplan.contexts.office.extensions =
             {
@@ -222,6 +252,11 @@ in
               "Verbose(1,queuestatus \${QUEUESTATUS})"
               "Hangup()"
             ]);
+          dialplan.contexts.office.includes = ["pbx-internal"];
+          dialplan.contexts.landed.extensions = lib.genAttrs ["timeout"] (outcome: [
+            "Set(DB(test/landed)=${outcome})"
+            "Hangup()"
+          ]);
         };
       };
 
@@ -332,6 +367,16 @@ in
             assert answered == ["511", "512", "513"], answered
             connected["support"] = answered
 
+        with subtest("the number of pbx.queues.support reaches the same queue, whose rrmemory goes on with the next agent"):
+            cursor = journal_cursor(pbx)
+            phone["501"].call("700")
+            wait_journal(pbx, cursor, "Started music on hold, class 'default', on channel 'PJSIP/501-")
+            agent = poll(lambda: agent_of("501"), "501 to reach an agent")
+            phone["501"].hangup()
+            wait_idle(pbx)
+            assert agent == "511", agent
+            connected["support"].append(agent)
+
         with subtest("ringall rings every agent of the lowest penalty at once"):
             rung, agent = queue_call("ringall")
             # 516 has a higher penalty
@@ -402,6 +447,19 @@ in
             assert ("PJSIP/516", "PAUSE", [""]) in events, events
             assert [e[0] for e in events if e[1] == "CONNECT"] == ["PJSIP/511"], events
 
+        with subtest("the timeout of pbx.queues.ring516, a queue written in settings, sends the caller to noAnswer while the member still rings"):
+            cancels = phone["516"].requests("CANCEL")
+            phone["501"].call("703")
+            pbx.wait_until_succeeds("asterisk -rx 'database get test landed' | grep -q 'Value: timeout'")
+            phone["516"].wait_request("CANCEL", after=cancels)
+            wait_idle(pbx)
+            entries = queue_log("ring516")
+            entered = [when for when, _, event, _ in entries if event == "ENTERQUEUE"]
+            left = [when for when, _, event, _ in entries if event == "EXITWITHTIMEOUT"]
+            # 3 s, where the member alone would ring for 10; the log counts
+            # whole seconds
+            assert len(entered) == len(left) == 1 and 3 <= left[0] - entered[0] <= 4, entries
+
         with subtest("a queue whose members are all unavailable turns callers away"):
             # the member's name is read whole, and its state is its device's
             assert "Doe, Jane (PJSIP/515) (ringinuse enabled) (Unavailable)" in asterisk(pbx, "queue show sales")
@@ -426,8 +484,8 @@ in
             phone["501"].call("602")
             wait_bridged(pbx, "501", "514")
 
-        with subtest("a caller waits in line while the agent is busy, and during its wrap-up time"):
-            phone["502"].call("602")
+        with subtest("a caller of pbx.queues.hotline, which has no timeout, waits in line while the agent is busy with a caller of the core dialplan, and during its wrap-up time"):
+            phone["502"].call("704")
             wait_channel(pbx, "502", app="Queue")
             # the queue tries the agent every second, and it is on a call
             pbx.wait_until_succeeds("asterisk -rx 'queue show hotline' | grep -qE '1. PJSIP/502-.*wait: 0:(0[2-9]|[1-5][0-9])'")

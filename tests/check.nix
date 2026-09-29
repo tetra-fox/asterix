@@ -212,6 +212,15 @@
       };
       expect = ["app_queue declined to load"];
     };
+    # the service passes extraArguments on to Asterisk, which exits on an
+    # option it does not know
+    unknownArgument = {
+      module.services.asterisk.extraArguments = ["-Z"];
+      expect = [
+        "asterisk-config-check: Asterisk did not start:"
+        "invalid option -- 'Z'"
+      ];
+    };
     # the options load the modules they need, but not what those need
     pjsipWithoutDefaultModules = {
       module.services.asterisk.modules.defaultModules = false;
@@ -522,6 +531,14 @@
         application = "${pkgs.coreutils}/bin/cat /dev/zero";
       };
     };
+    # -U and -G name the service's user and group, which the build does not
+    # have, so the check leaves them out, as it leaves out runuser and rungroup
+    userAndGroupArguments.services.asterisk.extraArguments = [
+      "-vvv"
+      "-U"
+      "asterisk"
+      "-dGasterisk"
+    ];
     # the examples of the module lists load as they are
     moduleListExamples.services.asterisk.modules = let
       options = (evalSystem []).options.services.asterisk.modules;

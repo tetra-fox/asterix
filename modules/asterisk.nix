@@ -196,10 +196,72 @@
       ++ concatMap (s: lib.optionals (s ? external_signaling_address) [s.external_signaling_address] ++ lib.optionals (s ? external_media_address) [s.external_media_address]) (ofType "transport")
       ++ lib.optionals (rtpGeneral ? turnaddr) [rtpGeneral.turnaddr]
     )));
+  # extraArguments as Asterisk's getopt reads them (main/asterisk.c
+  # getopt_settings): { option; value; } for each option, { argument; } for the rest
+  extraOptions = let
+    takesValue = option: builtins.elem option ["C" "e" "G" "L" "M" "s" "U" "x"];
+    add = acc: item: acc // {items = acc.items ++ [item];};
+    cluster = acc: characters: let
+      option = builtins.head characters;
+      rest = lib.concatStrings (builtins.tail characters);
+    in
+      if characters == []
+      then acc
+      else if !(takesValue option)
+      then
+        cluster (add acc {
+          inherit option;
+          value = null;
+        }) (builtins.tail characters)
+      else if rest != ""
+      then
+        add acc {
+          inherit option;
+          value = rest;
+        }
+      else acc // {expecting = option;};
+    step = acc: argument:
+      if acc.expecting != null
+      then
+        add (acc // {expecting = null;}) {
+          option = acc.expecting;
+          value = argument;
+        }
+      else if acc.operands || argument == "-" || !(lib.hasPrefix "-" argument)
+      then add acc {inherit argument;}
+      else if argument == "--"
+      then add (acc // {operands = true;}) {inherit argument;}
+      else cluster acc (lib.stringToCharacters (lib.removePrefix "-" argument));
+    parsed =
+      lib.foldl' step {
+        items = [];
+        expecting = null;
+        operands = false;
+      }
+      cfg.extraArguments;
+  in
+    parsed.items
+    ++ optional (parsed.expecting != null) {
+      option = parsed.expecting;
+      value = null;
+    };
+  # extraArguments for the check, without the user and group of -U and -G,
+  # which the build does not have (see checkAsteriskConf)
+  checkExtraArguments =
+    concatMap (
+      item:
+        if item ? argument
+        then [item.argument]
+        else if builtins.elem item.option ["U" "G"] && item.value != null
+        then []
+        else ["-${item.option}"] ++ optional (item.value != null) item.value
+    )
+    extraOptions;
   # the check's arguments are passed on for the probe (tests/campaign/probe.nix),
   # which boots Asterisk the same way
   checkArguments =
     optional (builtins.any lowPort listenPorts) "--low-ports"
+    ++ concatMap (argument: ["--argument" argument]) checkExtraArguments
     ++ [
       asteriskBin
       "${checkTree}"
@@ -836,7 +898,12 @@ in {
       type = types.listOf types.str;
       default = [];
       example = ["-vvv"];
-      description = "Extra command line arguments for the Asterisk daemon.";
+      description = ''
+        Extra command line arguments for the Asterisk daemon. The build-time
+        check ({option}`services.asterisk.checkConfig`) starts Asterisk with
+        them too, except `-U` and `-G`, whose user and group the build does
+        not have.
+      '';
     };
 
     sounds.packages = mkOption {
@@ -987,6 +1054,11 @@ in {
         })
         cfg.credentials
         ++ [
+          {
+            # the check cannot see it: Asterisk goes on in a process of its own
+            assertion = !(builtins.any (item: (item.option or null) == "F") extraOptions);
+            message = "services.asterisk.extraArguments: with -F Asterisk forks into the background, and systemd stops the service once the process it started has exited.";
+          }
           {
             assertion = unitBreakingCredentials == [];
             message = "services.asterisk.credentials: paths cannot contain a line break or end with a backslash, which would change the lines of asterisk.service: ${concatStringsSep ", " unitBreakingCredentials}.";

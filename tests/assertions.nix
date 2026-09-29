@@ -649,6 +649,13 @@
       assertion = "services.asterisk.credentials: paths cannot contain a line break or end with a backslash, which would change the lines of asterisk.service: pjsip-tls-cert, pjsip-tls-key.";
     };
 
+    # Asterisk forks into the background with -F, which the config check
+    # cannot see, and systemd stops the service once its process has exited
+    forkArgument = {
+      module.services.asterisk.extraArguments = ["-vF"];
+      assertion = "services.asterisk.extraArguments: with -F Asterisk forks into the background, and systemd stops the service once the process it started has exited.";
+    };
+
     # the firewall's rules name the interfaces
     firewallInterfaceNames = {
       module.services.asterisk.firewallInterfaces = [

@@ -7,6 +7,7 @@
   inherit (pkgs) lib;
   inherit
     (import ./eval-lib.nix {inherit pkgs self;})
+    configCheckOf
     evalConfig
     rendered
     placeholderFor
@@ -1088,6 +1089,47 @@ in {
         RestrictRealtime = false;
         dashP = false;
       };
+    };
+
+    # the config check passes extraArguments to Asterisk as its getopt reads
+    # them, each option on its own, without the user and group of -U and -G;
+    # after -- nothing is an option
+    testCheckGetsExtraArguments = {
+      expr = let
+        arguments =
+          (configCheckOf (evalConfig [
+            phone
+            {
+              services.asterisk.extraArguments = [
+                "-vU"
+                "asterisk"
+                "-Gasterisk"
+                "-dCx"
+                "-"
+                "-L"
+                "2"
+                "--"
+                "-U"
+                "-F"
+              ];
+            }
+          ])).arguments;
+      in
+        map (i: builtins.elemAt arguments (i + 1)) (
+          builtins.filter (i: builtins.elemAt arguments i == "--argument") (lib.range 0 (builtins.length arguments - 1))
+        );
+      expected = [
+        "-v"
+        "-d"
+        "-C"
+        "x"
+        "-"
+        "-L"
+        "2"
+        "--"
+        "-U"
+        "-F"
+      ];
     };
 
     # static addresses of interfaces other than the default gateway's may come

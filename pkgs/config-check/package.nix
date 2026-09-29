@@ -1,13 +1,13 @@
-# asterisk-config-check [--low-ports] [--probe PROGRAM] ASTERISK CONFIG [ADDRESS...]
+# asterisk-config-check [--low-ports] [--probe PROGRAM] [--argument ARGUMENT]... ASTERISK CONFIG [ADDRESS...]
 #
-# Starts ASTERISK with the configuration in CONFIG and fails if Asterisk logs
-# an error or warning while loading it, or if the dialplan uses an
-# application, function or switch that no loaded module provides. CONFIG is
-# prepared by modules/asterisk.nix: `config/` with `@root@` where the files
-# will be and a log channel `check`, `credentials/`, `directories`, which
-# lists the directories to create below `@root@`, and `hosts` for the names
-# Asterisk resolves while loading, since a build has no DNS. Secrets become
-# zeros.
+# Starts ASTERISK with the configuration in CONFIG, followed by the ARGUMENTs
+# as the service passes its extra arguments, and fails if Asterisk logs an
+# error or warning while loading it, or if the dialplan uses an application,
+# function or switch that no loaded module provides. CONFIG is prepared by
+# modules/asterisk.nix: `config/` with `@root@` where the files will be and a
+# log channel `check`, `credentials/`, `directories`, which lists the
+# directories to create below `@root@`, and `hosts` for the names Asterisk
+# resolves while loading, since a build has no DNS. Secrets become zeros.
 #
 # ADDRESS are the addresses Asterisk listens on. IPv4 ones become loopback
 # addresses, which a build can bind without privileges. Asterisk only runs in
@@ -49,6 +49,7 @@ in
       arguments=("$@")
       low_ports=
       probe=
+      extra=()
       while true; do
         case ''${1:-} in
           --low-ports)
@@ -57,6 +58,10 @@ in
             ;;
           --probe)
             probe=$2
+            shift 2
+            ;;
+          --argument)
+            extra+=("$2")
             shift 2
             ;;
           *) break ;;
@@ -124,7 +129,7 @@ in
       if [ -f "$root/hosts" ]; then
         preload=(LD_PRELOAD=${nss_wrapper}/lib/libnss_wrapper.so NSS_WRAPPER_HOSTS="$root/hosts")
       fi
-      env "''${preload[@]}" "$asterisk" -f -n -C "$root/config/asterisk.conf" > "$root/console" 2>&1 &
+      env "''${preload[@]}" "$asterisk" -f -n -C "$root/config/asterisk.conf" "''${extra[@]}" > "$root/console" 2>&1 &
       pid=$!
       for _ in $(seq 600); do
         if [ -S "$root/run/asterisk.ctl" ] || ! kill -0 "$pid" 2> /dev/null; then

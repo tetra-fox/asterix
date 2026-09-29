@@ -489,7 +489,21 @@
         };
       };
       assertions = [];
-      warning = "ht801.adminPassword is a plain string";
+      warning = "ht801.adminPassword is not a secret reference";
+    };
+
+    # an integer lands in the store just like a string
+    ht801IntegerAdminPasswordWarns = {
+      module = {
+        imports = [phones];
+        pbx.phones.grandstream.ht801 = {
+          enable = true;
+          adminPassword = 1234;
+          devices."201".mac = "c0:74:ad:00:02:01";
+        };
+      };
+      assertions = [];
+      warning = "ht801.adminPassword is not a secret reference";
     };
 
     # systemd drops every connection with no IPAddressAllow= entry

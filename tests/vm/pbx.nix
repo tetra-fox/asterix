@@ -388,9 +388,12 @@ in
                 phone.wait_request("INVITE", after=invites[phone.name], timeout=30)
                 invite = phone.received("INVITE")[-1]
                 assert '"Boss" <sip:203@' in invite, invite
-            # the notified phones ring 30 s without answering
+            # the notified phones ring without answering
             ringing = {endpoint_of(c["name"]) for c in channels(pbx)}
             assert {"201", "202", "provider"} <= ringing, ringing
+            # declined, so the test does not wait out their 30 s of ringing
+            for phone in (reception, sales):
+                phone.hangup()
             boss.hangup()
             wait_idle(pbx, timeout=60)
 

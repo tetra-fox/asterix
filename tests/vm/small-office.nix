@@ -170,6 +170,8 @@ in
                 reception.wait_request("INVITE", after=before, timeout=60)
                 invite = reception.received("INVITE")[-1]
                 assert '"Boss" <sip:203@' in invite, invite
+                # declined, so the test does not wait out its 30 s of ringing
+                reception.hangup()
                 boss.hangup()
                 wait_idle(pbx, timeout=180)
 

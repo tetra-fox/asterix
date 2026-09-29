@@ -92,6 +92,7 @@ in
         imports = [
           ./common.nix
           ./phone.nix
+          ./sipp.nix
         ];
         virtualisation.vlans = [3];
         networking.interfaces.eth1.ipv4.addresses = pkgs.lib.mkForce [
@@ -175,12 +176,16 @@ in
             thief.wait_registration_failed("registration failed, status=408", timeout=180)
             thief.stop()
 
-        with subtest("the intruder cannot register: SIP ACL, with the firewall opened"):
+        with subtest("the intruder cannot register or take Asterisk down: SIP ACL, with the firewall opened"):
             pbx.succeed("iptables -I nixos-fw -i servers -p udp --dport 5060 -j ACCEPT")
             thief = Phone(intruder, "thief2", "201", passwords["201"], "10.0.10.10", sip_port=5072, cli_port=2302)
             thief.start()
             thief.wait_registration_failed("registration failed, status=403", timeout=180)
             thief.stop()
+            # requests no phone sends reach Asterisk's parser, and it keeps running
+            pid = pbx.succeed("systemctl show -P MainPID asterisk.service")
+            sipp(intruder, "malformed", "10.0.10.10", "-s", "201")
+            assert pbx.succeed("systemctl show -P MainPID asterisk.service") == pid, "Asterisk restarted"
             pbx.succeed("iptables -D nixos-fw -i servers -p udp --dport 5060 -j ACCEPT")
             assert "10.0.1.66" not in asterisk(pbx, "pjsip show contacts")
 

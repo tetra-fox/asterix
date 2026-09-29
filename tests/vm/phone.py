@@ -1,5 +1,5 @@
-# Helpers for driving `sip-phone` (tests/vm/phone.nix) and `baresip-phone`
-# (tests/vm/baresip.nix) from test scripts.
+# Helpers for driving `sip-phone` (tests/vm/phone.nix), `baresip-phone`
+# (tests/vm/baresip.nix) and SIPp (tests/vm/sipp.nix) from test scripts.
 import itertools
 import json
 import re
@@ -189,6 +189,15 @@ class Baresip:
 
     def hangup(self):
         self.command("hangup")
+
+
+def sipp(machine, scenario, remote, *args):
+    """Plays the SIPp scenario tests/vm/sipp/`scenario`.xml once against
+    `remote`, and fails when it does."""
+    machine.succeed(
+        f"sipp -sf /etc/sipp/{scenario}.xml -m 1 -nostdin -timeout 60 -timeout_error "
+        f"-trace_msg -message_file /tmp/sipp-{scenario}.log {shlex.join(args)} {remote}"
+    )
 
 
 def start_phones(phones):

@@ -141,8 +141,21 @@ in
         [ ! -f "$root/log/check" ] || cat "$root/log/check" >&2
         exit 1
       fi
+      # the logger thread writes lines in order but in its own time (main/logger.c
+      # logger_thread), and "Asterisk Ready." follows all logged while loading
+      for _ in $(seq 3000); do
+        if grep -qF 'Asterisk Ready.' "$root/log/check"; then
+          break
+        fi
+        sleep 0.1
+      done
+      if ! grep -qF 'Asterisk Ready.' "$root/log/check"; then
+        echo "asterisk-config-check: Asterisk did not log that it is ready:" >&2
+        cat "$root/log/check" >&2
+        exit 1
+      fi
       # only what it logged while loading
-      cp "$root/log/check" "$root/loaded"
+      sed '/Asterisk Ready\./,$d' "$root/log/check" > "$root/loaded"
       rx "dialplan show" > "$root/dialplan"
       rx "core show applications" > "$root/applications"
       rx "core show functions" > "$root/functions"

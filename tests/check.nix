@@ -42,6 +42,16 @@
       '';
     });
 
+  # the check with a logger thread that writes each line of the check's log
+  # late, as on a busy machine
+  withSlowLogger = check:
+    check.overrideAttrs {
+      LD_PRELOAD = "${pkgs.runCommandCC "slow-log" {} ''
+        mkdir -p $out/lib
+        $CC -shared -fPIC -o $out/lib/slow-log.so ${./slow-log.c}
+      ''}/lib/slow-log.so";
+    };
+
   failing = {
     misspelledKey = {
       module.services.asterisk.pjsip.endpoints."101".settings.direct_mdia = false;
@@ -50,6 +60,13 @@
         "Could not create an object of type 'endpoint' with id '101'"
         "(services.asterisk.checkConfig = false turns this check off)"
       ];
+    };
+    # what Asterisk logged while loading counts, however late its logger
+    # thread writes it
+    misspelledKeyWithSlowLogger = {
+      module.services.asterisk.pjsip.endpoints."101".settings.direct_mdia = false;
+      slowLogger = true;
+      expect = ["Could not create an object of type 'endpoint' with id '101'"];
     };
     applicationNotLoaded = {
       module.services.asterisk.dialplan.contexts.internal.extensions."411" = ["Directory(default)"];
@@ -320,6 +337,8 @@ in
           check =
             if case.withoutUserNamespaces or false
             then withoutUserNamespaces (checkOf case.module)
+            else if case.slowLogger or false
+            then withSlowLogger (checkOf case.module)
             else checkOf case.module;
           log = "${pkgs.testers.testBuildFailure check}/testBuildFailure.log";
         in

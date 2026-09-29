@@ -88,8 +88,9 @@
   );
 
   # the configuration the build-time check starts Asterisk with (see
-  # pkgs/config-check): what it writes goes below @root@, it logs errors and
-  # warnings to one file, and each credential is a throwaway certificate
+  # pkgs/config-check): what it writes goes below @root@, it logs errors,
+  # warnings and verbose messages, which say when it is ready, to one file,
+  # and each credential is a throwaway certificate
   checkAsteriskConf = let
     conf = cfg.settings."asterisk.conf";
   in
@@ -128,7 +129,7 @@
       cfg.renderedFiles
       // {
         "asterisk.conf" = checkAsteriskConf;
-        "logger.conf" = format.render {syntax = syntaxFor "logger.conf";} {sections.logfiles.check = "error,warning";};
+        "logger.conf" = format.render {syntax = syntaxFor "logger.conf";} {sections.logfiles.check = "error,warning,verbose";};
       }
     )
     ++ map (name: {

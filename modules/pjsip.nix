@@ -1059,6 +1059,13 @@ in {
         PJSIP transports. Changing a transport restarts Asterisk, since
         transports are not reloadable. The firewall ports are derived from
         these (see {option}`services.asterisk.openFirewall`).
+
+        Asterisk sends its requests to a UDP contact over UDP, whatever their
+        size. Phones built on pjsip, and others that follow RFC 3261 18.1.1,
+        send their requests of 1300 bytes or more over TCP to the same address
+        and port, often an INVITE with its credentials; they need a `tcp`
+        transport on that port too, or the firewall drops the connection and
+        the call fails after 32 seconds.
       '';
     };
 

@@ -113,8 +113,13 @@
     };
   };
 
+  # app_queue splits a member line like application arguments: at commas
+  # outside quotes, parentheses and brackets, dropping quotes and the backslash
+  # that makes the next character literal
+  escapeField = lib.replaceStrings ["\\" "," "\"" "(" ")" "[" "]"] ["\\\\" "\\," "\\\"" "\\(" "\\)" "\\[" "\\]"];
+
   memberValue = m:
-    format.joinFields [
+    format.joinFields (map escapeField [
       m.interface
       (
         if m.penalty == null
@@ -131,7 +136,7 @@
         then ""
         else m.stateInterface
       )
-    ];
+    ]);
 in {
   options.services.asterisk.queues = {
     persistentMembers = mkOption {

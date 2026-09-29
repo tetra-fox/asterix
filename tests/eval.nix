@@ -582,6 +582,11 @@ in {
                 interface = "Local/103@internal";
                 stateInterface = "PJSIP/103";
               }
+              # app_queue splits the line at commas and drops quotes and backslashes
+              {
+                interface = "PJSIP/104";
+                name = ''Doe, "Jane" \ (Sales'';
+              }
             ];
           }
         ])."queues.conf"
@@ -590,6 +595,7 @@ in {
         "member => PJSIP/101"
         "member => PJSIP/102,2,Bob"
         "member => Local/103@internal,,,PJSIP/103"
+        ''member => PJSIP/104,,Doe\, \"Jane\" \\ \(Sales''
       ];
     };
 

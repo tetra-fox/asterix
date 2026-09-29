@@ -6,10 +6,11 @@
 # time), music on hold for the caller, a member rings for `timeout` seconds
 # and the queue tries again `retry` seconds later, a member with a higher
 # penalty only rings once none with a lower one can take the call, a full
-# queue and a queue whose members are all unavailable turn callers away, an
-# agent logs in with a feature code and stays a member across a restart
-# (persistent members), a caller waits in line while the only agent is busy
-# and during its wrap-up time, and the queue log records it all
+# queue and a queue whose members are all unavailable turn callers away, a
+# member's name with a comma is read whole, an agent logs in with a feature
+# code and stays a member across a restart (persistent members), a caller
+# waits in line while the only agent is busy and during its wrap-up time, and
+# the queue log records it all
 {
   pkgs,
   self,
@@ -115,7 +116,12 @@ in
                 members = agents;
               };
               sales = {
-                members = ["PJSIP/515"];
+                members = [
+                  {
+                    interface = "PJSIP/515";
+                    name = "Doe, Jane";
+                  }
+                ];
                 settings.joinempty = "unavailable,invalid";
               };
               inherit hotline tiers;
@@ -397,6 +403,8 @@ in
             assert [e[0] for e in events if e[1] == "CONNECT"] == ["PJSIP/511"], events
 
         with subtest("a queue whose members are all unavailable turns callers away"):
+            # the member's name is read whole, and its state is its device's
+            assert "Doe, Jane (PJSIP/515) (ringinuse enabled) (Unavailable)" in asterisk(pbx, "queue show sales")
             cursor = journal_cursor(pbx)
             phone["502"].call("601")
             wait_journal(pbx, cursor, "queuestatus JOINEMPTY")

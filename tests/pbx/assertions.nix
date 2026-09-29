@@ -7,6 +7,7 @@
 }: let
   inherit (pkgs) lib;
   inherit (import ../eval-lib.nix {inherit pkgs self;}) checkCases;
+  slots = import ./slots.nix {inherit lib;};
 
   # A valid baseline with every kind of object, which each case breaks in
   # one place.
@@ -160,6 +161,36 @@
           pbx.ringGroups.front.noAnswer: voicemail 999
           pbx.inbound."5551000".closed: extension 299
       '';
+    };
+
+    # every kind of destination, with nothing it names, in every slot
+    missingDestinationInEverySlot = let
+      missing = slots {
+        conference.conference = "nope";
+        context = {context.context = "nowhere";};
+        extension.extension = "299";
+        ivr.ivr = "nope";
+        queue.queue = "nope";
+        ringGroup.ringGroup = "nope";
+        voicemail.voicemail = "299";
+      };
+      described = {
+        conference = "conference nope";
+        context = "context nowhere";
+        extension = "extension 299";
+        ivr = "ivr nope";
+        queue = "queue nope";
+        ringGroup = "ringGroup nope";
+        voicemail = "voicemail 299";
+      };
+    in {
+      inherit (missing) module;
+      assertions = [
+        ''
+          pbx: destinations that do not exist:
+            ${lib.concatMapStringsSep "\n  " (slot: "${slot.where}: ${described.${slot.kind}}") missing.slots}
+        ''
+      ];
     };
 
     contextDestinationFromCore = {

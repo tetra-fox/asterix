@@ -44,7 +44,11 @@
           "peer"
         ];
         default = "self";
-        description = "Whose key presses trigger the feature.";
+        description = ''
+          Where the application runs: on the side that pressed the keys
+          (`self`) or on the other side of the call (`peer`). Whose key
+          presses trigger the feature is up to `DYNAMIC_FEATURES`.
+        '';
       };
       app = mkOption {
         type = types.str;
@@ -102,8 +106,8 @@ in {
         };
       };
       description = ''
-        Custom features (`[applicationmap]`), enabled per call through the
-        `DYNAMIC_FEATURES` channel variable.
+        Custom features (`[applicationmap]`). A channel's key presses trigger
+        the features its `DYNAMIC_FEATURES` variable names, separated by `#`.
       '';
     };
   };

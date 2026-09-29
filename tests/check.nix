@@ -62,6 +62,17 @@
         "(internal, 412): no loaded module provides the function LOCK"
       ];
     };
+    # Asterisk says it blocks all SIP traffic, then drops the whole ACL
+    malformedAcl = {
+      module.services.asterisk.pjsip.acls.lan = {
+        contactDeny = ["0.0.0.0/0.0.0.0"];
+        contactPermit = ["10.0.300.0/24"];
+      };
+      expect = [
+        "Bad contact ACL '10.0.300.0/24'"
+        "Could not create an object of type 'acl' with id 'lan'"
+      ];
+    };
     # Asterisk closes it and warns
     unclosedParenthesis = {
       module.services.asterisk.dialplan.contexts.internal.extensions."413" = ["Dial(PJSIP/101"];

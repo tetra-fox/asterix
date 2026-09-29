@@ -462,6 +462,8 @@
     };
     # res_crypto reads the keys directory, which the service creates
     keyDirectory.services.asterisk.modules.load = ["res_crypto.so"];
+    # res_rtp_asterisk resolves the STUN server with Asterisk's own DNS client
+    stunServerByName.services.asterisk.rtp.stunServer = "stun.example.org:3478";
     # a digest after its algorithm must have that algorithm's length
     sha256Digest = {config, ...}: {
       services.asterisk.pjsip.endpoints."101".auth.settings.password_digest = "SHA-256:${

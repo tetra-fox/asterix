@@ -145,6 +145,11 @@
       path = configFile file (lib.replaceStrings ["${paths.credentials}/"] ["@root@/credentials/"] text);
     }) (
       cfg.renderedFiles
+      # res_rtp_asterisk looks a STUN server's name up with Asterisk's own DNS
+      # client (res_nsearch), which never reads the hosts file below
+      // lib.optionalAttrs (stunName != null) {
+        "rtp.conf" = lib.replaceStrings ["stunaddr = ${stunName}"] ["stunaddr = 192.0.2.1"] cfg.renderedFiles."rtp.conf";
+      }
       // {
         "asterisk.conf" = checkAsteriskConf;
         "logger.conf" = format.render {syntax = syntaxFor "logger.conf";} {sections.logfiles.check = "error,warning,verbose";};
@@ -168,6 +173,13 @@
       }
     ]
   );
+  # the host of `host:port` and whether it is a name, not an address
+  hostOf = v: builtins.head (builtins.match "[[:space:]]*([^:/[:space:]]*).*" (toString v));
+  isName = v: builtins.match "[A-Za-z0-9-]+([.][A-Za-z0-9-]+)*" v != null && builtins.match "[0-9.]+" v == null;
+  stunName =
+    if rtpGeneral ? stunaddr && isName (hostOf rtpGeneral.stunaddr)
+    then hostOf rtpGeneral.stunaddr
+    else null;
   # host names Asterisk resolves while it loads the configuration; the build
   # has no DNS, so for the check they resolve to a documentation address
   checkHostNames = let
@@ -175,16 +187,13 @@
       if builtins.isList v
       then v
       else lib.splitString "," (toString v);
-    host = v: builtins.head (builtins.match "[[:space:]]*([^:/[:space:]]*).*" (toString v));
-    isName = v: builtins.match "[A-Za-z0-9-]+([.][A-Za-z0-9-]+)*" v != null && builtins.match "[0-9.]+" v == null;
     ofType = type: filter (s: (s.type or null) == type) pjsipObjects;
   in
-    unique (filter isName (map host (
+    unique (filter isName (map hostOf (
       # every section's `match`, templates included: an identify resolves the
       # `match` lines it inherits as well as its own
       concatMap (s: listOf (s.match or [])) (attrValues (cfg.settings."pjsip.conf" or {}))
       ++ concatMap (s: lib.optionals (s ? external_signaling_address) [s.external_signaling_address] ++ lib.optionals (s ? external_media_address) [s.external_media_address]) (ofType "transport")
-      ++ lib.optionals (rtpGeneral ? stunaddr) [rtpGeneral.stunaddr]
       ++ lib.optionals (rtpGeneral ? turnaddr) [rtpGeneral.turnaddr]
     )));
   # the check's arguments are passed on for the probe (tests/campaign/probe.nix),

@@ -157,7 +157,7 @@
 
   contextSection = name: context: {
     inherit name;
-    inherit (context) comment;
+    comment = mkDefault context.comment;
     include = context.includes;
     switch = context.switches;
     ignorepat = context.ignorePatterns;

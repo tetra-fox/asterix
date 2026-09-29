@@ -258,6 +258,22 @@ in {
       ];
     };
 
+    # a context's comment is a single value too
+    testLayerOneOverridesContextComment = {
+      expr =
+        lib.hasInfix "; phones\n[internal]\n"
+        (rendered [
+          phone
+          {
+            services.asterisk = {
+              dialplan.contexts.internal.comment = "calls from the phones";
+              settings."extensions.conf".internal.comment = "phones";
+            };
+          }
+        ])."extensions.conf";
+      expected = true;
+    };
+
     testTypedSettingsOptionReachesSection = {
       expr =
         lib.hasInfix "rtp_timeout = 30"

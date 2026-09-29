@@ -576,6 +576,41 @@
       '';
     };
 
+    # every record would fail to insert; cel_sqlite3_custom takes the CUT()
+    # below for three values
+    sqliteValuesUnlikeColumns = {
+      module.services.asterisk = {
+        cdr.sqlite.enable = true;
+        cel = {
+          enable = true;
+          sqlite.enable = true;
+        };
+        settings."cdr_sqlite3_custom.conf".master.values = "'\${CDR(src)}', '\${CDR(dst)}'";
+        settings."cel_sqlite3_custom.conf".master = {
+          columns = "eventtype, exten";
+          values = "'\${eventtype}', '\${CUT(CHANNEL(exten),-,1)}'";
+        };
+      };
+      assertions = [
+        ''
+          services.asterisk: the number of values differs from the number of columns, so every record would fail to insert (cel_sqlite3_custom separates values at every comma, cdr_sqlite3_custom at commas outside (), [], "" and after \):
+            cdr_sqlite3_custom.conf: columns 16, values 2
+            cel_sqlite3_custom.conf: columns 2, values 4
+        ''
+      ];
+    };
+
+    sqliteValuesWithArguments = {
+      module.services.asterisk = {
+        cdr.sqlite.enable = true;
+        settings."cdr_sqlite3_custom.conf".master = {
+          columns = "src, dst";
+          values = "'\${CDR(src)}', '\${CUT(CDR(dst),-,1)}'";
+        };
+      };
+      assertions = [];
+    };
+
     trunkEndpointNameClash = {
       module = {config, ...}: {
         services.asterisk.pjsip.trunks."101" = {

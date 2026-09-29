@@ -13,6 +13,7 @@
     mkMerge
     mkOption
     optionals
+    splitString
     types
     ;
 
@@ -65,6 +66,59 @@
     columns = mkDefault (concatStringsSep ", " (builtins.attrNames columns));
     values = mkDefault (concatStringsSep ", " (map (v: "'${v}'") (builtins.attrValues columns)));
   };
+
+  # the arguments __ast_app_separate_args (main/app.c) makes of a string:
+  # commas inside (), [] or "" and after a backslash do not separate them
+  argumentCount = s:
+    (lib.foldl' (
+        acc: c:
+          if acc.escaped
+          then acc // {escaped = false;}
+          else if c == "\\"
+          then acc // {escaped = true;}
+          else if c == "("
+          then acc // {parens = acc.parens + 1;}
+          else if c == ")"
+          then acc // {parens = lib.max 0 (acc.parens - 1);}
+          else if c == "["
+          then acc // {brackets = acc.brackets + 1;}
+          else if c == "]"
+          then acc // {brackets = lib.max 0 (acc.brackets - 1);}
+          else if c == "\""
+          then acc // {quoted = !acc.quoted;}
+          else if c == "," && acc.parens == 0 && acc.brackets == 0 && !acc.quoted
+          then acc // {count = acc.count + 1;}
+          else acc
+      ) {
+        count = 1;
+        parens = 0;
+        brackets = 0;
+        quoted = false;
+        escaped = false;
+      } (lib.stringToCharacters s))
+    .count;
+
+  # how each module separates its values; both separate columns at every comma
+  valueCounts = {
+    # into at most 200 (cdr/cdr_sqlite3_custom.c load_values_config)
+    "cdr_sqlite3_custom.conf" = values: lib.min 200 (argumentCount values);
+    "cel_sqlite3_custom.conf" = values: builtins.length (splitString "," values);
+  };
+
+  # the INSERT of every record fails when the numbers differ
+  # (cdr/cdr_sqlite3_custom.c write_cdr)
+  sqliteMismatches = lib.concatLists (
+    lib.mapAttrsToList (
+      file: valueCount: let
+        master = cfg.settings.${file}.master or {};
+        columns = builtins.length (splitString "," master.columns);
+        values = valueCount master.values;
+      in
+        lib.optional (builtins.isString (master.columns or null) && builtins.isString (master.values or null) && columns != values)
+        "${file}: columns ${toString columns}, values ${toString values}"
+    )
+    valueCounts
+  );
 
   sqliteOptions = what: defaultTable: {
     enable = lib.mkEnableOption "${what} records in an SQLite database";
@@ -153,6 +207,16 @@ in {
           ++ optionals ccfg.sqlite.enable ["cdr_sqlite3_custom.so"]
           ++ optionals ecfg.sqlite.enable ["cel_sqlite3_custom.so"];
       };
+
+      assertions = [
+        {
+          assertion = sqliteMismatches == [];
+          message = ''
+            services.asterisk: the number of values differs from the number of columns, so every record would fail to insert (cel_sqlite3_custom separates values at every comma, cdr_sqlite3_custom at commas outside (), [], "" and after \):
+              ${concatStringsSep "\n  " sqliteMismatches}
+          '';
+        }
+      ];
     }
 
     (mkIf ccfg.csv.enable {

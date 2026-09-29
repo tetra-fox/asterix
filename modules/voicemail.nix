@@ -145,6 +145,16 @@
     )
     mailboxes;
 
+  # app_voicemail splits the options at every | and each option at its
+  # first = (apps/app_voicemail.c apply_options)
+  badOptions =
+    filter (
+      box:
+        builtins.any (name: hasInfix "|" name || hasInfix "=" name) (builtins.attrNames box.options)
+        || builtins.any (value: hasInfix "|" (optionValue value)) (attrValues box.options)
+    )
+    mailboxes;
+
   # voicemail.conf sections that are not voicemail contexts
   reservedSections = [
     "general"
@@ -454,6 +464,12 @@ in {
           assertion = badFields == [];
           message = "services.asterisk.voicemail.mailboxes: PINs, names and e-mail addresses cannot contain commas (${
             concatStringsSep ", " (map (box: "${box.mailbox}@${box.context}") badFields)
+          }).";
+        }
+        {
+          assertion = badOptions == [];
+          message = "services.asterisk.voicemail.mailboxes: option names cannot contain | or =, nor their values | (${
+            concatStringsSep ", " (map (box: "${box.mailbox}@${box.context}") badOptions)
           }).";
         }
         {

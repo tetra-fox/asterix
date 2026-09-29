@@ -878,6 +878,23 @@
       '';
     };
 
+    # app_voicemail splits the options at | and each at its first =
+    voicemailOptionWithPipe = {
+      module = {config, ...}: {
+        services.asterisk.voicemail.mailboxes = {
+          "101" = {
+            pin = config.lib.asterisk.secret "/run/secrets/vm-101";
+            options.emailsubject = "New message | office";
+          };
+          "102" = {
+            pin = config.lib.asterisk.secret "/run/secrets/vm-102";
+            options."a=b" = true;
+          };
+        };
+      };
+      assertion = "option names cannot contain | or =, nor their values | (101@default, 102@default)";
+    };
+
     voicemailEmailWithoutCommand = {
       module = {config, ...}: {
         services.asterisk.voicemail.mailboxes."101" = {

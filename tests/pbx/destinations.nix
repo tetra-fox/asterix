@@ -1,10 +1,11 @@
 # Destinations followed through the dialplan, call by call (the probe,
 # tests/campaign/probe.nix): a menu key goes to a ring group, whose no-answer
-# destination is a queue, whose timeout goes to a mailbox; and every slot that
-# takes a destination, in a configuration with each kind of destination in
-# each slot (./slots.nix), which Asterisk has to load. Nobody is registered,
-# so ring groups and extensions have no phone to ring and queues no member to
-# take the call, except for one phone that is busy.
+# destination is a queue, whose timeout goes to a mailbox; the timeout of a
+# queue leads to each kind of destination; and every slot that takes a
+# destination, in a configuration with each kind of destination in each slot
+# (./slots.nix), which Asterisk has to load. Nobody is registered, so ring
+# groups and extensions have no phone to ring and queues no member to take
+# the call, except for one phone that is busy.
 {
   pkgs,
   self,
@@ -41,6 +42,61 @@
       how = "hangup";
     }
   ];
+
+  # a queue's timeout into each kind of destination: the context that follows,
+  # where the call ends, and when the probe ends a conference or a mailbox
+  queueTimeouts = {
+    conference = {
+      next = "pbx-conference-board";
+      ended = [
+        {
+          application = "ConfBridge";
+          data = "board";
+          how = "hangup";
+        }
+      ];
+      limit = 3;
+    };
+    context = {
+      next = "done";
+      ended = hangup;
+    };
+    extension = {
+      next = "pbx-extension-201";
+      ended = hangup;
+    };
+    hangup.ended = hangup;
+    ivr = {
+      next = "pbx-ivr-lobby";
+      ended = hangup;
+    };
+    queue = {
+      next = "pbx-queue-desk";
+      ended = hangup;
+    };
+    ringGroup = {
+      next = "pbx-ringgroup-front";
+      ended = hangup;
+    };
+    voicemail = {
+      ended = voicemail;
+      limit = 3;
+    };
+  };
+  queueSamples =
+    lib.mapAttrsToList (kind: timeout: {
+      call =
+        {
+          extension = "s";
+          context = "pbx-queue-to-${kind}";
+        }
+        // lib.optionalAttrs (timeout ? limit) {inherit (timeout) limit;};
+      contexts = ["pbx-queue-to-${kind}"] ++ lib.optional (timeout ? next) timeout.next;
+      inherit (timeout) ended;
+      answered = true;
+      limitReached = timeout ? limit;
+    })
+    queueTimeouts;
 
   # each call, the contexts its channel passes through, and where its
   # dialplan ends; the mailbox hangs up once the caller stays silent
@@ -117,18 +173,6 @@
       contexts = [
         "pbx-ringgroup-to-queue"
         "pbx-queue-desk"
-      ];
-      ended = hangup;
-      answered = true;
-    }
-    {
-      call = {
-        extension = "s";
-        context = "pbx-queue-to-ringGroup";
-      };
-      contexts = [
-        "pbx-queue-to-ringGroup"
-        "pbx-ringgroup-front"
       ];
       ended = hangup;
       answered = true;
@@ -315,7 +359,7 @@
         };
       })
     ];
-    calls = map (sample: sample.call) samples;
+    calls = map (sample: sample.call) (samples ++ queueSamples);
   };
 
   expected =
@@ -324,7 +368,7 @@
       answered = sample.answered or false;
       limitReached = sample.limitReached or false;
     })
-    samples;
+    (samples ++ queueSamples);
 in
   pkgs.runCommand "asterisk-pbx-destinations-tests" {
     nativeBuildInputs = [pkgs.jq];

@@ -632,6 +632,23 @@ in {
         '';
     };
 
+    # res_parking provides parkcall, and declines to load without its file
+    testParkcallLoadsItsModule = {
+      expr = let
+        files = rendered [
+          phone
+          {services.asterisk.features.featureMap.parkcall = "#72";}
+        ];
+      in [
+        (lib.hasInfix "load => res_parking.so" files."modules.conf")
+        (files ? "res_parking.conf")
+      ];
+      expected = [
+        true
+        true
+      ];
+    };
+
     testAmiUserSection = {
       expr =
         (rendered [

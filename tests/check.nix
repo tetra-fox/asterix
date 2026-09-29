@@ -92,6 +92,8 @@
 
   passing = {
     base = {};
+    # res_parking, which parkcall loads, starts from the file rendered for it
+    parkcall.services.asterisk.features.featureMap.parkcall = "#72";
     # what the reference checks accept since they resolve templates
     endpointFromTemplate.services.asterisk.settings."pjsip.conf" = {
       phone = {

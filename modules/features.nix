@@ -19,6 +19,10 @@
   inherit (asteriskLib) format;
   inherit (import ./lib.nix {inherit lib;}) toSection;
 
+  # res_parking implements parkcall; without it Asterisk drops a call dialled
+  # with k or K as soon as it is answered
+  parksCalls = (fcfg.featureMap.parkcall or "") != "";
+
   applicationType = types.submodule {
     options = {
       dtmf = mkOption {
@@ -71,7 +75,8 @@ in {
       description = ''
         Built-in features and their key sequences (`[featuremap]`). They are
         only available on calls dialled with the matching Dial() options
-        (`t`/`T` for transfers, `x`/`X` for automixmon, ...).
+        (`t`/`T` for transfers, `k`/`K` for parkcall, `x`/`X` for automixmon,
+        ...). `parkcall` loads res_parking.so, which provides it.
       '';
     };
 
@@ -94,6 +99,10 @@ in {
   };
 
   config = mkIf cfg.enable {
+    services.asterisk.modules.load = mkIf parksCalls ["res_parking.so"];
+    # res_parking declines to load without its file
+    services.asterisk.settings."res_parking.conf" = mkIf parksCalls {};
+
     services.asterisk.settings."features.conf" =
       {
         general = toSection fcfg.general;

@@ -32,6 +32,18 @@
       };
       queues.support.number = "610";
       conferences.board.number = "800";
+      ivrs.main = {
+        number = "700";
+        prompt.sound = "custom/main-menu";
+        options."1".ringGroup = "front";
+      };
+      paging.all = {
+        number = "650";
+        members = [
+          "201"
+          "202"
+        ];
+      };
       hours.office = {
         timezone = "America/Los_Angeles";
         open = [
@@ -276,6 +288,73 @@
         };
       };
       assertion = "an `aor` named like the endpoint";
+    };
+
+    ivrDestinations = {
+      module.pbx = {
+        ivrs.main = {
+          options = {
+            "2".queue = "sales";
+            "3".context.context = "nowhere";
+          };
+          noInput.ivr = "night";
+        };
+        ringGroups.front.noAnswer.ivr = "main";
+      };
+      assertion = ''
+        pbx: destinations that do not exist:
+          pbx.ivrs.main.options."2": queue sales
+          pbx.ivrs.main.options."3": context nowhere
+          pbx.ivrs.main.noInput: ivr night
+      '';
+    };
+
+    ivrKeys = {
+      module.pbx.ivrs.main.options = {
+        "12".hangup = true;
+        "a".hangup = true;
+        "#".hangup = true;
+      };
+      assertion = "keys must be one digit, * or #: pbx.ivrs.main.options.12, pbx.ivrs.main.options.a.";
+    };
+
+    ivrKeyIsExtensionWithDirectDial = {
+      module.pbx = {
+        extensions."2".password = "x";
+        ivrs.main = {
+          directDial = true;
+          options."2".hangup = true;
+        };
+      };
+      assertion = "which directDial makes dialable: pbx.ivrs.main.options.2.";
+    };
+
+    ivrName = {
+      module.pbx.ivrs."main menu".prompt.sound = "custom/main-menu";
+      assertion = "menu names may only contain letters, digits, _ and -";
+    };
+
+    ivrNumberClash = {
+      module.pbx.ivrs.main.number = lib.mkForce "201";
+      assertion = ''201: pbx.extensions."201", pbx.ivrs.main'';
+    };
+
+    pagingNumberClash = {
+      module.pbx.paging.all.number = lib.mkForce "800";
+      assertion = "800: pbx.conferences.board, pbx.paging.all";
+    };
+
+    pagingMemberIsNoExtension = {
+      module.pbx.paging.all.members = lib.mkForce [
+        "201"
+        "299"
+      ];
+      assertion = "pbx.paging.all: 299";
+    };
+
+    pagingHeaderWithoutValueThrows = {
+      module.pbx.paging.all.headers = ["Call-Info"];
+      throws = true;
     };
 
     destinationWithTwoKindsThrows = {

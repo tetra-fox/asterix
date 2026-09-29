@@ -507,7 +507,119 @@ in
       };
     };
 
-    # the example in README.md, with plain secret paths instead of sops-nix
+    # the attempt counter replays the prompt, the last timeout or invalid
+    # key takes noInput or invalid
+    testIvrMenu = let
+      module = {
+        pbx = {
+          ivrs.main = {
+            number = "700";
+            prompt.text = "For reception, press 1.";
+            options = {
+              "1".extension = "201";
+              "#".hangup = true;
+            };
+            directDial = true;
+            timeout = 3;
+            attempts = 2;
+            noInput.voicemail = "201";
+          };
+          inbound."5551000".destination = lib.mkForce {ivr = "main";};
+        };
+      };
+    in {
+      expr = {
+        ivr = context "pbx-ivr-main" module;
+        inbound = context "pbx-inbound-provider" module;
+        prompts = map (package: package.name) (configOf module).services.asterisk.sounds.packages;
+      };
+      expected = {
+        ivr = ''
+          ; from pbx.ivrs.main
+          [pbx-ivr-main]
+          exten => #,1,Hangup()
+          exten => 1,1,Goto(pbx-extension-201,s,1)
+          exten => 201,1,Goto(pbx-extension-201,s,1)
+          exten => 202,1,Goto(pbx-extension-202,s,1)
+          exten => i,1,Playback(pbx-invalid)
+           same => n,GotoIf($[''${PBX_ATTEMPT} < 2]?s,prompt)
+           same => n,Hangup()
+          exten => s,1,Answer()
+           same => n,Set(PBX_ATTEMPT=0)
+           same => n(prompt),Set(PBX_ATTEMPT=$[''${PBX_ATTEMPT} + 1])
+           same => n,Background(pbx/ivr-main)
+           same => n,WaitExten(3)
+          exten => t,1,GotoIf($[''${PBX_ATTEMPT} < 2]?s,prompt)
+           same => n,VoiceMail(201@default,u)
+           same => n,Hangup()'';
+        inbound = ''
+          ; from pbx.inbound: calls from trunk provider
+          [pbx-inbound-provider]
+          exten => 5551000,1,Goto(pbx-ivr-main,s,1)'';
+        prompts = ["pbx-ivr-prompts"];
+      };
+    };
+
+    # a recorded prompt needs no speech synthesis
+    testIvrSoundPrompt = {
+      expr = let
+        module.pbx.ivrs.main.prompt.sound = "custom/main-menu";
+      in {
+        background = lib.hasInfix "Background(custom/main-menu)" (context "pbx-ivr-main" module);
+        packages = (configOf module).services.asterisk.sounds.packages;
+      };
+      expected = {
+        background = true;
+        packages = [];
+      };
+    };
+
+    testPaging = let
+      module = {
+        pbx.paging = {
+          all = {
+            number = "650";
+            members = [
+              "201"
+              "202"
+            ];
+          };
+          talk = {
+            number = "651";
+            members = ["202"];
+            duplex = true;
+            skipBusy = false;
+            headers = ["Alert-Info: intercom"];
+          };
+        };
+      };
+    in {
+      expr = {
+        all = context "pbx-paging-all" module;
+        talk = context "pbx-paging-talk" module;
+        internal = lib.hasInfix "exten => 650,1,Goto(pbx-paging-all,s,1)" (context "pbx-internal" module);
+      };
+      expected = {
+        all = ''
+          ; from pbx.paging.all
+          [pbx-paging-all]
+          exten => headers,1,Set(PJSIP_HEADER(add,Alert-Info)=<http://example.com>\;info=alert-autoanswer\;delay=0)
+           same => n,Set(PJSIP_HEADER(add,Call-Info)=<sip:pbx>\;answer-after=0)
+           same => n,Return()
+          exten => s,1,Page(PJSIP/201&PJSIP/202,isb(pbx-paging-all^headers^1))
+           same => n,Hangup()'';
+        talk = ''
+          ; from pbx.paging.talk
+          [pbx-paging-talk]
+          exten => headers,1,Set(PJSIP_HEADER(add,Alert-Info)=intercom)
+           same => n,Return()
+          exten => s,1,Page(PJSIP/202,idb(pbx-paging-talk^headers^1))
+           same => n,Hangup()'';
+        internal = true;
+      };
+    };
+
+    # the examples in README.md, with plain secret paths instead of sops-nix
     testReadmeExampleIsValid = {
       expr = let
         config =
@@ -562,6 +674,24 @@ in
                     prefix = "9";
                     trunk = "provider";
                     callerId = "5551000";
+                  };
+
+                  # the voice menu and paging example
+                  ivrs.main = {
+                    number = "700";
+                    prompt.text = "For sales, press 1. For the front desk, press 2.";
+                    options = {
+                      "1".extension = "202";
+                      "2".ringGroup = "front";
+                    };
+                    noInput.voicemail = "201";
+                  };
+                  paging.all = {
+                    number = "650";
+                    members = [
+                      "201"
+                      "202"
+                    ];
                   };
                 };
 

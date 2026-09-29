@@ -2,8 +2,8 @@
 # holidays and the close-early toggle, inbound calls routed by them, a hunt
 # group ringing one phone after the other, an external ring group member who
 # has to press 1 before the call is theirs, emergency calls that notify two
-# phones without waiting for them, and the busy and no-answer destinations
-# of an extension. A second Asterisk plays the SIP provider and the mobile
+# phones without waiting for them, the busy and no-answer destinations of an
+# extension, a voice menu driven by DTMF, and a page to two phones. A second Asterisk plays the SIP provider and the mobile
 # phone of the external member.
 #
 #   pbx       10.2.0.10, clock set by the test
@@ -124,6 +124,23 @@ in
             callerId = "5551000";
           };
 
+          ivrs.menu = {
+            number = "700";
+            prompt.text = "Press 1 for the test.";
+            options."1".context.context = "ivr-one";
+            attempts = 2;
+            noInput.context.context = "ivr-noinput";
+            invalid.context.context = "ivr-invalid";
+          };
+
+          paging.all = {
+            number = "650";
+            members = [
+              "201"
+              "202"
+            ];
+          };
+
           emergency = {
             numbers = ["911"];
             trunk = "provider";
@@ -137,6 +154,14 @@ in
 
         services.asterisk = {
           openFirewall = true;
+          # the test follows the voice menu through verbose messages in the journal
+          logger.channels.console = [
+            "notice"
+            "warning"
+            "error"
+            "verbose"
+          ];
+          settings."asterisk.conf".options.verbose = 3;
           pjsip = {
             transports.udp = {};
             trunks.provider = {
@@ -166,6 +191,18 @@ in
             ];
             cell-done.extensions.s = [
               "Set(DB(test/cell)=noanswer)"
+              "Hangup()"
+            ];
+            ivr-one.extensions.s = [
+              "Set(DB(test/ivr)=one)"
+              "Hangup()"
+            ];
+            ivr-noinput.extensions.s = [
+              "Set(DB(test/ivr)=noinput)"
+              "Hangup()"
+            ];
+            ivr-invalid.extensions.s = [
+              "Set(DB(test/ivr)=invalid)"
               "Hangup()"
             ];
           };
@@ -366,6 +403,43 @@ in
             boss.call("201")
             channel = wait_channel(pbx, "203", app="VoiceMail", timeout=30)
             assert channel["data"] == "201@default,u", channel
+            boss.hangup()
+            wait_idle(pbx)
+
+        def menu(digits):
+            """Calls the voice menu from 203, sends `digits` one per prompt,
+            and returns where the call ended up."""
+            asterisk(pbx, "database del test ivr")
+            cursor = journal_cursor(pbx)
+            boss.call("700")
+            for count, digit in enumerate(digits, 1):
+                wait_journal(pbx, cursor, "Playing 'pbx/ivr-menu\\.", count=count)
+                boss.dtmf(digit)
+            pbx.wait_until_succeeds("asterisk -rx 'database get test ivr' | grep -q '^Value: '", timeout=60)
+            result = db(pbx, "test", "ivr")
+            prompts = len(re.findall("Playing 'pbx/ivr-menu\\.", journal_since(pbx, cursor)))
+            boss.hangup()
+            wait_idle(pbx)
+            return result, prompts
+
+        with subtest("a voice menu sends a key to its destination"):
+            assert menu("1") == ("one", 1)
+
+        with subtest("a voice menu replays its prompt, then takes the no-input destination"):
+            assert menu("") == ("noinput", 2)
+
+        with subtest("a voice menu replays its prompt after an invalid key, then takes the invalid destination"):
+            assert menu("55") == ("invalid", 2)
+
+        with subtest("a page rings its members at once and asks them to answer by themselves"):
+            invites = {p.name: p.requests("INVITE") for p in (reception, sales)}
+            boss.call("650")
+            # the members ring without answering, so they have to ring together
+            for phone in (reception, sales):
+                phone.wait_request("INVITE", after=invites[phone.name], timeout=30)
+                invite = phone.received("INVITE")[-1]
+                assert "Call-Info: <sip:pbx>;answer-after=0" in invite, invite
+                assert "Alert-Info: <http://example.com>;info=alert-autoanswer;delay=0" in invite, invite
             boss.hangup()
             wait_idle(pbx)
       '';

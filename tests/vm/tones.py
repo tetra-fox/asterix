@@ -32,12 +32,11 @@ def sample_rate(phone):
     return int.from_bytes(header[24:28], "little")
 
 
-def heard(phone, start, end=None):
-    """The tones in each 100 ms `phone` heard between two marks, loudest first;
-    an empty list is silence"""
+def samples(phone, start, end=None):
+    """The samples `phone` heard between two marks"""
     end = recorded(phone) if end is None else end
     if end <= start:
-        return []
+        return numpy.zeros(0)
     # dd reads just this range; with tail | head, tail fails on the closed pipe
     # once the phone has recorded a pipe buffer past the range
     raw = base64.b64decode(
@@ -45,8 +44,24 @@ def heard(phone, start, end=None):
             f"dd if={phone.recording} iflag=skip_bytes,count_bytes skip={HEADER + start} count={end - start} status=none | base64 -w0"
         )
     )
-    samples = numpy.frombuffer(raw[: len(raw) // 2 * 2], dtype="<i2").astype(float)
-    return tones_in(samples, sample_rate(phone))
+    return numpy.frombuffer(raw[: len(raw) // 2 * 2], dtype="<i2").astype(float)
+
+
+def heard(phone, start, end=None):
+    """The tones in each 100 ms `phone` heard between two marks, loudest first;
+    an empty list is silence"""
+    audio = samples(phone, start, end)
+    # the header, which holds the rate, comes with the first audio
+    return tones_in(audio, sample_rate(phone)) if len(audio) else []
+
+
+def levels(phone, start, end=None):
+    """The RMS of each 100 ms `phone` heard between two marks"""
+    audio = samples(phone, start, end)
+    if not len(audio):
+        return []
+    size = round(sample_rate(phone) * WINDOW)
+    return [numpy.sqrt(numpy.mean(audio[offset : offset + size] ** 2)) for offset in range(0, len(audio) - size + 1, size)]
 
 
 def hears_any(windows, tones):

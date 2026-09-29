@@ -139,7 +139,12 @@ in {
       unanswered = mkOption {
         type = types.bool;
         default = false;
-        description = "Also record calls nobody answered.";
+        description = ''
+          Also record calls that were never answered and never offered to
+          another channel, such as one to an extension that hangs up without
+          answering. A call offered to a phone is recorded either way, as
+          `NO ANSWER` when nobody picked up.
+        '';
       };
 
       csv = {

@@ -26,6 +26,17 @@
       touch $out
     '';
 
+  # every test in these suites evaluates a whole NixOS system, so a suite is
+  # split into checks of partSize tests that parallel evaluation can spread out
+  partSize = 12;
+  suiteParts = name: suite: let
+    names = builtins.attrNames suite.tests;
+    part = i: suite.run (lib.getAttrs (lib.sublist (i * partSize) partSize names) suite.tests);
+  in
+    lib.listToAttrs (map (i:
+      lib.nameValuePair "${name}-${toString (i + 1)}" (reportFailures "asterisk-${name}-tests-${toString (i + 1)}" (part i)))
+    (lib.range 0 ((builtins.length names - 1) / partSize)));
+
   examples = import ./examples.nix {inherit pkgs self sopsSecrets;};
 
   sources = extensions:
@@ -34,80 +45,73 @@
       fileset = lib.fileset.fileFilter (file: builtins.any file.hasExt extensions) ../.;
     };
   nixSources = sources ["nix"];
-in {
-  lib-unit = reportFailures "asterisk-lib-unit-tests" (
-    import ./lib.nix {
-      inherit lib;
-      asteriskLib = self.lib;
-    }
-  );
+in
+  {
+    lib-unit = reportFailures "asterisk-lib-unit-tests" (
+      import ./lib.nix {
+        inherit lib;
+        asteriskLib = self.lib;
+      }
+    );
 
-  eval = reportFailures "asterisk-eval-tests" (import ./eval.nix {inherit pkgs self;});
+    pbx-timezones = import ./pbx/timezones.nix {inherit pkgs self;};
 
-  assertions = reportFailures "asterisk-assertion-tests" (
-    import ./assertions.nix {inherit pkgs self;}
-  );
+    examples = reportFailures "asterisk-examples-eval" examples.problems;
 
-  pbx-eval = reportFailures "asterisk-pbx-eval-tests" (import ./pbx/eval.nix {inherit pkgs self;});
+    config-check = import ./check.nix {inherit pkgs self;};
 
-  pbx-assertions = reportFailures "asterisk-pbx-assertion-tests" (
-    import ./pbx/assertions.nix {inherit pkgs self;}
-  );
+    examples-config-minimal = examples.derivations.minimal;
+    examples-config-household-intercom = examples.derivations.household-intercom;
+    examples-config-small-office = examples.derivations.small-office;
 
-  pbx-timezones = import ./pbx/timezones.nix {inherit pkgs self;};
+    vm-core = import ./vm/core.nix {inherit pkgs self;};
 
-  examples = reportFailures "asterisk-examples-eval" examples.problems;
+    vm-reload = import ./vm/reload.nix {inherit pkgs self sopsSecrets;};
 
-  config-check = import ./check.nix {inherit pkgs self;};
+    vm-minimal = import ./vm/minimal.nix {inherit pkgs self sopsSecrets;};
 
-  examples-config-minimal = examples.derivations.minimal;
-  examples-config-household-intercom = examples.derivations.household-intercom;
-  examples-config-small-office = examples.derivations.small-office;
+    vm-household-intercom = import ./vm/household-intercom.nix {inherit pkgs self sopsSecrets;};
 
-  vm-core = import ./vm/core.nix {inherit pkgs self;};
+    vm-small-office = import ./vm/small-office.nix {inherit pkgs self sopsSecrets;};
 
-  vm-reload = import ./vm/reload.nix {inherit pkgs self sopsSecrets;};
+    vm-tier2 = import ./vm/tier2.nix {inherit pkgs self;};
 
-  vm-minimal = import ./vm/minimal.nix {inherit pkgs self sopsSecrets;};
+    vm-tls-realtime = import ./vm/tls-realtime.nix {inherit pkgs self;};
 
-  vm-household-intercom = import ./vm/household-intercom.nix {inherit pkgs self sopsSecrets;};
+    vm-ht801 = import ./vm/ht801.nix {inherit pkgs self sopsSecrets;};
 
-  vm-small-office = import ./vm/small-office.nix {inherit pkgs self sopsSecrets;};
+    vm-calls = import ./vm/calls.nix {inherit pkgs self;};
 
-  vm-tier2 = import ./vm/tier2.nix {inherit pkgs self;};
+    vm-transfers = import ./vm/transfers.nix {inherit pkgs self;};
 
-  vm-tls-realtime = import ./vm/tls-realtime.nix {inherit pkgs self;};
+    vm-conference = import ./vm/conference.nix {inherit pkgs self;};
 
-  vm-ht801 = import ./vm/ht801.nix {inherit pkgs self sopsSecrets;};
+    vm-queues = import ./vm/queues.nix {inherit pkgs self;};
 
-  vm-calls = import ./vm/calls.nix {inherit pkgs self;};
+    vm-nat = import ./vm/nat.nix {inherit pkgs self;};
 
-  vm-transfers = import ./vm/transfers.nix {inherit pkgs self;};
+    vm-transports = import ./vm/transports.nix {inherit pkgs self;};
 
-  vm-conference = import ./vm/conference.nix {inherit pkgs self;};
+    vm-tenants = import ./vm/tenants.nix {inherit pkgs self;};
 
-  vm-queues = import ./vm/queues.nix {inherit pkgs self;};
+    vm-pbx = import ./vm/pbx.nix {inherit pkgs self;};
 
-  vm-nat = import ./vm/nat.nix {inherit pkgs self;};
+    # builds the server and runs its unit tests
+    provisioning-server = self.packages.${pkgs.stdenv.hostPlatform.system}.provisioning-server;
 
-  vm-transports = import ./vm/transports.nix {inherit pkgs self;};
+    # every option has a description and the reference builds
+    docs = import ../docs {inherit pkgs self;};
 
-  vm-tenants = import ./vm/tenants.nix {inherit pkgs self;};
+    # the same formatter `nix fmt` runs
+    formatting = self.formatter.${pkgs.stdenv.hostPlatform.system}.check (sources ["nix" "rs"]);
 
-  vm-pbx = import ./vm/pbx.nix {inherit pkgs self;};
-
-  # builds the server and runs its unit tests
-  provisioning-server = self.packages.${pkgs.stdenv.hostPlatform.system}.provisioning-server;
-
-  # every option has a description and the reference builds
-  docs = import ../docs {inherit pkgs self;};
-
-  # the same formatter `nix fmt` runs
-  formatting = self.formatter.${pkgs.stdenv.hostPlatform.system}.check (sources ["nix" "rs"]);
-
-  # no unused let bindings, function arguments or inherits
-  deadnix = pkgs.runCommand "asterisk-deadnix-check" {nativeBuildInputs = [pkgs.deadnix];} ''
-    deadnix --fail ${nixSources}
-    touch $out
-  '';
-}
+    # no unused let bindings, function arguments or inherits
+    deadnix = pkgs.runCommand "asterisk-deadnix-check" {nativeBuildInputs = [pkgs.deadnix];} ''
+      deadnix --fail ${nixSources}
+      touch $out
+    '';
+  }
+  // suiteParts "eval" (import ./eval.nix {inherit pkgs self;})
+  // suiteParts "assertions" (import ./assertions.nix {inherit pkgs self;})
+  // suiteParts "pbx-eval" (import ./pbx/eval.nix {inherit pkgs self;})
+  // suiteParts "pbx-assertions" (import ./pbx/assertions.nix {inherit pkgs self;})

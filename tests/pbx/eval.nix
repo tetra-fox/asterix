@@ -50,8 +50,9 @@
     );
 
   zoneFile = zone: "${pkgs.tzdata}/share/zoneinfo/${zone}";
-in
-  lib.runTests {
+in {
+  run = lib.runTests;
+  tests = {
     # an adapter registers as the endpoint (and its aor) and authenticates
     # with the auth user name, which may differ
     testHt801UserIdIsTheEndpoint = {
@@ -730,4 +731,5 @@ in
         endpoints = [];
       };
     };
-  }
+  };
+}

@@ -30,8 +30,9 @@
   };
 
   unitOf = modules: (evalConfig modules).systemd.services.asterisk;
-in
-  lib.runTests {
+in {
+  run = lib.runTests;
+  tests = {
     testTypedEndpointSections = {
       expr = (rendered [phone])."pjsip.conf";
       expected =
@@ -948,4 +949,5 @@ in
       expr = "${(evalConfig []).lib.asterisk.secret "/run/x"}";
       expected = "@NIX_ASTERISK_SECRET:file:/run/x@";
     };
-  }
+  };
+}

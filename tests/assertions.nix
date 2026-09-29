@@ -535,5 +535,7 @@
       throws = true;
     };
   };
-in
-  checkCases base cases
+in {
+  run = checkCases base;
+  tests = cases;
+}

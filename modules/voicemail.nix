@@ -223,6 +223,11 @@
     if isString (general.format or null)
     then splitString "|" general.format
     else [];
+  # app_voicemail copies mailcmd into a buffer of 160 bytes
+  mailCommandLength =
+    if isString (general.mailcmd or null)
+    then builtins.stringLength general.mailcmd
+    else 0;
 in {
   options.services.asterisk.voicemail = {
     enable = mkOption {
@@ -290,7 +295,8 @@ in {
           {file}`/run/wrappers/bin/sendmail` do not work; use an SMTP client
           such as msmtp. Its password can be a credential
           ({option}`services.asterisk.credentials`), which the command reads
-          from {file}`$CREDENTIALS_DIRECTORY/<name>`.
+          from {file}`$CREDENTIALS_DIRECTORY/<name>`. Asterisk keeps 159
+          characters of it; a longer command has to go into a script.
         '';
       };
       fromAddress = mkOption {
@@ -377,6 +383,10 @@ in {
         {
           assertion = !mailCommandKnown || mailedBoxes == [] || (voicemailConf.general.mailcmd or null) != null;
           message = "services.asterisk.voicemail: mailboxes with an e-mail address (${concatStringsSep ", " mailedBoxes}) need voicemail.email.command; without it Asterisk runs /usr/sbin/sendmail, which NixOS does not have.";
+        }
+        {
+          assertion = mailCommandLength <= 159;
+          message = "services.asterisk.voicemail.email.command: Asterisk cuts the e-mail command (mailcmd) after 159 characters, this one has ${toString mailCommandLength}; run a longer command from a script, such as one made with pkgs.writeShellScript.";
         }
         {
           assertion = builtins.length storedFormats <= 10;

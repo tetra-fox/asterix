@@ -477,6 +477,27 @@
       assertions = [];
     };
 
+    # app_voicemail keeps the first 159 characters of the command
+    voicemailLongestEmailCommand = {
+      module = {config, ...}: {
+        services.asterisk.voicemail = {
+          mailboxes."101".pin = config.lib.asterisk.secret "/run/secrets/vm";
+          email.command = "/run/current-system/sw/bin/msmtp -t ${lib.fixedWidthString 123 "x" ""}";
+        };
+      };
+      assertions = [];
+    };
+
+    voicemailEmailCommandTooLong = {
+      module = {config, ...}: {
+        services.asterisk.voicemail = {
+          mailboxes."101".pin = config.lib.asterisk.secret "/run/secrets/vm";
+          email.command = "/run/current-system/sw/bin/msmtp -t ${lib.fixedWidthString 124 "x" ""}";
+        };
+      };
+      assertion = "Asterisk cuts the e-mail command (mailcmd) after 159 characters, this one has 160";
+    };
+
     voicemailElevenFormats = {
       module = {config, ...}: {
         services.asterisk.voicemail = {

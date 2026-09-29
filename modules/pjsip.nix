@@ -126,7 +126,11 @@
         removeExisting = mkOption {
           type = types.bool;
           default = true;
-          description = "Replace the oldest contact when a new registration would exceed maxContacts.";
+          description = ''
+            When a registration would exceed maxContacts, make room by removing
+            the other contacts that expire soonest, instead of refusing it with
+            403.
+          '';
         };
         qualifyFrequency = mkOption {
           type = types.ints.unsigned;

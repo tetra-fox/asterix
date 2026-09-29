@@ -154,7 +154,7 @@ in {
         )
         acfg.users;
 
-      firewall.tcpPorts = mkIf acfg.openFirewall [acfg.port];
+      firewall.ami = acfg.openFirewall;
     };
 
     assertions = [

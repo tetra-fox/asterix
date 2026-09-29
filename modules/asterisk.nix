@@ -503,14 +503,13 @@
   # bound at startup, RTP ports only for calls.
   httpGeneral = cfg.settings."http.conf".general or {};
   managerGeneral = cfg.settings."manager.conf".general or {};
-  listenPorts =
-    map (t: t.port) transportPorts
-    ++ optional (format.isTrue (httpGeneral.enabled or false)) (toPort (httpGeneral.bindport or 8088))
+  httpPorts =
+    optional (format.isTrue (httpGeneral.enabled or false)) (toPort (httpGeneral.bindport or 8088))
     ++ optional (format.isTrue (httpGeneral.tlsenable or false)) (
       parseBindPort (toString (httpGeneral.tlsbindaddr or "0.0.0.0")) 8089
-    )
-    ++ optional (format.isTrue (managerGeneral.enabled or false)) (toPort (managerGeneral.port or 5038))
-    ++ cfg.firewall.tcpPorts;
+    );
+  amiPorts = optional (format.isTrue (managerGeneral.enabled or false)) (toPort (managerGeneral.port or 5038));
+  listenPorts = map (t: t.port) transportPorts ++ httpPorts ++ amiPorts;
   lowPort = port: port < 1024;
   needsLowPorts = builtins.any lowPort (listenPorts ++ [rtpRange.from]);
 
@@ -567,7 +566,8 @@
         )
         transportPorts
       )
-      ++ cfg.firewall.tcpPorts
+      ++ lib.optionals cfg.firewall.http httpPorts
+      ++ lib.optionals cfg.firewall.ami amiPorts
     );
     allowedUDPPortRanges = [rtpRange];
   };
@@ -820,11 +820,17 @@ in {
     };
 
     firewall = {
-      tcpPorts = mkOption {
-        type = types.listOf types.port;
-        default = [];
+      http = mkOption {
+        type = types.bool;
+        default = false;
         internal = true;
-        description = "Additional TCP ports to open, contributed by typed modules.";
+        description = "Open the ports the HTTP server listens on, as http.conf sets them.";
+      };
+      ami = mkOption {
+        type = types.bool;
+        default = false;
+        internal = true;
+        description = "Open the port AMI listens on, as manager.conf sets it.";
       };
     };
 

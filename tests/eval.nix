@@ -352,6 +352,67 @@ in {
       };
     };
 
+    # AMI and HTTP listen on the ports of the final manager.conf and
+    # http.conf, which settings can change
+    testFirewallOpensTheAmiAndHttpPortsAsteriskListensOn = {
+      expr =
+        map (
+          module:
+            (evalConfig [
+              phone
+              {services.asterisk.openFirewall = true;}
+              module
+            ]).networking.firewall.allowedTCPPorts
+        )
+        [
+          {
+            services.asterisk.ami = {
+              enable = true;
+              openFirewall = true;
+              settings.port = 5039;
+            };
+          }
+          {
+            services.asterisk.http = {
+              enable = true;
+              openFirewall = true;
+              settings.bindport = 8000;
+            };
+          }
+          {
+            services.asterisk.http = {
+              enable = true;
+              openFirewall = true;
+              tls = {
+                enable = true;
+                certFile = "/var/lib/acme/pbx/cert.pem";
+                keyFile = "/var/lib/acme/pbx/key.pem";
+              };
+              settings.tlsbindaddr = "127.0.0.1:8443";
+            };
+          }
+          # on, but not opened
+          {
+            services.asterisk = {
+              ami = {
+                enable = true;
+                settings.port = 5039;
+              };
+              http.enable = true;
+            };
+          }
+        ];
+      expected = [
+        [5039]
+        [8000]
+        [
+          8088
+          8443
+        ]
+        []
+      ];
+    };
+
     testTlsFilesAreCredentials = {
       expr = let
         config = evalConfig [

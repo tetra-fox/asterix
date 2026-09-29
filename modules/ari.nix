@@ -215,9 +215,7 @@ in {
             http-tls-key = hcfg.tls.keyFile;
           };
 
-        firewall.tcpPorts = mkIf hcfg.openFirewall (
-          [hcfg.port] ++ optionals hcfg.tls.enable [hcfg.tls.port]
-        );
+        firewall.http = hcfg.openFirewall;
       };
 
       assertions = [

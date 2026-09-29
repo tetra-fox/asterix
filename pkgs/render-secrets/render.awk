@@ -78,9 +78,16 @@ BEGIN {
     terminator = RT
     rest = $0
     out = ""
+    sources = ""
     while (match(rest, pattern)) {
-        out = out substr(rest, 1, RSTART - 1) value(substr(rest, RSTART, RLENGTH))
+        placeholder = substr(rest, RSTART, RLENGTH)
+        out = out substr(rest, 1, RSTART - 1) value(placeholder)
+        sources = sources (sources == "" ? "" : ", ") source[placeholder]
         rest = substr(rest, RSTART + RLENGTH)
     }
+    # Asterisk skips a longer line and logs how it begins (main/config.c
+    # config_text_file_load); the module checks the lines without secrets
+    if (mode == "asterisk" && sources != "" && length(out rest) > 8190)
+        fail("line " FNR " of " FILENAME " is longer than 8190 bytes with " sources " in it, which Asterisk skips")
     printf "%s%s", out rest, terminator
 }

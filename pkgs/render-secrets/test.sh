@@ -22,6 +22,8 @@ secret lookalike "$(placeholder semicolon)"
 secret comma $'a,b\n'
 secret pin $'1234\n' field
 secret commapin $'12,34\n' field
+long=$(printf '0123456789%.0s' $(seq 818))
+secret long "$long"
 printf '%s\tsecret-missing\t/run/secrets/missing\n' "$(placeholder missing)" >> manifest
 
 # check MODE INPUT EXPECTED
@@ -61,3 +63,12 @@ fails asterisk "x = $(placeholder space)" "secret /run/secrets/space has leading
 fails asterisk "101 => $(placeholder commapin),Sales" "secret /run/secrets/commapin is one field of a comma-separated value, so it cannot contain a comma"
 fails asterisk "x = $(placeholder missing)" "secret /run/secrets/missing (credential secret-missing) is not available"
 fails none "x = $(placeholder unknown)" "no credential for $(placeholder unknown)"
+
+# Asterisk skips a line of more than 8190 bytes and logs how it begins
+check asterisk "abcdefghij$(placeholder long)"$'\n' "abcdefghij$long"$'\n'
+fails asterisk $'x = 1\n'"abcdefghijk$(placeholder long)" "line 2 of file is longer than 8190 bytes with /run/secrets/long in it"
+if grep -qF 0123456789 error; then
+  echo "render-secrets: the error shows the secret" >&2
+  exit 1
+fi
+check xml "abcdefghijk$(placeholder long)" "abcdefghijk$long"

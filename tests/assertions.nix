@@ -767,6 +767,27 @@
       warning = ''settings."confbridge.conf"."user:guest".pin is a plain string'';
     };
 
+    # Asterisk skips a line of more than 8190 bytes; a secret counts when the
+    # service starts, and AEL and Lua have parsers of their own
+    lineLongerThan8190Bytes = {
+      module = {config, ...}: {
+        services.asterisk = {
+          settings."long.conf".s = {
+            a = lib.strings.replicate 8187 "x";
+            b = lib.strings.replicate 8186 "x";
+            c = "${config.lib.asterisk.secret "/run/secrets/c"}${lib.strings.replicate 8186 "x"}";
+          };
+          extraConfig."extensions.lua" = ''t = "${lib.strings.replicate 8200 "x"}"'';
+        };
+      };
+      assertions = [
+        ''
+          services.asterisk: lines longer than 8190 bytes, which Asterisk skips:
+            long.conf, line 4: a = xxxxxxxxxxxxxxxxxxxxxxxxxxxx...
+        ''
+      ];
+    };
+
     sameKeyWarns = {
       module.services.asterisk.settings."extensions.conf".internal.same = ["n,Hangup()"];
       warning = "`same` keys in settings.\"extensions.conf\"";

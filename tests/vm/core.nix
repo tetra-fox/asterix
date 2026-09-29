@@ -110,6 +110,18 @@ pkgs.testers.runNixOSTest {
         pbx.succeed("printf 1234 > /run/test-secrets/vm-101")
         pbx.succeed("systemctl reload asterisk.service")
 
+    with subtest("a secret that makes its line longer than 8190 bytes fails the reload"):
+        # Asterisk would skip the line and log how it begins, with part of the
+        # secret
+        pbx.succeed("printf 's3cr3tXYZ%.0s' $(seq 911) > /run/test-secrets/sip-102")
+        pbx.fail("systemctl reload asterisk.service")
+        pbx.succeed("journalctl --sync")
+        pbx.succeed("journalctl -u asterisk.service | grep -F 'is longer than 8190 bytes with /run/test-secrets/sip-102 in it'")
+        pbx.fail("journalctl -b | grep -F s3cr3tXYZ")
+        assert "rotated;pw" in ast("pjsip show auth 102")
+        pbx.succeed("printf 'rotated;pw' > /run/test-secrets/sip-102")
+        pbx.succeed("systemctl reload asterisk.service")
+
     with subtest("restart keeps working"):
         pbx.succeed("systemctl restart asterisk.service")
         pbx.wait_for_unit("asterisk.service")

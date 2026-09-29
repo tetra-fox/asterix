@@ -7,7 +7,8 @@
 # secret that is one field of a comma-separated value and so cannot contain a
 # comma, separated by tabs. MODE says how values are written:
 #
-#   asterisk  a single line without leading or trailing whitespace, `;` as `\;`
+#   asterisk  a single line without leading or trailing whitespace, `;` as `\;`,
+#             in a line of at most 8190 bytes
 #   xml       `&<>"'` as entities
 #   none      unchanged
 #

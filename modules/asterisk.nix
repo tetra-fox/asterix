@@ -203,6 +203,20 @@
   ) (attrNames cfg.settings);
   fileSecrets = filter (ref: ref ? _secret) secretRefs;
 
+  # Asterisk skips a line of a config file longer than 8190 bytes (main/config.c
+  # config_text_file_load); render-secrets checks a line with its secrets
+  longLines = concatMap (
+    file:
+      concatLists (lib.imap1 (
+        n: line:
+          optional (
+            builtins.stringLength line
+            > 8190
+            && builtins.stringLength (lib.concatStrings (filter builtins.isString (builtins.split secrets.placeholderPattern line))) > 8190
+          ) "${file}, line ${toString n}: ${builtins.substring 0 32 line}..."
+      ) (lib.splitString "\n" cfg.renderedFiles.${file}))
+  ) (filter (hasSuffix ".conf") fileNames);
+
   # Parts of the configuration that Asterisk only reads at startup. Changing
   # them restarts the service; everything else is applied with a reload.
   pjsipObjects = (format.resolveInheritance (cfg.settings."pjsip.conf" or {})).sections;
@@ -897,6 +911,13 @@ in {
             # otherwise res_rtp_asterisk uses 5000-31000, which the firewall does not open
             assertion = rtpRange.from < rtpRange.to;
             message = "services.asterisk.rtp.portRange (rtpstart and rtpend in rtp.conf): `from` (${toString rtpRange.from}) must be lower than `to` (${toString rtpRange.to}).";
+          }
+          {
+            assertion = longLines == [];
+            message = ''
+              services.asterisk: lines longer than 8190 bytes, which Asterisk skips:
+                ${concatStringsSep "\n  " longLines}
+            '';
           }
         ];
 

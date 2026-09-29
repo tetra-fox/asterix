@@ -53,7 +53,8 @@ characters).
 
 ## small-office.nix
 
-A small office PBX with a SIP trunk.
+A small office PBX with a SIP trunk, written with the PBX layer: import
+`asterix.nixosModules.pbx` instead of `nixosModules.default`.
 
 | Network | Addresses      | Devices                                             |
 | ------- | -------------- | --------------------------------------------------- |
@@ -70,7 +71,8 @@ A small office PBX with a SIP trunk.
 | 800        | conference bridge                                                           |
 | \*97       | voicemail menu                                                              |
 
-It also shows keys without a typed option, set through the `settings` of a
-typed object.
+The trunk, the queue's members and the conference profiles are core options,
+next to `pbx`. It also shows keys without a typed option, set through the
+`settings` of a typed object.
 
 Secrets: `sip-trunk`, `sip-201` to `sip-203`, `vm-200` to `vm-203`.

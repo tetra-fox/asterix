@@ -37,7 +37,7 @@ in
     nodes = {
       pbx = {
         imports = [
-          self.nixosModules.default
+          self.nixosModules.pbx
           ../../examples/small-office.nix
           ./common.nix
           (sopsSecrets secrets)

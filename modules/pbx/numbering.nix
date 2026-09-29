@@ -76,7 +76,10 @@
         number:
           map (dialled: {
             number = dialled;
-            owner = "pbx.emergency.numbers";
+            owner =
+              if dialled == number
+              then "pbx.emergency.numbers"
+              else "pbx.emergency.numbers (${number} after pbx.outbound.prefix)";
             steps = [(gotoAt "pbx-emergency" number)];
           }) ([number] ++ prefixed number)
       )

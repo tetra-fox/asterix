@@ -100,7 +100,7 @@
       module = {config, ...}: {
         pbx.extensions."9911".password = config.lib.asterisk.secret "/run/secrets/9911";
       };
-      assertion = ''9911: pbx.extensions."9911", pbx.emergency.numbers'';
+      assertion = ''9911: pbx.extensions."9911", pbx.emergency.numbers (911 after pbx.outbound.prefix)'';
     };
 
     # every kind of number on 9911, which is also 911 after the prefix, and
@@ -116,8 +116,7 @@
         "pbx.paging.clash"
         "pbx.voicemailMenu"
         "pbx.hours.clash.closeEarly"
-        # 911 after the prefix, then 9911 itself
-        "pbx.emergency.numbers"
+        "pbx.emergency.numbers (911 after pbx.outbound.prefix)"
         "pbx.emergency.numbers"
       ];
       # the object named clash on 9911, and one and two on `twins`

@@ -359,6 +359,15 @@
       assertions = [];
     };
 
+    # an include ends its context at a | too, the old separator of the time
+    includeOfContextWithPipe = {
+      module.services.asterisk.dialplan.contexts = {
+        internal.includes = ["a|b"];
+        "a|b".extensions.s = ["Answer()"];
+      };
+      assertion = "[internal] include => a|b";
+    };
+
     contextsFromExtraConfigAreKnown = {
       module.services.asterisk = {
         pjsip.endpoints."101".context = lib.mkForce "legacy";

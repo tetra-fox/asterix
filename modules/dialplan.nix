@@ -230,11 +230,20 @@
     || (cfg.extraConfig."extensions.conf" or "") != ""
     || (cfg.includes."extensions.conf" or []) != [];
 
+  # an include names its context up to a |, or else a comma, after which the
+  # time it applies comes (main/pbx_include.c include_alloc)
+  includedContext = include:
+    lib.head (lib.splitString (
+        if lib.hasInfix "|" include
+        then "|"
+        else ","
+      )
+      include);
   danglingIncludes = lib.concatMap (
     s:
       map (target: "[${s.name}] include => ${target}") (
         filter (
-          target: isString target && !(builtins.elem (lib.head (lib.splitString "," target)) knownContexts)
+          target: isString target && !(builtins.elem (includedContext target) knownContexts)
         ) (toList (s.include or []))
       )
   ) (attrValues dialplan);

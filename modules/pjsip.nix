@@ -41,6 +41,7 @@
     optionalAttrs
     splitString
     types
+    unique
     ;
 
   cfg = config.services.asterisk;
@@ -694,7 +695,9 @@
         type = "identify";
         values = {
           endpoint = name;
-          inherit (e.identify) match;
+          # Asterisk warns about a host it matches already, such as a trunk's
+          # host that is in identify.match too
+          match = unique e.identify.match;
         };
         extra = e.identify.settings;
       };

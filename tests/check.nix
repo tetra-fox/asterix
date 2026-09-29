@@ -177,6 +177,15 @@
       ];
       expect = ["Cannot allow unknown format 'g7222'"];
     };
+    # a preloaded module starts before every other one, which app_queue does
+    # not take
+    queueModulePreloaded = {
+      module.services.asterisk = {
+        queues.queues.support.members = ["PJSIP/101"];
+        modules.preload = ["app_queue.so"];
+      };
+      expect = ["app_queue declined to load"];
+    };
     # the options load the modules they need, but not what those need
     pjsipWithoutDefaultModules = {
       module.services.asterisk.modules.defaultModules = false;

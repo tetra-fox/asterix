@@ -386,11 +386,10 @@ in
       valid = ["alice"];
       default = "accept";
     };
-    # `callerid = ` and the value make a line of 8190 bytes, the most
-    # Asterisk reads, and of one more
+    # Asterisk keeps 79 bytes of a caller ID's name and of its number
     "services.asterisk.pjsip.endpoints.<name>.callerId" = {
-      valid = [''"Kitchen" <101>'' "Kitchen <101>" "101" (lib.strings.replicate 8179 "x")];
-      invalid = [(lib.strings.replicate 8180 "x")];
+      valid = [''"Kitchen" <101>'' "Kitchen <101>" "101" (lib.strings.replicate 79 "x")];
+      invalid = [(lib.strings.replicate 80 "x")];
     };
     "services.asterisk.pjsip.endpoints.<name>.context" = {
       valid = ["internal"];

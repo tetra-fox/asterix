@@ -910,6 +910,92 @@
   missingContexts = filter (s: !(builtins.elem s.context cfg.dialplan.knownContexts)) (
     filter (s: (s.type or null) == "endpoint" && isString (s.context or null)) objects
   );
+
+  # the name and number Asterisk takes from a callerid (main/callerid.c
+  # ast_callerid_parse and ast_callerid_split): `"name" <number>`, `name
+  # <number>`, a number alone or a name alone
+  callerIdParts = value: let
+    # ast_strip_quoted: the text without whitespace around it, then without
+    # a pair of quotes around it
+    unquote = s: let
+      t = lib.trim s;
+      length = builtins.stringLength t;
+    in
+      if length > 0 && lib.hasPrefix "\"" t && lib.hasSuffix "\"" t
+      then builtins.substring 1 (lib.max 0 (length - 2)) t
+      else t;
+    # ast_unescape_quoted: each backslash goes, the character after it stays
+    unescape = s: let
+      parts = builtins.split "\\\\(.)" s;
+    in
+      lib.concatMapStrings (part:
+        if isList part
+        then builtins.head part
+        else part) (lib.init parts)
+      + lib.removeSuffix "\\" (lib.last parts);
+    # ast_shrink_phone_number: without ( ) and spaces, - outside [ ] and . but
+    # at the end
+    shrink = number: let
+      characters = lib.stringToCharacters number;
+      last = builtins.length characters - 1;
+    in
+      (lib.foldl' (
+          acc: i: let
+            c = builtins.elemAt characters i;
+          in
+            if c == "["
+            then {
+              bracketed = acc.bracketed + 1;
+              kept = acc.kept + c;
+            }
+            else if c == "]"
+            then {
+              bracketed = acc.bracketed - 1;
+              kept = acc.kept + c;
+            }
+            else if c == "-" && acc.bracketed == 0 || c == "." && i != last || builtins.elem c ["(" " " ")"]
+            then acc
+            else acc // {kept = acc.kept + c;}
+        ) {
+          bracketed = 0;
+          kept = "";
+        } (lib.range 0 last))
+      .kept;
+    input = unquote value;
+    # the last < and the last > after it
+    bracketed = builtins.match "(.*)<(.*)" input;
+    location = builtins.elemAt bracketed 1;
+    closed = builtins.match "(.*)>.*" location;
+    # without <, the text is a number alone when it is not in quotes and its
+    # first 255 bytes shrink to one
+    shrunk = shrink (builtins.substring 0 255 input);
+  in
+    if bracketed != null
+    then {
+      name = unescape (unquote (builtins.head bracketed));
+      number = shrink (
+        if closed == null
+        then location
+        else builtins.head closed
+      );
+    }
+    else if input == lib.trim value && builtins.match "[0-9*#+]+" shrunk != null
+    then {
+      name = "";
+      number = shrunk;
+    }
+    else {
+      name = unescape (unquote input);
+      number = "";
+    };
+  # endpoints whose callerid Asterisk cuts: it keeps 79 bytes of the name and
+  # of the number (res/res_pjsip/pjsip_configuration.c caller_id_handler)
+  longCallerIds = lib.concatMap (
+    s: let
+      parts = callerIdParts s.callerid;
+    in
+      lib.concatMap (part: lib.optional (builtins.stringLength parts.${part} > 79) "[${s.name}] ${part} of ${toString (builtins.stringLength parts.${part})} bytes") ["name" "number"]
+  ) (filter (s: isString (s.callerid or null) && asteriskLib.secrets.fromText s.callerid == []) endpointObjects);
 in {
   options.services.asterisk.pjsip = {
     global = mkOption {
@@ -1068,6 +1154,13 @@ in {
       {
         assertion = tlsWithoutKeys == [];
         message = "services.asterisk: TLS transport(s) ${concatStringsSep ", " tlsWithoutKeys} need a certificate and a private key (pjsip.transports.<name>.tls.certFile and tls.keyFile, or cert_file and priv_key_file).";
+      }
+      {
+        assertion = longCallerIds == [];
+        message = ''
+          services.asterisk: PJSIP endpoints with a caller ID longer than the 79 bytes of name and of number Asterisk keeps:
+            ${concatStringsSep "\n  " longCallerIds}
+        '';
       }
       {
         assertion = cfg.dialplan.knownContexts == null || missingContexts == [];

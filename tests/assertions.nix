@@ -1088,6 +1088,61 @@
       warning = "`same` keys in settings.\"extensions.conf\"";
     };
 
+    # Asterisk splits a callerid into a name and a number and keeps 79 bytes
+    # of each: here a name of 79 bytes, where each of these characters takes
+    # 3, a name of 81, a name whose backslashes Asterisk drops, a number that
+    # Asterisk shrinks to 79 digits, and from settings a name without quotes
+    # and a number alone of 80 digits
+    callerIdLongerThanAsteriskKeeps = let
+      mountains = n: lib.concatStrings (lib.replicate n (builtins.fromJSON ''"\u5c71"''));
+      digits = n: lib.strings.replicate n "1";
+    in {
+      module = {config, ...}: {
+        services.asterisk = {
+          pjsip = {
+            endpoints = {
+              "101".callerId = ''"${mountains 26}!" <101>'';
+              "102" = {
+                context = "internal";
+                callerId = ''"${mountains 27}" <102>'';
+              };
+              "103" = {
+                context = "internal";
+                callerId = ''"${lib.strings.replicate 40 "\\\""}" <103>'';
+              };
+            };
+            trunks.provider = {
+              host = "203.0.113.5";
+              username = "5551000";
+              password = config.lib.asterisk.secret "/run/secrets/trunk";
+              context = "internal";
+              callerId = "Office <(${digits 79}) - >";
+            };
+          };
+          settings."pjsip.conf" = {
+            gate = {
+              type = "endpoint";
+              context = "internal";
+              callerid = "${lib.strings.replicate 80 "n"} <104>";
+            };
+            door = {
+              type = "endpoint";
+              context = "internal";
+              callerid = "${digits 80}";
+            };
+          };
+        };
+      };
+      assertions = [
+        ''
+          services.asterisk: PJSIP endpoints with a caller ID longer than the 79 bytes of name and of number Asterisk keeps:
+            [door] number of 80 bytes
+            [102] name of 81 bytes
+            [gate] name of 80 bytes
+        ''
+      ];
+    };
+
     newlineInValueThrows = {
       module.services.asterisk.pjsip.endpoints."101".callerId = "a\nb";
       throws = true;

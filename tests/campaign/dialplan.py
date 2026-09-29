@@ -24,6 +24,9 @@ order. How Asterisk sorts and matches extensions follows
 configs/samples/extensions.conf.sample and the pattern matching rules of its
 documentation; where they say nothing, the source is named in a comment. The
 check prints each disagreement and fails if there is one.
+
+The parser, the matcher and the search are also what tollfraud.py walks the
+dialplan with.
 """
 
 import dataclasses
@@ -121,7 +124,8 @@ class Step:
         return f"{self.application}({self.data})"
 
 
-@dataclasses.dataclass
+# compared and hashed as itself, so a walk can tell extensions apart
+@dataclasses.dataclass(eq=False)
 class Extension:
     name: str
     # the caller ID an extension written as name/callerid matches

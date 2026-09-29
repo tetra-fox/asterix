@@ -72,6 +72,10 @@ in
     probe = import ./probe.nix {inherit pkgs self;};
     roundtrip = import ./roundtrip.nix {inherit pkgs self;};
     dialplan = import ./dialplan.nix {inherit pkgs self;};
+    tollfraud = import ./tollfraud.nix {
+      inherit pkgs self;
+      examples = examples.configs;
+    };
     codec-order = import ./codec-order.nix {inherit pkgs self;};
     musiconhold = import ./musiconhold.nix {inherit pkgs self;};
     pbx-destinations = import ./pbx/destinations.nix {inherit pkgs self;};

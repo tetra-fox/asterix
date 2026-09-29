@@ -9,6 +9,9 @@
 #     commands = [ "dialplan show pbx-internal" ];
 #     calls = [ { extension = "700"; context = "pbx-internal"; keys = "1"; } ];
 #   }
+#
+# `config`, a system evaluated elsewhere such as a node of a VM test, can take
+# the place of `modules`.
 {
   pkgs,
   self,
@@ -20,11 +23,11 @@
 in
   {
     name,
-    modules,
+    modules ? [],
+    config ? evalConfig modules,
     commands ? [],
     calls ? [],
   }: let
-    config = evalConfig modules;
     failed = failedAssertions config;
     configCheck = configCheckOf config;
     spec = pkgs.writeText "asterisk-probe-${name}.json" (builtins.toJSON {inherit commands calls;});

@@ -79,19 +79,28 @@
       includes = mkOption {
         type = types.listOf types.str;
         default = [];
-        description = "Contexts included in this one (`include =>`), searched in order after its own extensions and switches.";
+        description = ''
+          Contexts included in this one (`include =>`), searched in order
+          after its own extensions and switches. A context listed twice, as
+          when two modules include it, is included once, where it comes
+          first.
+        '';
       };
       switches = mkOption {
         type = types.listOf types.str;
         default = [];
         example = ["Realtime/default@extensions"];
-        description = "Alternative switches (`switch =>`), asked in order after the context's own extensions and before its includes.";
+        description = ''
+          Alternative switches (`switch =>`), asked in order after the
+          context's own extensions and before its includes. One listed twice
+          is written once.
+        '';
       };
       ignorePatterns = mkOption {
         type = types.listOf types.str;
         default = [];
         example = ["9"];
-        description = "Patterns after which dial tone continues (`ignorepat =>`).";
+        description = "Patterns after which dial tone continues (`ignorepat =>`), each written once.";
       };
       extensions = mkOption {
         type = types.attrsOf (types.listOf stepType);
@@ -162,9 +171,11 @@
   contextSection = name: context: {
     inherit name;
     comment = mkDefault context.comment;
-    include = context.includes;
-    switch = context.switches;
-    ignorepat = context.ignorePatterns;
+    # several modules can each list one; Asterisk refuses the second
+    # (main/pbx.c ast_context_add_include2 and the like)
+    include = unique context.includes;
+    switch = unique context.switches;
+    ignorepat = unique context.ignorePatterns;
     exten = concatLists (
       map (extensionLines context) (
         sort (a: b: a < b) (unique (attrNames context.extensions ++ attrNames context.hints))

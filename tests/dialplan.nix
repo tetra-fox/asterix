@@ -82,6 +82,10 @@
     }
     {
       phones = {
+        # what the first module has already
+        includes = ["internal"];
+        switches = ["Loopback/@loop"];
+        ignorePatterns = ["9"];
         hints."100" = "Custom:phones";
         extraConfig = ''
           exten => 400,1,NoOp(phones raw 400)

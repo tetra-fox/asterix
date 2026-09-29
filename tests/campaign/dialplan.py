@@ -16,10 +16,11 @@ context, with an optional caller ID. PROBE is the probe.json of a run with
 
 The expected dialplan comes from the option descriptions: the definitions of
 a list from several modules are concatenated in module order, lib.mkBefore
-ones first and lib.mkAfter ones last (D22); an extension's first step gets
-priority 1 and the following ones the next priorities, a label names its
-step; a context searches its own extensions, then its switches, then its
-includes in order. How Asterisk sorts and matches extensions follows
+ones first and lib.mkAfter ones last (D22), and an include, switch or ignore
+pattern listed twice counts once; an extension's first step gets priority 1
+and the following ones the next priorities, a label names its step; a
+context searches its own extensions, then its switches, then its includes in
+order. How Asterisk sorts and matches extensions follows
 configs/samples/extensions.conf.sample and the pattern matching rules of its
 documentation; where they say nothing, the source is named in a comment. The
 check prints each disagreement and fails if there is one.
@@ -382,9 +383,9 @@ def expected(modules):
         names += [n for n in module if n not in names]
     for name in names:
         c = contexts[name] = Context(name)
-        c.includes = merged(modules, [name, "includes"])
-        c.switches = merged(modules, [name, "switches"])
-        c.ignorepats = merged(modules, [name, "ignorePatterns"])
+        c.includes = list(dict.fromkeys(merged(modules, [name, "includes"])))
+        c.switches = list(dict.fromkeys(merged(modules, [name, "switches"])))
+        c.ignorepats = list(dict.fromkeys(merged(modules, [name, "ignorePatterns"])))
         extensions = []
         for module in modules:
             for e in module.get(name, {}).get("extensions", {}):

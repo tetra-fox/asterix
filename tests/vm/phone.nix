@@ -8,9 +8,9 @@
 # The phone sends a sine of TONE Hz on every call without pause (no VAD), so
 # RTP flows in both directions, and records what its calls bring to
 # /tmp/sip-phone-NAME.wav, so a test can tell who hears whom (tones.py). Full
-# SIP traces are logged to /tmp/sip-phone-NAME.log. How it answers
-# (--auto-answer) and its transport flags (--no-tcp, --ipv6, ...) come with
-# the pjsua args, from phone.py.
+# SIP traces are logged to /tmp/sip-phone-NAME.log. Whether it registers
+# (--registrar), how it answers (--auto-answer) and its transport flags
+# (--no-tcp, --ipv6, ...) come with the pjsua args, from phone.py.
 {pkgs, ...}: let
   pjsip = pkgs.pjsip.overrideAttrs (old: {
     # fixes for pjsua's CLI (pjsua_app_cli.c, unfixed in pjproject master):
@@ -78,7 +78,7 @@
           # which would truncate a registration logged before that
           systemd-run --unit="sip-phone-$name" --collect \
             pjsua \
-              --id="sip:$user@$server" --registrar="sip:$server" \
+              --id="sip:$user@$server" \
               --realm='*' --username="$user" --password="$password" \
               "''${ip_addr[@]}" \
               --null-audio --no-vad --local-port="$sip_port" \

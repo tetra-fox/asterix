@@ -14,12 +14,13 @@ phones_made = itertools.count()
 
 
 class Phone:
-    """A pjsua instance registered as `user`. It answers incoming calls with
-    the SIP status `auto_answer`: 200 picks up, 180 rings until told
-    otherwise, 486 is busy. It sends a sine of `tone` Hz and records what it
-    hears (tones.py)."""
+    """A pjsua instance registered as `user`, or not registered at all with
+    `register=False`, like a provider's server that is only called. It answers
+    incoming calls with the SIP status `auto_answer`: 200 picks up, 180 rings
+    until told otherwise, 486 is busy. It sends a sine of `tone` Hz and
+    records what it hears (tones.py)."""
 
-    def __init__(self, machine, name, user, password, server, sip_port=5070, cli_port=2300, auto_answer=200, tone=None):
+    def __init__(self, machine, name, user, password, server, sip_port=5070, cli_port=2300, auto_answer=200, tone=None, register=True):
         self.machine = machine
         self.name = name
         self.user = user
@@ -28,12 +29,15 @@ class Phone:
         self.sip_port = sip_port
         self.cli_port = cli_port
         self.auto_answer = auto_answer
+        self.register = register
         self.tone = PHONE_TONES[next(phones_made) % len(PHONE_TONES)] if tone is None else tone
         self.log = f"/tmp/sip-phone-{name}.log"
         self.recording = f"/tmp/sip-phone-{name}.wav"
 
     def start_command(self, extra=""):
         flags = [f"--auto-answer={self.auto_answer}"]
+        if self.register:
+            flags.append(shlex.quote(f"--registrar=sip:{self.server}"))
         # the server URI decides the transport, as on a real phone. A UDP
         # phone gets no TCP transport: pjsua sends requests larger than 1300
         # bytes over TCP when it has one, and the server may not listen there.

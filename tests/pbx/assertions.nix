@@ -413,6 +413,15 @@
       assertion = "the trunk(s) provider have a context of their own";
     };
 
+    # the final pjsip.conf says where the trunk's calls start
+    trunkWithContextFromSettings = {
+      module.services.asterisk = {
+        settings."pjsip.conf"."endpoint:provider".context = "from-provider";
+        dialplan.contexts.from-provider.extensions.s = ["Hangup()"];
+      };
+      assertions = ["pbx.inbound: the trunk(s) provider have a context of their own, so their calls do not reach pbx.inbound; remove it."];
+    };
+
     notifyIsNoExtension = {
       module.pbx.emergency.notify = lib.mkForce ["299"];
       assertion = "pbx.emergency.notify: 299 are not extensions of pbx.extensions";

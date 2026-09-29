@@ -25,6 +25,7 @@
 
   cfg = config.pbx;
   pbxLib = import ./lib.nix {inherit lib;};
+  format = (import ../../lib {inherit lib;}).format;
 
   inboundType = types.submodule {
     options = {
@@ -197,7 +198,12 @@
 
   unknownHours = builtins.filter (number: cfg.inbound.${number}.hours != null && !(cfg.hours ? ${cfg.inbound.${number}.hours})) (builtins.attrNames cfg.inbound);
   unknownNotify = builtins.filter (extension: !(cfg.extensions ? ${extension})) (lib.optionals (cfg.emergency != null) cfg.emergency.notify);
-  foreignContexts = builtins.filter (trunk: trunks ? ${trunk} && trunks.${trunk}.context != pbxLib.objectContext "inbound" trunk) inboundTrunks;
+  # where calls from a trunk start is the context of its endpoint in the final
+  # pjsip.conf, which settings can change
+  endpointContexts = lib.listToAttrs (map (s: lib.nameValuePair s.name (s.context or null)) (
+    builtins.filter (s: (s.type or null) == "endpoint") (format.resolveInheritance (config.services.asterisk.settings."pjsip.conf" or {})).sections
+  ));
+  foreignContexts = builtins.filter (trunk: trunks ? ${trunk} && (endpointContexts.${trunk} or null) != pbxLib.objectContext "inbound" trunk) inboundTrunks;
 in {
   # a default in each trunk rather than trunks.<name>.context, which would
   # create a trunk for a misspelt name

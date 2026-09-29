@@ -864,6 +864,16 @@
       assertion = "pbx.conferences: names longer than 79 bytes, which ConfBridge refuses: ${lib.strings.replicate 80 "c"}.";
     };
 
+    # ConfBridge finds a conference by its name in any case, so these would be
+    # one room
+    conferencesAlikeButForCase = {
+      module.pbx.conferences = {
+        Board.number = "801";
+        BOARD = {};
+      };
+      assertion = "pbx.conferences: names that differ only in case, which ConfBridge takes for one conference: BOARD, Board, board.";
+    };
+
     # Queue's argument parser drops backslashes, and an unclosed parenthesis
     # takes the timeout into the name
     queueNames = {

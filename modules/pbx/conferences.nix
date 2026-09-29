@@ -47,8 +47,10 @@
   # ConfBridge needs a conference name
   badNames = builtins.filter (name: name == "" || pbxLib.breaksContext name || pbxLib.breaksArgument name) (builtins.attrNames cfg.conferences);
   # ConfBridge refuses a name of 80 bytes or more (apps/app_confbridge.c
-  # confbridge_exec)
+  # confbridge_exec), and finds a conference by its name in any case
+  # (conference_bridge_cmp_cb)
   longNames = builtins.filter (name: builtins.stringLength name > 79) (builtins.attrNames cfg.conferences);
+  alike = builtins.filter (names: builtins.length names > 1) (builtins.attrValues (builtins.groupBy lib.toLower (builtins.attrNames cfg.conferences)));
 
   # profiles Asterisk has without configuration
   missingProfiles = concatMap (
@@ -65,7 +67,7 @@ in {
     example = lib.literalExpression ''{ board = { number = "800"; }; }'';
     description = ''
       Conference rooms, keyed by room name. ConfBridge takes names of up to
-      79 bytes.
+      79 bytes and tells them apart without regard to case.
     '';
   };
 
@@ -112,6 +114,10 @@ in {
       {
         assertion = longNames == [];
         message = "pbx.conferences: names longer than 79 bytes, which ConfBridge refuses: ${concatStringsSep ", " longNames}.";
+      }
+      {
+        assertion = alike == [];
+        message = "pbx.conferences: names that differ only in case, which ConfBridge takes for one conference: ${concatMapStringsSep "; " (concatStringsSep ", ") alike}.";
       }
       {
         assertion = missingProfiles == [];

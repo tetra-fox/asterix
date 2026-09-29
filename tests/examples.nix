@@ -6,7 +6,7 @@
   sopsSecrets,
 }: let
   inherit (pkgs) lib;
-  inherit (import ./eval-lib.nix {inherit pkgs self;}) evalConfig failedAssertions;
+  inherit (import ./eval-lib.nix {inherit pkgs self;}) evalConfig systemProblems systemBuild;
 
   examples = {
     minimal = [../examples/minimal.nix];
@@ -30,40 +30,8 @@ in {
   inherit configs;
 
   # evaluation of the whole system, without building it
-  problems = lib.concatLists (
-    lib.mapAttrsToList (
-      name: config: let
-        failed = failedAssertions config;
-        # forces evaluation of every unit, file and option of the system
-        toplevel = builtins.unsafeDiscardStringContext config.system.build.toplevel.drvPath;
-      in
-        lib.optional (failed != [] || config.warnings != [] || toplevel == "") {
-          ${name} = {
-            inherit failed;
-            inherit (config) warnings;
-          };
-        }
-    )
-    configs
-  );
+  problems = lib.concatLists (lib.mapAttrsToList systemProblems configs);
 
   # the configuration trees and the module check, built for real
-  derivations =
-    lib.mapAttrs (
-      _: config:
-        pkgs.linkFarm "asterisk-example" (
-          [
-            {
-              name = "config";
-              path = config.services.asterisk.generatedConfig;
-            }
-          ]
-          ++ lib.imap0 (i: check: {
-            name = "check-${toString i}";
-            path = check;
-          })
-          config.system.checks
-        )
-    )
-    configs;
+  derivations = lib.mapAttrs (_: systemBuild) configs;
 }

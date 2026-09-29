@@ -1,4 +1,5 @@
-# Evaluate NixOS configurations using the module, without building them.
+# Evaluate NixOS configurations using the module, and pick what to build of
+# them.
 {
   pkgs,
   self,
@@ -22,6 +23,35 @@ in rec {
   rendered = modules: (evalConfig modules).services.asterisk.renderedFiles;
 
   failedAssertions = config: map (a: a.message) (lib.filter (a: !a.assertion) config.assertions);
+
+  # failed assertions and warnings of a system, as a list of one problem named
+  # `name` or none; every unit, file and option of the system is evaluated
+  systemProblems = name: config: let
+    failed = failedAssertions config;
+    toplevel = builtins.unsafeDiscardStringContext config.system.build.toplevel.drvPath;
+  in
+    lib.optional (failed != [] || config.warnings != [] || toplevel == "") {
+      ${name} = {
+        inherit failed;
+        inherit (config) warnings;
+      };
+    };
+
+  # a system's generated configuration and its checks, to build
+  systemBuild = config:
+    pkgs.linkFarm "asterisk-config-and-checks" (
+      [
+        {
+          name = "config";
+          path = config.services.asterisk.generatedConfig;
+        }
+      ]
+      ++ lib.imap0 (i: check: {
+        name = "check-${toString i}";
+        path = check;
+      })
+      config.system.checks
+    );
 
   placeholderFor = path: self.lib.secrets.placeholderOf (self.lib.secret path);
 

@@ -869,61 +869,6 @@ in {
       expected = true;
     };
 
-    # the dialplan example in README.md renders as shown there
-    testReadmeDialplanExample = {
-      expr = let
-        text =
-          (rendered [
-            {services.asterisk.enable = true;}
-            (
-              {config, ...}: let
-                dp = config.lib.asterisk.dialplan;
-              in {
-                services.asterisk.dialplan = {
-                  globals.TRUNK = "PJSIP/provider";
-                  contexts = {
-                    internal = {
-                      includes = ["outbound"];
-                      hints."101" = "PJSIP/101";
-                      extensions = {
-                        "101" = [
-                          "Dial(PJSIP/101,20)"
-                          {
-                            app = "VoiceMail";
-                            args = [
-                              "101@default"
-                              "u"
-                            ];
-                            label = "vm";
-                          }
-                          "Hangup()"
-                        ];
-                        # everyone who dials 800 joins the same conference
-                        "800" = [
-                          "Answer()"
-                          (dp.app "ConfBridge" ["800"])
-                        ];
-                      };
-                    };
-                    outbound.extensions."_9X." = ["Dial(\${TRUNK}/\${EXTEN:1})"];
-                  };
-                };
-              }
-            )
-          ])."extensions.conf";
-      in
-        lib.findFirst (lib.hasPrefix "[internal]") null (lib.splitString "\n\n" text);
-      expected = ''
-        [internal]
-        include => outbound
-        exten => 101,hint,PJSIP/101
-        exten => 101,1,Dial(PJSIP/101,20)
-         same => n(vm),VoiceMail(101@default,u)
-         same => n,Hangup()
-        exten => 800,1,Answer()
-         same => n,ConfBridge(800)'';
-    };
-
     # Asterisk ignores -p unless it starts as root: systemd sets the policy
     testRealtimeSchedulingIsSetBySystemd = {
       expr = let

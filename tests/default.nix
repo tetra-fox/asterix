@@ -38,6 +38,7 @@
     (lib.range 0 ((builtins.length names - 1) / partSize)));
 
   examples = import ./examples.nix {inherit pkgs self sopsSecrets;};
+  readme = import ./readme.nix {inherit pkgs self;};
 
   sources = extensions:
     lib.fileset.toSource {
@@ -72,6 +73,9 @@ in
     examples-config-household-intercom = examples.derivations.household-intercom;
     examples-config-household-intercom-ht801 = examples.derivations.household-intercom-ht801;
     examples-config-small-office = examples.derivations.small-office;
+
+    readme = reportFailures "asterisk-readme-eval" readme.problems;
+    readme-config = pkgs.linkFarm "asterisk-readme-config" readme.derivations;
 
     vm-core = import ./vm/core.nix {inherit pkgs self;};
 

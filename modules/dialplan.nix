@@ -75,13 +75,13 @@
       includes = mkOption {
         type = types.listOf types.str;
         default = [];
-        description = "Contexts included in this one (`include =>`), searched in order.";
+        description = "Contexts included in this one (`include =>`), searched in order after its own extensions and switches.";
       };
       switches = mkOption {
         type = types.listOf types.str;
         default = [];
         example = ["Realtime/default@extensions"];
-        description = "Alternative switches (`switch =>`).";
+        description = "Alternative switches (`switch =>`), asked in order after the context's own extensions and before its includes.";
       };
       ignorePatterns = mkOption {
         type = types.listOf types.str;

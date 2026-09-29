@@ -122,6 +122,8 @@ in
 
     vm-pbx-groups = import ./vm/pbx-groups.nix {inherit pkgs self;};
 
+    vm-pbx-calls = import ./vm/pbx-calls.nix {inherit pkgs self;};
+
     # builds the server and runs its unit tests
     provisioning-server = self.packages.${pkgs.stdenv.hostPlatform.system}.provisioning-server;
 

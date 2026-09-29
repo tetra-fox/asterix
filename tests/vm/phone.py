@@ -4,6 +4,8 @@ import itertools
 import json
 import re
 import shlex
+import socket
+import struct
 import time
 
 # Each phone sends its own tone. From 400 Hz in steps of 60 Hz, halving or
@@ -17,10 +19,11 @@ class Phone:
     """A pjsua instance registered as `user`, or not registered at all with
     `register=False`, like a provider's server that is only called. It answers
     incoming calls with the SIP status `auto_answer`: 200 picks up, 180 rings
-    until told otherwise, 486 is busy. It sends a sine of `tone` Hz and
-    records what it hears (tones.py)."""
+    until told otherwise, 486 is busy. With `call_waiting=False` it answers
+    486 to any call that comes while it is in one. It sends a sine of `tone`
+    Hz and records what it hears (tones.py)."""
 
-    def __init__(self, machine, name, user, password, server, sip_port=5070, cli_port=2300, auto_answer=200, tone=None, register=True):
+    def __init__(self, machine, name, user, password, server, sip_port=5070, cli_port=2300, auto_answer=200, tone=None, register=True, call_waiting=True):
         self.machine = machine
         self.name = name
         self.user = user
@@ -30,6 +33,7 @@ class Phone:
         self.cli_port = cli_port
         self.auto_answer = auto_answer
         self.register = register
+        self.call_waiting = call_waiting
         self.tone = PHONE_TONES[next(phones_made) % len(PHONE_TONES)] if tone is None else tone
         self.log = f"/tmp/sip-phone-{name}.log"
         self.recording = f"/tmp/sip-phone-{name}.wav"
@@ -38,6 +42,9 @@ class Phone:
         flags = [f"--auto-answer={self.auto_answer}"]
         if self.register:
             flags.append(shlex.quote(f"--registrar=sip:{self.server}"))
+        if not self.call_waiting:
+            # pjsua answers 486 when it has no free call slot
+            flags.append("--max-calls=1")
         # the server URI decides the transport, as on a real phone. A UDP
         # phone gets no TCP transport: pjsua sends requests larger than 1300
         # bytes over TCP when it has one, and the server may not listen there.
@@ -309,6 +316,41 @@ def rtp_received(phones):
 
 def asterisk(machine, command):
     return machine.succeed(f"asterisk -rx {shlex.quote(command)}")
+
+
+def sip_messages(machine, interface="eth1"):
+    """SIP messages over UDP that `machine` sent or received on `interface`,
+    from the capture QEMU writes of it (common.nix), in order: the capture
+    time in seconds, source and destination as address:port, and the text.
+    The times of one machine's capture come from one clock."""
+    data = (machine.state_dir / f"{interface}.pcap").read_bytes()
+    # QEMU writes a little-endian capture with microseconds
+    assert data[:4] == b"\xd4\xc3\xb2\xa1", data[:4]
+    messages = []
+    offset = 24
+    while offset + 16 <= len(data):
+        seconds, micros, length, _ = struct.unpack_from("<IIII", data, offset)
+        frame = data[offset + 16 : offset + 16 + length]
+        offset += 16 + length
+        # the last frame may still be on its way to the file
+        if len(frame) < length:
+            break
+        # IPv4 over Ethernet, carrying UDP, and not a fragment
+        if frame[12:14] != b"\x08\x00" or frame[23] != 17 or struct.unpack_from("!H", frame, 20)[0] & 0x3FFF:
+            continue
+        ip = 14 + (frame[14] & 0x0F) * 4
+        source_port, destination_port, udp_length = struct.unpack_from("!HHH", frame, ip)
+        text = frame[ip + 8 : ip + udp_length].decode(errors="replace")
+        if re.match(r"SIP/2\.0 |[A-Z]+ sip:", text):
+            messages.append(
+                {
+                    "time": seconds + micros / 1e6,
+                    "source": f"{socket.inet_ntoa(frame[26:30])}:{source_port}",
+                    "destination": f"{socket.inet_ntoa(frame[30:34])}:{destination_port}",
+                    "text": text,
+                }
+            )
+    return messages
 
 
 def netem(machine, interface, *settings):

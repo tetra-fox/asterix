@@ -27,17 +27,26 @@
     '';
 
   # every test in these suites evaluates a whole NixOS system, so a suite is
-  # split into checks of partSize tests that parallel evaluation can spread out
+  # split into checks of partSize tests that parallel evaluation can spread
+  # out; `check` makes the derivation of a part from its name and its tests
   partSize = 12;
-  suiteParts = name: suite: let
-    names = builtins.attrNames suite.tests;
-    part = i: suite.run (lib.getAttrs (lib.sublist (i * partSize) partSize names) suite.tests);
+  suiteParts = name: check: tests: let
+    names = builtins.attrNames tests;
   in
-    lib.listToAttrs (map (i:
-      lib.nameValuePair "${name}-${toString (i + 1)}" (reportFailures "asterisk-${name}-tests-${toString (i + 1)}" (part i)))
+    lib.listToAttrs (map (i: let
+      part = toString (i + 1);
+    in
+      lib.nameValuePair "${name}-${part}" (check "asterisk-${name}-tests-${part}" (lib.getAttrs (lib.sublist (i * partSize) partSize names) tests)))
     (lib.range 0 ((builtins.length names - 1) / partSize)));
 
+  # a suite whose `run` returns the tests that failed
+  evalSuiteParts = name: suite: suiteParts name (check: tests: reportFailures check (suite.run tests)) suite.tests;
+
   examples = import ./examples.nix {inherit pkgs self sopsSecrets;};
+  configCheck = import ./check.nix {
+    inherit pkgs self;
+    examples = examples.configs;
+  };
   readme = import ./readme.nix {inherit pkgs self;};
 
   sources = extensions:
@@ -58,11 +67,6 @@ in
     pbx-timezones = import ./pbx/timezones.nix {inherit pkgs self;};
 
     examples = reportFailures "asterisk-examples-eval" examples.problems;
-
-    config-check = import ./check.nix {
-      inherit pkgs self;
-      examples = examples.configs;
-    };
 
     # commands and calls on Asterisk in the build sandbox (tests/campaign/probe.nix)
     probe = import ./probe.nix {inherit pkgs self;};
@@ -147,7 +151,8 @@ in
       touch $out
     '';
   }
-  // suiteParts "eval" (import ./eval.nix {inherit pkgs self;})
-  // suiteParts "assertions" (import ./assertions.nix {inherit pkgs self;})
-  // suiteParts "pbx-eval" (import ./pbx/eval.nix {inherit pkgs self;})
-  // suiteParts "pbx-assertions" (import ./pbx/assertions.nix {inherit pkgs self;})
+  // evalSuiteParts "eval" (import ./eval.nix {inherit pkgs self;})
+  // evalSuiteParts "assertions" (import ./assertions.nix {inherit pkgs self;})
+  // evalSuiteParts "pbx-eval" (import ./pbx/eval.nix {inherit pkgs self;})
+  // evalSuiteParts "pbx-assertions" (import ./pbx/assertions.nix {inherit pkgs self;})
+  // suiteParts "config-check" configCheck.run configCheck.tests

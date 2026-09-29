@@ -329,35 +329,57 @@
       }";
     };
   };
-in
-  pkgs.runCommand "asterisk-config-check-tests" {} ''
-    ${lib.concatStrings (
-      lib.mapAttrsToList (
-        name: case: let
-          check =
-            if case.withoutUserNamespaces or false
-            then withoutUserNamespaces (checkOf case.module)
-            else if case.slowLogger or false
-            then withSlowLogger (checkOf case.module)
-            else checkOf case.module;
-          log = "${pkgs.testers.testBuildFailure check}/testBuildFailure.log";
-        in
-          lib.concatMapStrings (line: ''
-            if ! grep -qF ${lib.escapeShellArg line} ${log}; then
-              echo ${lib.escapeShellArg "${name}: expected `${line}` in:"} >&2
-              cat ${log} >&2
-              exit 1
-            fi
-          '')
-          case.expect
-      )
-      failing
-    )}
-    # the passing cases only have to build
-    : ${lib.concatMapStringsSep " " (module: "${checkOf module}") (lib.attrValues passing)}
-    : ${lib.concatMapStringsSep " " (module: "${withoutUserNamespaces (checkOf module)}") (
-      lib.attrValues passingWithoutUserNamespaces
-    )}
-    : ${lib.concatMapStringsSep " " (config: "${withoutUserNamespaces (configCheckOf config)}") (lib.attrValues examples)}
-    touch $out
-  ''
+in {
+  # each case is { module; expect ? [ lines ]; withoutUserNamespaces ? false;
+  # slowLogger ? false; }, with an example's evaluated `config` in place of a
+  # module on top of base
+  tests =
+    failing
+    // lib.mapAttrs (_: module: {inherit module;}) passing
+    // lib.mapAttrs (_: module: {
+      inherit module;
+      withoutUserNamespaces = true;
+    })
+    passingWithoutUserNamespaces
+    // lib.mapAttrs' (name: config:
+      lib.nameValuePair "example-${name}" {
+        inherit config;
+        withoutUserNamespaces = true;
+      })
+    examples;
+
+  # a case with `expect` fails with those lines, any other case builds
+  run = part: cases:
+    pkgs.runCommand part {} ''
+      ${lib.concatStrings (
+        lib.mapAttrsToList (
+          name: case: let
+            configCheck =
+              if case ? config
+              then configCheckOf case.config
+              else checkOf case.module;
+            check =
+              if case.withoutUserNamespaces or false
+              then withoutUserNamespaces configCheck
+              else if case.slowLogger or false
+              then withSlowLogger configCheck
+              else configCheck;
+            log = "${pkgs.testers.testBuildFailure check}/testBuildFailure.log";
+          in
+            if case ? expect
+            then
+              lib.concatMapStrings (line: ''
+                if ! grep -qF ${lib.escapeShellArg line} ${log}; then
+                  echo ${lib.escapeShellArg "${name}: expected `${line}` in:"} >&2
+                  cat ${log} >&2
+                  exit 1
+                fi
+              '')
+              case.expect
+            else ": ${check}\n"
+        )
+        cases
+      )}
+      touch $out
+    '';
+}

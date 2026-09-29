@@ -62,6 +62,7 @@ in
 
     # commands and calls on Asterisk in the build sandbox (tests/campaign/probe.nix)
     probe = import ./probe.nix {inherit pkgs self;};
+    roundtrip = import ./roundtrip.nix {inherit pkgs self;};
 
     examples-config-minimal = examples.derivations.minimal;
     examples-config-household-intercom = examples.derivations.household-intercom;

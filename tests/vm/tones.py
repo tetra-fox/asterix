@@ -1,7 +1,8 @@
 # What test phones hear. Every phone sends a sine of its own frequency and
 # records the audio of its calls (tests/vm/phone.nix); these helpers find the
-# tones in each 100 ms of a recording. Tests append this file after phone.py,
-# whose imports it uses, and add numpy to the driver with extraPythonPackages.
+# tones in each 100 ms of a recording, and the DTMF keys in it. Tests append
+# this file after phone.py, whose imports it uses, and add numpy to the driver
+# with extraPythonPackages.
 import base64
 
 import numpy
@@ -16,6 +17,19 @@ SILENCE = 300
 PEAK = 0.1
 # how far a measured tone may be from the one it is taken for, in Hz
 TOLERANCE = 20
+
+# DTMF keys by their row and column tones, in Hz
+DTMF_ROWS = [697, 770, 852, 941]
+DTMF_COLUMNS = [1209, 1336, 1477, 1633]
+DTMF_KEYS = ["123A", "456B", "789C", "*0#D"]
+# keys are found in blocks this long, in seconds. As in Asterisk's detector, a
+# key starts with two blocks of it in a row and ends with three blocks without
+# it, so a phone's playback dropping a block or two splits no key in two.
+DTMF_BLOCK = 0.02
+# a block holds a key when the key's two tones carry this share of its energy
+# together, and each of them this share
+DTMF_BOTH = 0.8
+DTMF_EACH = 0.25
 
 
 def recorded(phone):
@@ -86,6 +100,48 @@ def wait_recorded(phone, mark, seconds):
     """Wait until `phone` has recorded `seconds` of audio after `mark`."""
     size = HEADER + mark + round(seconds * sample_rate(phone)) * 2
     phone.machine.wait_until_succeeds(f"test $(stat -c %s {phone.recording}) -ge {size}")
+
+
+def keys_heard(phone, start, end=None):
+    """The DTMF keys `phone` heard between two marks, in order"""
+    audio = samples(phone, start, end)
+    return keys_in(audio, sample_rate(phone)) if len(audio) else ""
+
+
+def keys_in(samples, rate):
+    size = round(rate * DTMF_BLOCK)
+    index = numpy.arange(size)
+    probes = {f: numpy.exp(-2j * numpy.pi * f * index / rate) for f in DTMF_ROWS + DTMF_COLUMNS}
+    blocks = []
+    for offset in range(0, len(samples) - size + 1, size):
+        chunk = samples[offset : offset + size]
+        energy = numpy.sum(chunk**2)
+        # the energy of a sine in the block, from the block's correlation with it
+        power = {f: 2 * abs(numpy.dot(chunk, probe)) ** 2 / size for f, probe in probes.items()}
+        row = max(DTMF_ROWS, key=lambda f: power[f])
+        column = max(DTMF_COLUMNS, key=lambda f: power[f])
+        key = None
+        if (
+            numpy.sqrt(energy / size) >= SILENCE
+            and power[row] + power[column] >= DTMF_BOTH * energy
+            and min(power[row], power[column]) >= DTMF_EACH * energy
+        ):
+            key = DTMF_KEYS[DTMF_ROWS.index(row)][DTMF_COLUMNS.index(column)]
+        blocks.append(key)
+    keys = []
+    # the key heard, blocks in a row without it, and the key of the last blocks
+    current, misses = None, 0
+    candidate, hits = None, 0
+    for key in blocks:
+        hits = hits + 1 if key is not None and key == candidate else 1
+        candidate = key
+        misses = 0 if key == current else misses + 1
+        if misses == 3:
+            current = None
+        if candidate is not None and hits == 2 and candidate != current:
+            keys.append(candidate)
+            current, misses = candidate, 0
+    return "".join(keys)
 
 
 def tones_in(samples, rate):

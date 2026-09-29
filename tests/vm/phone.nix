@@ -5,15 +5,15 @@
 #   sip-phone cli NAME COMMAND...      e.g. sip-phone cli alice call new sip:102@pbx
 #   sip-phone stop NAME
 #
-# The phone sends a sine of TONE Hz on every call without pause (no VAD), so
-# RTP flows in both directions, and records what its calls bring to
-# /tmp/sip-phone-NAME.wav, so a test can tell who hears whom (tones.py). Full
-# SIP traces are logged to /tmp/sip-phone-NAME.log. Whether it registers
-# (--registrar), how it answers (--auto-answer) and its transport flags
-# (--no-tcp, --ipv6, ...) come with the pjsua args, from phone.py. With
-# --no-symmetric-rtp first among them, the phone keeps sending RTP to the
-# address the SDP names, as many desk phones do, instead of to wherever RTP
-# comes from.
+# The phone sends a sine of TONE Hz, or the WAV file TONE names, on every call
+# without pause (no VAD), so RTP flows in both directions, and records what
+# its calls bring to /tmp/sip-phone-NAME.wav, so a test can tell who hears
+# whom (tones.py). Full SIP traces are logged to /tmp/sip-phone-NAME.log.
+# Whether it registers (--registrar), how it answers (--auto-answer) and its
+# transport flags (--no-tcp, --ipv6, ...) come with the pjsua args, from
+# phone.py. With --no-symmetric-rtp first among them, the phone keeps sending
+# RTP to the address the SDP names, as many desk phones do, instead of to
+# wherever RTP comes from.
 {pkgs, ...}: let
   pjsip = pkgs.pjsip.overrideAttrs (old: {
     # fixes for pjsua's CLI (pjsua_app_cli.c, unfixed in pjproject master):
@@ -73,9 +73,14 @@
           fi
           echo "$cli_port" > "/run/sip-phone/$name.port"
           rm -f "/tmp/sip-phone-$name.log" "/tmp/sip-phone-$name.wav"
-          # one second of a whole number of periods, which pjsua loops without
-          # a click; quiet enough that 20 phones mixed together don't clip
-          sox -n -r 16000 -b 16 -c 1 "/run/sip-phone/$name-tone.wav" synth 1 sine "$tone" vol 0.05
+          if [ -f "$tone" ]; then
+            # a WAV file to send instead of a sine, such as inband DTMF
+            cp "$tone" "/run/sip-phone/$name-tone.wav"
+          else
+            # one second of a whole number of periods, which pjsua loops without
+            # a click; quiet enough that 20 phones mixed together don't clip
+            sox -n -r 16000 -b 16 -c 1 "/run/sip-phone/$name-tone.wav" synth 1 sine "$tone" vol 0.05
+          fi
           # pjsua advertises the address of the default route's interface in
           # its SDP, which in the test VMs is QEMU's user network: every VM has
           # the same one there, so audio sent to it never arrives. Advertise

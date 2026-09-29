@@ -21,10 +21,13 @@ class Phone:
     incoming calls with the SIP status `auto_answer`: 200 picks up, 180 rings
     until told otherwise, 486 is busy. With `call_waiting=False` it answers
     486 to any call that comes while it is in one. It sends a sine of `tone`
-    Hz and records what it hears (tones.py). With `symmetric_rtp=False` it
-    sends RTP only to the address the SDP names (tests/vm/phone.nix)."""
+    Hz, or the WAV file `tone` names from the start of each call, such as
+    inband DTMF, and records what it hears (tones.py). With
+    `symmetric_rtp=False` it sends RTP only to the address the SDP names
+    (tests/vm/phone.nix). `options` are further pjsua arguments, such as
+    --mwi."""
 
-    def __init__(self, machine, name, user, password, server, sip_port=5070, cli_port=2300, auto_answer=200, tone=None, register=True, call_waiting=True, symmetric_rtp=True):
+    def __init__(self, machine, name, user, password, server, sip_port=5070, cli_port=2300, auto_answer=200, tone=None, register=True, call_waiting=True, symmetric_rtp=True, tcp=False, options=""):
         self.machine = machine
         self.name = name
         self.user = user
@@ -36,6 +39,8 @@ class Phone:
         self.register = register
         self.call_waiting = call_waiting
         self.symmetric_rtp = symmetric_rtp
+        self.tcp = tcp
+        self.options = options
         self.tone = PHONE_TONES[next(phones_made) % len(PHONE_TONES)] if tone is None else tone
         self.log = f"/tmp/sip-phone-{name}.log"
         self.recording = f"/tmp/sip-phone-{name}.wav"
@@ -50,9 +55,12 @@ class Phone:
             # pjsua answers 486 when it has no free call slot
             flags.append("--max-calls=1")
         # the server URI decides the transport, as on a real phone. A UDP
-        # phone gets no TCP transport: pjsua sends requests larger than 1300
-        # bytes over TCP when it has one, and the server may not listen there.
-        flags.append("--no-udp" if "transport=tcp" in self.server else "--no-tcp")
+        # phone gets no TCP transport unless `tcp`: pjsua sends requests of
+        # 1300 bytes or more over TCP when it has one (RFC 3261 18.1.1)
+        if "transport=tcp" in self.server:
+            flags.append("--no-udp")
+        elif not self.tcp:
+            flags.append("--no-tcp")
         if self.server.startswith("["):
             flags.append("--ipv6")
         # pjsua counts up from its RTP port until one is free; distinct bases
@@ -60,7 +68,7 @@ class Phone:
         flags.append(f"--rtp-port={20000 + 8 * (self.sip_port - 5000)}")
         return (
             f"sip-phone start {self.name} {self.user} {shlex.quote(self.password)} "
-            f"{shlex.quote(self.server)} {self.sip_port} {self.cli_port} {self.tone} {' '.join(flags)} {extra}"
+            f"{shlex.quote(self.server)} {self.sip_port} {self.cli_port} {self.tone} {' '.join(flags)} {self.options} {extra}"
         )
 
     def start(self, extra=""):
@@ -100,16 +108,18 @@ class Phone:
         """Send DTMF as SIP INFO requests on the current call."""
         self.cli(f"call d_info {digits}")
 
-    def dtmf_received(self):
-        """Digits the phone received as DTMF on its calls so far, in order."""
-        return "".join(re.findall(r"Incoming DTMF on call \d+: (.)", self.log_text()))
+    def dtmf_received(self, method=None):
+        """Digits the phone received as DTMF on its calls so far, in order;
+        with `method`, RFC2833 or SIP INFO, only those that came that way."""
+        how = re.escape(method) if method else ".*"
+        return "".join(re.findall(rf"Incoming DTMF on call \d+: (.)(?::duration\(\d+\))?, using {how} method", self.log_text()))
 
-    def wait_dtmf(self, digits, after, timeout=30):
-        """Wait until the digits the phone received after its first `after`
-        are `digits`; fails as soon as one differs."""
+    def wait_dtmf(self, digits, after, timeout=30, method=None):
+        """Wait until the digits the phone received after its first `after`,
+        by `method` if given, are `digits`; fails as soon as one differs."""
         deadline = time.time() + timeout
         while True:
-            received = self.dtmf_received()[after:]
+            received = self.dtmf_received(method)[after:]
             if received == digits:
                 return
             if not digits.startswith(received) or time.time() > deadline:
@@ -395,6 +405,19 @@ def sip_messages(machine, interface="eth1"):
                 }
             )
     return messages
+
+
+def sip_times(machine, *patterns):
+    """Capture times of the SIP messages of sip_messages(machine) whose text
+    matches each of the multi-line regular expressions `patterns`."""
+    return [message["time"] for message in sip_messages(machine) if all(re.search(pattern, message["text"], re.M) for pattern in patterns)]
+
+
+def within(seconds, trigger, times):
+    """The first of `times` after `trigger`, times of one capture, came at most
+    `seconds` after it."""
+    later = [moment - trigger for moment in times if moment >= trigger]
+    assert later and min(later) <= seconds, f"nothing within {seconds} s after {trigger}: {times}"
 
 
 def netem(machine, interface, *settings):

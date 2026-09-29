@@ -505,6 +505,23 @@
         identify.match = ["sip.provider.example"];
       };
     };
+    # a custom class's relative directory is in the data directory, as a files
+    # class's is; its .sln files become the application's arguments
+    customMusicFromDataDirectory.services.asterisk = {
+      sounds.packages = [
+        (pkgs.linkFarm "moh-sln" [
+          {
+            name = "moh-sln/hold.sln";
+            path = pkgs.writeText "hold.sln" "";
+          }
+        ])
+      ];
+      musicOnHold.classes.stream = {
+        mode = "custom";
+        directory = "moh-sln";
+        application = "${pkgs.coreutils}/bin/cat /dev/zero";
+      };
+    };
     # the examples of the module lists load as they are
     moduleListExamples.services.asterisk.modules = let
       options = (evalSystem []).options.services.asterisk.modules;

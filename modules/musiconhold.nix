@@ -21,6 +21,16 @@
   inherit (asteriskLib) format;
   inherit (import ./lib.nix {inherit lib;}) toSection;
 
+  # res_musiconhold looks for a relative directory in the data directory in
+  # files mode (moh_scan_files), but in its working directory in custom mode,
+  # where `nodir` and http:// URLs are no directory (spawn_mp3)
+  directoryOf = c: let
+    dir = lib.toLower c.directory;
+  in
+    if c.mode == "custom" && builtins.isString c.directory && !(lib.hasPrefix "/" dir || dir == "nodir" || lib.hasPrefix "http://" dir)
+    then "${cfg.paths.data}/${c.directory}"
+    else c.directory;
+
   classType = types.submodule {
     options = {
       mode = mkOption {
@@ -105,10 +115,10 @@ in {
               inherit
                 (c)
                 mode
-                directory
                 sort
                 application
                 ;
+              directory = directoryOf c;
               entry = c.entries;
             })
             c.settings

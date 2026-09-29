@@ -13,7 +13,8 @@
 # pjsua one. Registrations get the status Asterisk documents: a wrong password
 # or user, an aor that takes none, a device past maxContacts refused or
 # replacing the contact that expires soonest, qualify on and off, a refresh,
-# an unregistration and an expiry.
+# an unregistration and an expiry. The SIP ACL refuses a source and its
+# contact rules a Contact, pairwise, with 403, calls as well.
 {
   pkgs,
   self,
@@ -36,9 +37,9 @@
     "212" = "Lou";
   };
 
-  # extension -> aor of the endpoints only the registration subtests use.
-  # minimum_expiration lets a phone ask for 10 second registrations, which
-  # it refreshes every 5 seconds
+  # extension -> aor of the endpoints only the registration and ACL subtests
+  # use. minimum_expiration lets a phone ask for 10 second registrations,
+  # which it refreshes every 5 seconds
   registrationAors = {
     "213".maxContacts = 0;
     # the typed defaults: one contact, which a new device takes over
@@ -49,6 +50,7 @@
       settings.minimum_expiration = 10;
     };
     "217".maxContacts = 2;
+    "218" = {};
   };
 in
   pkgs.testers.runNixOSTest {
@@ -98,6 +100,21 @@ in
 
           pjsip = {
             transports.udp = {};
+            # sources from the first half of the vlan, where every node is;
+            # the phones' second address, 192.168.1.200, is a source outside
+            # it but may be a Contact
+            acls.lan = {
+              deny = [
+                "0.0.0.0/0.0.0.0"
+                "::/0"
+              ];
+              permit = ["192.168.1.0/25"];
+              contactDeny = [
+                "0.0.0.0/0.0.0.0"
+                "::/0"
+              ];
+              contactPermit = ["192.168.1.0/24"];
+            };
             endpoints = lib.mkMerge [
               (lib.mapAttrs (extension: name: {
                   context = "office";
@@ -239,6 +256,13 @@ in
           ./common.nix
           ./phone.nix
           ./baresip.nix
+        ];
+        # after the test's own address, which stays the one phones send from
+        networking.interfaces.eth1.ipv4.addresses = lib.mkAfter [
+          {
+            address = "192.168.1.200";
+            prefixLength = 24;
+          }
         ];
       };
 
@@ -628,6 +652,33 @@ in
             new.cli("acc unreg")
             wait_journal(pbx, cursor, r"Removed contact 'sip:214@[0-9.]+:5109;ob' from AOR '214' due to request")
             assert new.contact_status(pbx) is None
+
+        with subtest("the SIP ACL refuses a source and its contact rules a Contact, pairwise, with 403, a call as well"):
+            cursor = journal_cursor(pbx)
+            outer = "192.168.1.200"
+            # (source, Contact): (permitted, permitted), (permitted, off the
+            # vlan), (outside the SIP ACL, permitted) and (outside, off the vlan)
+            inside = Phone(phones, "218-inside", "218", "pw-218", "pbx", sip_port=5111, cli_port=2342)
+            hidden = Phone(phones, "218-hidden", "218", "pw-218", "pbx", sip_port=5112, cli_port=2343)
+            outside = Phone(phones, "218-outside", "218", "pw-218", "pbx", sip_port=5113, cli_port=2344)
+            nowhere = Phone(phones, "218-nowhere", "218", "pw-218", "pbx", sip_port=5114, cli_port=2345)
+            # once registered, pjsua would replace a Contact other than the
+            # address Asterisk sees it at
+            inside.start(f"--contact=sip:218@{outer}:5111 --auto-update-nat=0")
+            hidden.start("--contact=sip:218@10.99.0.5:5112")
+            outside.start(f"--bound-addr={outer} --ip-addr={outer}")
+            nowhere.start(f"--bound-addr={outer} --ip-addr={outer} --contact=sip:218@10.99.0.5:5114")
+            wait_registrations({inside: 200, hidden: 403, outside: 403, nowhere: 403})
+            assert inside.contact_status(pbx), "218-inside holds no contact"
+            # the contact rules also refuse the calls of a phone they refused
+            hidden.call("201")
+            hidden.wait_disconnected()
+            assert hidden.count(r"DISCONNECTED \[reason=403 ") == 1
+            # the REGISTER and the INVITE
+            wait_journal(pbx, cursor, r"SIP Contact ACL: Rejecting '10\.99\.0\.5'", count=2)
+            # the SIP ACL goes first, so a Contact is not looked at
+            for port in (5113, 5114):
+                wait_journal(pbx, cursor, rf"Incoming SIP message from 192\.168\.1\.200:{port} did not pass ACL test")
 
         with subtest("the registration of the phone that went away expires"):
             retry(lambda _: quiet.contact_status(pbx) is None, timeout_seconds=30)

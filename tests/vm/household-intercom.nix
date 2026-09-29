@@ -182,6 +182,14 @@ in
             thief.start()
             thief.wait_registration_failed("registration failed, status=403", timeout=180)
             thief.stop()
+            # nor with a Contact on 201's own network, which its contact ACL permits:
+            # the SIP ACL refuses the source before the endpoint is looked at
+            cursor = journal_cursor(pbx)
+            posing = Phone(intruder, "posing", "201", passwords["201"], "10.0.10.10", sip_port=5073, cli_port=2303)
+            posing.start("--contact=sip:201@10.0.10.66:5073")
+            wait_registrations({posing: 403})
+            posing.stop()
+            wait_journal(pbx, cursor, r"SIP ACL: Rejecting '10\.0\.1\.66'")
             # requests no phone sends reach Asterisk's parser, and it keeps running
             pid = pbx.succeed("systemctl show -P MainPID asterisk.service")
             sipp(intruder, "malformed", "10.0.10.10", "-s", "201")

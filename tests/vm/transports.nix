@@ -11,10 +11,14 @@
 # family. The WebSocket phones are baresip, as pjsua has no WebSocket
 # transport, and only register: over WebSocket, Asterisk offers the address
 # of its default route in SDP, here QEMU's user network, and IPv4 to IPv6
-# phones too.
+# phones too. A request Asterisk sends that is over 1300 bytes, an INVITE with
+# every codec, reaches a UDP phone over UDP, whether the phone listens on TCP
+# or not, and a UDP phone that sends its requests of 1300 bytes or more over
+# TCP, as RFC 3261 18.1.1 asks, calls through the TCP transport.
 #
 #   VLAN 1  pbx      192.168.1.1, 2001:db8:1::1
-#           phones   192.168.1.2  401 UDP, 402 TCP, 405 TLS, 407 ws, 409 wss
+#           phones   192.168.1.2  401 UDP, 402 TCP, 405 TLS, 407 ws, 409 wss,
+#                                 411 and 413 UDP with TCP too, 412 UDP
 #           v6phone  2001:db8:1::3 only, 403 UDP, 404 TCP, 406 TLS, 408 ws, 410 wss
 {
   pkgs,
@@ -24,7 +28,7 @@
 
   certificates = import ./certificates.nix {inherit pkgs;};
 
-  extensions = map toString (lib.range 401 410);
+  extensions = map toString (lib.range 401 413);
   # extension -> the transport its endpoint is pinned to; the others have
   # none, so Asterisk picks the one that matches the contact
   pinned = {
@@ -92,6 +96,12 @@ in
               context = "phones";
               transport = pinned.${extension} or null;
               auth.password = config.lib.asterisk.secret "/run/test-secrets/sip-${extension}";
+              # every codec Asterisk knows, which takes the INVITE to these
+              # phones over 1300 bytes; ulaw first, which the others share
+              allow = lib.mkIf (builtins.elem extension ["411" "412"]) [
+                "ulaw"
+                "all"
+              ];
             });
           };
 
@@ -236,5 +246,39 @@ in
             ]:
                 found = pbx_addresses(pjsua[ext])
                 assert found == {address}, (ext, found)
+
+        with subtest("a request Asterisk sends that is over 1300 bytes reaches a UDP phone over UDP, whether it listens on TCP or not"):
+            pjsua.update({
+                "411": Phone(phones, "411", "411", "pw-411", v4, sip_port=5062, cli_port=2303, tcp=True),
+                "412": Phone(phones, "412", "412", "pw-412", v4, sip_port=5063, cli_port=2304),
+                # by address: pjsip switches to TCP only when the first address
+                # it resolved is IPv4 UDP (sip_util.c), and pbx resolves to IPv6 first
+                "413": Phone(phones, "413", "413", "pw-413", "192.168.1.1", sip_port=5064, cli_port=2305, tcp=True),
+            })
+            start_phones([pjsua[ext] for ext in ["411", "412", "413"]])
+            wait_registrations({pjsua[ext]: 200 for ext in ["411", "412", "413"]})
+            pairs = [("401", "411"), ("402", "412")]
+            confirmed = {callee: pjsua[callee].confirmed() for _, callee in pairs}
+            cli_parallel([(pjsua[caller], f"call new {pjsua[caller].uri(callee)}") for caller, callee in pairs])
+            for caller, callee in pairs:
+                wait_bridged(pbx, caller, callee)
+                pjsua[callee].wait_confirmed(after=confirmed[callee], timeout=30)
+                # Asterisk switches no request to TCP (res_pjsip's disable_tcp_switch)
+                invites = re.findall(r"RX (\d+) bytes Request msg INVITE/\S+ \S+ from (\w+) ", pjsua[callee].log_text())
+                assert invites and all(int(size) > 1300 and over == "UDP" for size, over in invites), (callee, invites)
+            cli_parallel([(pjsua[caller], "call hangup_all") for caller, _ in pairs])
+            wait_idle(pbx)
+
+        with subtest("a UDP phone that sends its requests of 1300 bytes or more over TCP, as RFC 3261 18.1.1 asks, calls through the TCP transport"):
+            switcher = pjsua["413"]
+            switcher.call("401")
+            wait_bridged(pbx, "413", "401")
+            # the INVITE with its credentials, after Asterisk challenged the first
+            assert switcher.count("exceeds UDP size threshold") >= 1
+            assert switcher.count(r"TX [0-9]+ bytes Request msg INVITE/\S+ \S+ to TCP ") >= 1, "no INVITE over TCP"
+            wait_hears(pjsua["401"], [switcher.tone])
+            wait_hears(switcher, [pjsua["401"].tone])
+            switcher.hangup()
+            wait_idle(pbx)
       '';
   }

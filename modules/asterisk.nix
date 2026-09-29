@@ -43,6 +43,24 @@
     credentials = "/run/credentials/asterisk.service";
   };
 
+  # directories below the state directory that Asterisk uses but does not
+  # create; the service creates them, and the build-time check below its root
+  stateDirectories =
+    [
+      "agi-bin"
+      "keys"
+    ]
+    ++ map (dir: "spool/${dir}") [
+      "voicemail"
+      "monitor"
+      "recording"
+      "outgoing"
+      "tmp"
+      "meetme"
+      "dictate"
+      "system"
+    ];
+
   # Read-only data: sounds, music on hold, documentation, static HTTP files.
   dataDir = pkgs.symlinkJoin {
     name = "asterisk-data";
@@ -140,6 +158,15 @@
       name = "hosts";
       path = pkgs.writeText "asterisk-check-hosts" (lib.concatMapStrings (name: "192.0.2.1 ${name}\n") checkHostNames);
     }
+    # below @root@, with lib for the state directory
+    ++ [
+      {
+        name = "directories";
+        path = pkgs.writeText "asterisk-check-directories" (
+          lib.concatMapStrings (dir: "${dir}\n") (["run" "log"] ++ map (dir: "lib/${dir}") stateDirectories)
+        );
+      }
+    ]
   );
   # host names Asterisk resolves while it loads the configuration; the build
   # has no DNS, so for the check they resolve to a documentation address
@@ -363,10 +390,7 @@
 
       case $mode in
         start)
-          mkdir -p ${paths.state}/agi-bin ${paths.state}/keys
-          for dir in voicemail monitor recording outgoing tmp meetme dictate system; do
-            mkdir -p "${paths.spool}/$dir"
-          done
+          mkdir -p ${lib.escapeShellArgs (map (dir: "${paths.state}/${dir}") stateDirectories)}
           ;;
         reload)
           declare -A commands=()

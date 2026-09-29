@@ -4,7 +4,8 @@
 # an error or warning while loading it, or if the dialplan uses an application
 # or function that no loaded module provides. CONFIG is prepared by
 # modules/asterisk.nix: `config/` with `@root@` where the files will be and a
-# log channel `check`, `credentials/`, and `hosts` for the names Asterisk
+# log channel `check`, `credentials/`, `directories`, which lists the
+# directories to create below `@root@`, and `hosts` for the names Asterisk
 # resolves while loading, since a build has no DNS. Secrets become zeros.
 #
 # ADDRESS are the addresses Asterisk listens on. IPv4 ones become loopback
@@ -106,7 +107,7 @@ in
 
       root=$(mktemp -d)
       cp -rL --no-preserve=mode "$config/." "$root/"
-      mkdir -p "$root/run" "$root/lib/spool" "$root/lib/agi-bin" "$root/log"
+      (cd "$root" && xargs mkdir -p < directories)
       # Asterisk checks the length of a digest that follows its algorithm
       find "$root/config" -type f -exec sed -i -E \
         -e "s|@root@|$root|g" \

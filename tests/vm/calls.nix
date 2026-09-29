@@ -1,15 +1,17 @@
 # Calls between phones, which hear each other: busy, unanswered and
 # unreachable callees send the caller to voicemail with the matching greeting,
 # a message reaches an SMTP server with its recording attached and reads back
-# in every format, the mailbox owner learns about the message, hears it and
-# deletes it after entering a PIN from a secret as DTMF, records a busy
-# greeting callers then hear but cannot change the PIN, a message stops at
-# maxSeconds and a full mailbox takes none, a hint lights a busy lamp, a ring
-# group cancels the phones that did not answer, one extension rings on two
-# devices, call forwarding is kept in astdb across a restart, a ringing call
-# is picked up from another phone, an IVR reads RFC 4733 and SIP INFO DTMF, a
-# call survives a lossy network, codecs with different sample rates are
-# transcoded, a call is recorded to the spool, and a baresip phone calls a
+# in every format, the mailbox owner's lamp lights within 2 s, also on a phone
+# that subscribes to it, and stays lit across a restart, the owner hears the
+# message and deletes it after entering a PIN from a secret as DTMF, which
+# puts the lamp out within 2 s, records a busy greeting callers then hear but
+# cannot change the PIN, a message stops at maxSeconds and a full mailbox
+# takes none, a hint lights a busy lamp and puts it out, each within 2 s, a
+# ring group cancels the phones that did not answer, one extension rings on
+# two devices, call forwarding is kept in astdb across a restart, a ringing
+# call is picked up from another phone, an IVR reads RFC 4733 and SIP INFO
+# DTMF, a call survives a lossy network, codecs with different sample rates
+# are transcoded, a call is recorded to the spool, and a baresip phone calls a
 # pjsua one. Registrations get the status Asterisk documents: a wrong password
 # or user, an aor that takes none, a device past maxContacts refused or
 # replacing the contact that expires soonest, qualify on and off, a refresh,
@@ -295,9 +297,16 @@ in
         mail.wait_for_open_port(25)
 
         answers = {"203": 486, "204": 180, "205": 180}
+        # 204 subscribes to message-summary for its mailbox; Asterisk refuses
+        # that with 404 (modules/pjsip.nix), so it gets the NOTIFYs it did not
+        # ask for, like the others
+        options = {"204": "--mwi"}
         registered = ["201", "202", "203", "204", "205", "206", "207", "208", "211"]
         phone = {
-            ext: Phone(phones, ext, ext, f"pw-{ext}", "pbx", sip_port=5060 + i, cli_port=2300 + i, auto_answer=answers.get(ext, 200))
+            ext: Phone(
+                phones, ext, ext, f"pw-{ext}", "pbx", sip_port=5060 + i, cli_port=2300 + i,
+                auto_answer=answers.get(ext, 200), options=options.get(ext, ""),
+            )
             for i, ext in enumerate(registered)
         }
         # 210 on a desk phone that answers and a softphone that only rings
@@ -305,7 +314,8 @@ in
         mobile = Phone(phones, "210-mobile", "210", "pw-210", "pbx", sip_port=5081, cli_port=2321, auto_answer=180)
 
         def leave_message(caller, callee, status, greeting):
-            """Call `callee`, who does not pick up, and leave a message after the greeting."""
+            """Call `callee`, who does not pick up, and leave a message after the
+            greeting. Returns when the caller hung up, which saves the message."""
             cursor = journal_cursor(pbx)
             caller.call(callee)
             wait_journal(pbx, cursor, f"dialstatus {callee} {status}")
@@ -315,6 +325,11 @@ in
             caller.hangup()
             pbx.wait_until_succeeds(f"test -f /var/lib/asterisk/spool/voicemail/default/{callee}/INBOX/msg0000.txt")
             wait_idle(pbx)
+            return hung_up(caller)
+
+        def hung_up(phone):
+            """Capture time of the last BYE `phone` sent."""
+            return sip_times(pbx, r"\ABYE ", rf"^From: .*sip:{phone.user}@")[-1]
 
         def assert_tone(path, tone):
             """Asterisk reads the audio file `path` back as `tone`, too loud to
@@ -350,11 +365,16 @@ in
             wait_idle(pbx)
 
         with subtest("a busy callee's voicemail plays the busy greeting"):
-            leave_message(phone["201"], "203", "BUSY", "vm-isonphone")
+            left = {"203": leave_message(phone["201"], "203", "BUSY", "vm-isonphone")}
 
         with subtest("unanswered and unregistered callees' voicemail plays the unavailable greeting"):
-            leave_message(phone["201"], "204", "NOANSWER", "vm-isunavail")
+            left["204"] = leave_message(phone["201"], "204", "NOANSWER", "vm-isunavail")
             leave_message(phone["201"], "209", "CHANUNAVAIL", "vm-isunavail")
+
+        with subtest("a message lights the lamp of its mailbox's phone within 2 s, also of one that subscribes"):
+            for owner in (phone["203"], phone["204"]):
+                owner.wait_count("Messages-Waiting: yes", 1)
+                within(2, left[owner.user], sip_times(pbx, rf"\ANOTIFY sip:{owner.user}@", "^Messages-Waiting: yes"))
 
         with subtest("the message reaches an SMTP server with the recording attached"):
             mail.wait_until_succeeds("test $(ls /var/lib/smtp-sink/maildir/new | wc -l) -eq 1", timeout=60)
@@ -380,10 +400,8 @@ in
                 assert "Converted" in answer, answer
                 assert_tone(copy, phone["201"].tone)
 
-        with subtest("the mailbox owner is notified and deletes the message after entering the PIN"):
+        with subtest("the mailbox owner deletes the message after entering the PIN, which puts the lamp out within 2 s"):
             cara = phone["203"]
-            # unsolicited NOTIFY: the endpoint lists the mailbox
-            cara.wait_count("Messages-Waiting: yes", 1)
             cleared = cara.count("Messages-Waiting: no")
             cursor = journal_cursor(pbx)
             cara.call("*97")
@@ -402,6 +420,8 @@ in
             wait_journal(pbx, cursor, "Playing 'vm-deleted\\.")
             cara.hangup()
             cara.wait_count("Messages-Waiting: no", cleared + 1)
+            # VoiceMailMain removes the message when the owner hangs up
+            within(2, hung_up(cara), sip_times(pbx, r"\ANOTIFY sip:203@", "^Messages-Waiting: no"))
             pbx.fail("test -f /var/lib/asterisk/spool/voicemail/default/203/INBOX/msg0000.txt")
             wait_idle(pbx)
 
@@ -463,14 +483,20 @@ in
             wait_idle(pbx)
             pbx.fail("test -e /var/lib/asterisk/spool/voicemail/default/209/INBOX/msg0001.txt")
 
-        with subtest("a phone watching a hint sees the extension busy"):
-            anna = phone["201"]
+        with subtest("a phone watching a hint sees the extension busy and free again, each within 2 s"):
+            anna, kim = phone["201"], phone["211"]
             anna.wait_count("<note>Ready</note>", 1)
-            busy = anna.count("<note>On the phone</note>")
-            phone["211"].call("202")
+            busy, ready = anna.count("<note>On the phone</note>"), anna.count("<note>Ready</note>")
+            # 202's answer comes first, then the pbx's to 211
+            answer = (r"\ASIP/2\.0 200 ", r"^CSeq: \d+ INVITE", r"^To: .*sip:202@")
+            answers = len(sip_times(pbx, *answer))
+            kim.call("202")
             wait_bridged(pbx, "211", "202")
             anna.wait_count("<note>On the phone</note>", busy + 1)
-            phone["211"].hangup()
+            within(2, sip_times(pbx, *answer)[answers], sip_times(pbx, r"\ANOTIFY sip:201@", "<note>On the phone</note>"))
+            kim.hangup()
+            anna.wait_count("<note>Ready</note>", ready + 1)
+            within(2, hung_up(kim), sip_times(pbx, r"\ANOTIFY sip:201@", "<note>Ready</note>"))
             wait_idle(pbx)
 
         with subtest("a ring group rings every member and cancels the rest when one answers"):
@@ -499,6 +525,7 @@ in
             ben.call("*72206")
             pbx.wait_until_succeeds("asterisk -rx 'database get forward 202' | grep -q 'Value: 206'")
             wait_idle(pbx)
+            lit = phone["204"].count("Messages-Waiting: yes")
             pbx.succeed("systemctl restart asterisk.service")
             pbx.wait_for_unit("asterisk.service")
             assert "Value: 206" in asterisk(pbx, "database get forward 202")
@@ -517,6 +544,12 @@ in
             wait_bridged(pbx, "201", "202")
             phone["201"].hangup()
             wait_idle(pbx)
+
+        with subtest("the lamp of a mailbox with a message stays lit across the restart, also for a phone that subscribes"):
+            # Asterisk tells every phone again once it started
+            phone["204"].wait_count("Messages-Waiting: yes", lit + 1)
+            out = [moment for moment in sip_times(pbx, r"\ANOTIFY sip:204@", "^Messages-Waiting: no") if moment > left["204"]]
+            assert not out, f"204's lamp went out at {out}"
 
         with subtest("a ringing call is picked up from another phone"):
             eve = phone["205"]

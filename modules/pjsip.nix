@@ -191,8 +191,12 @@
       type = types.bool;
       default = false;
       description = ''
-        Let RTP flow directly between endpoints. Off by default, so Asterisk
-        relays media, which works across VLANs and NAT.
+        Let RTP flow directly between endpoints, when both in a call have it
+        on. Off by default, so Asterisk relays media, which works across VLANs
+        and NAT. Asterisk sends each phone the address the other gave and
+        does not check that it is reachable: between networks without a route,
+        or with a phone behind NAT, the call has no audio and nothing is
+        logged. Calls with media encryption are always relayed.
       '';
     };
     callerId = mkOption {
@@ -217,7 +221,13 @@
     behindNat = mkOption {
       type = types.bool;
       default = false;
-      description = "Enable `rtp_symmetric`, `force_rport` and `rewrite_contact` for devices behind NAT.";
+      description = ''
+        Enable `rtp_symmetric`, `force_rport` and `rewrite_contact` for devices
+        behind NAT. The From header of requests to the device still names the
+        PBX's own address, not its transport's external one, so a private
+        address when the PBX is behind NAT as well; `from_domain` in
+        `settings` replaces it.
+      '';
     };
     identify = mkOption {
       type = types.nullOr (identifyType name);

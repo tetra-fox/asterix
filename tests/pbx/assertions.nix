@@ -103,6 +103,87 @@
       assertion = ''9911: pbx.extensions."9911", pbx.emergency.numbers'';
     };
 
+    # every kind of number on 9911, which is also 911 after the prefix, and
+    # two of each named kind on a number of their own; a call pickup on 9911
+    # takes it from all of them
+    everyKindOfNumberClashes = let
+      owners = [
+        ''pbx.extensions."9911"''
+        "pbx.ringGroups.clash"
+        "pbx.queues.clash"
+        "pbx.conferences.clash"
+        "pbx.ivrs.clash"
+        "pbx.paging.clash"
+        "pbx.voicemailMenu"
+        "pbx.hours.clash.closeEarly"
+        # 911 after the prefix, then 9911 itself
+        "pbx.emergency.numbers"
+        "pbx.emergency.numbers"
+      ];
+      # the object named clash on 9911, and one and two on `twins`
+      named = twins: object: {
+        clash = object "9911";
+        one = object twins;
+        two = object twins;
+      };
+    in {
+      module = {config, ...}: {
+        pbx = {
+          extensions."9911".password = config.lib.asterisk.secret "/run/secrets/9911";
+          ringGroups = named "601" (number: {
+            inherit number;
+            members = ["201"];
+          });
+          queues = named "602" (number: {inherit number;});
+          conferences = named "603" (number: {inherit number;});
+          ivrs = named "604" (number: {
+            inherit number;
+            prompt.sound = "beep";
+          });
+          paging = named "605" (number: {
+            inherit number;
+            members = ["201"];
+          });
+          voicemailMenu = "9911";
+          hours = named "606" (closeEarly: {
+            inherit closeEarly;
+            timezone = "UTC";
+            open = [
+              {
+                days = "*";
+                time = "00:00-23:59";
+              }
+            ];
+          });
+          emergency.numbers = lib.mkForce [
+            "911"
+            "9911"
+          ];
+          inbound."9911" = {
+            trunk = "provider";
+            destination.hangup = true;
+          };
+        };
+        services.asterisk = {
+          queues.queues = lib.genAttrs ["clash" "one" "two"] (_: {members = ["PJSIP/201"];});
+          features.general.pickupexten = "9911";
+        };
+      };
+      assertions = [
+        ''
+          pbx: numbers with more than one owner:
+            601: pbx.ringGroups.one, pbx.ringGroups.two
+            602: pbx.queues.one, pbx.queues.two
+            603: pbx.conferences.one, pbx.conferences.two
+            604: pbx.ivrs.one, pbx.ivrs.two
+            605: pbx.paging.one, pbx.paging.two
+            606: pbx.hours.one.closeEarly, pbx.hours.two.closeEarly
+            9911: ${lib.concatStringsSep ", " owners}
+        ''
+        ''pbx: chan_pjsip takes a call to 9911, the pickupexten of features.conf, as a call pickup before the dialplan runs, so it never reaches ${lib.concatStringsSep ", " owners}, pbx.inbound."9911". Use another number, or change services.asterisk.features.general.pickupexten.''
+      ];
+    };
+
     malformedNumber = {
       module.pbx.queues.support.number = lib.mkForce "61O";
       assertion = "numbers may only contain digits, * and #: 61O (pbx.queues.support)";

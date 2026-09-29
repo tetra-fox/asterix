@@ -68,6 +68,7 @@ in
     probe = import ./probe.nix {inherit pkgs self;};
     roundtrip = import ./roundtrip.nix {inherit pkgs self;};
     pbx-destinations = import ./pbx/destinations.nix {inherit pkgs self;};
+    pbx-numbering = import ./pbx/numbering.nix {inherit pkgs self;};
 
     examples-config-minimal = examples.derivations.minimal;
     examples-config-household-intercom = examples.derivations.household-intercom;

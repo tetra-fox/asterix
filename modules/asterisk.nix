@@ -564,7 +564,12 @@
     else if ipv4 != null
     then builtins.head ipv4
     else bind;
-  isAddress = a: builtins.match "[0-9.]+" a != null || lib.hasInfix ":" a;
+  # an IPv4 address is four parts of 0 to 255; the check gives each one a
+  # loopback address of its own, which would hide a value that is no address
+  isAddress = a: let
+    part = "(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])";
+  in
+    builtins.match "${part}([.]${part}){3}" a != null || lib.hasInfix ":" a;
   bindAddresses = unique (
     filter
     (

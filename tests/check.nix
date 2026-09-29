@@ -155,6 +155,26 @@
       };
       expect = ["Invalid port number '1000'"];
     };
+    # only addresses get a loopback address of their own; Asterisk sees the
+    # rest as written, and AMI would listen on :: instead
+    notAnAddress = {
+      module.services.asterisk = {
+        pjsip.transports.udp.address = "300.0.0.1";
+        ami = {
+          enable = true;
+          address = "300.0.0.1";
+        };
+        http = {
+          enable = true;
+          address = "300.0.0.1";
+        };
+      };
+      expect = [
+        "Error parsing bind=300.0.0.1:5060"
+        "Invalid address '300.0.0.1' specified, default '::' will be used"
+        "Unable to resolve host '300.0.0.1'"
+      ];
+    };
     # an assertion reports it first; the check shows that Asterisk refuses
     # the file
     parentAfterChild = {

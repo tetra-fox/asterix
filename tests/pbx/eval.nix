@@ -68,6 +68,10 @@
 
   # the line of the adapter's file that sets `p`
   pLine = p: config: lib.findFirst (lib.hasPrefix "    <${p}>") null (lib.splitString "\n" config.pbx.phones.files."cfgc074ad000201.xml".text);
+
+  # the section of pjsip.conf with this type and name
+  pjsipSection = type: name: files:
+    lib.findFirst (block: lib.hasPrefix "[${name}]\ntype = ${type}\n" block) null (lib.splitString "\n\n" files."pjsip.conf");
 in {
   run = lib.runTests;
   tests = {
@@ -332,6 +336,39 @@ in {
         callerId = ''"Front desk" <201>'';
         mailbox = "Front desk";
         comment = "reception";
+      };
+    };
+
+    # and so do plain definitions in settings, where the scalars pbx writes
+    # end up as defaults too
+    testSettingsOverridePbx = {
+      expr = let
+        files =
+          (configOf ({config, ...}: {
+            services.asterisk.settings = {
+              "pjsip.conf" = {
+                "endpoint:201" = {
+                  context = "reception";
+                  callerid = ''"Front desk" <201>'';
+                };
+                "auth:201".password = config.lib.asterisk.secret "/run/secrets/front-desk";
+              };
+              "voicemail.conf".default."201" = "-${config.lib.asterisk.secret "/run/secrets/vm-front-desk"},Front desk";
+            };
+          })).services.asterisk.renderedFiles;
+        lines = pattern: text: builtins.filter (line: builtins.match pattern line != null) (lib.splitString "\n" text);
+      in {
+        endpoint = lines "(callerid|context) = .*" (pjsipSection "endpoint" "201" files);
+        auth = lines "password = .*" (pjsipSection "auth" "201" files);
+        mailbox = lines "201 => .*" files."voicemail.conf";
+      };
+      expected = {
+        endpoint = [
+          ''callerid = "Front desk" <201>''
+          "context = reception"
+        ];
+        auth = ["password = ${placeholderFor "/run/secrets/front-desk"}"];
+        mailbox = ["201 => -${placeholderFor "/run/secrets/vm-front-desk"},Front desk"];
       };
     };
 

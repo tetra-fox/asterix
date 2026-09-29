@@ -316,6 +316,18 @@
       assertions = [];
     };
 
+    # Asterisk keeps 79 bytes of a caller ID name; each of these characters
+    # takes 3
+    extensionNameOf79Bytes = {
+      module.pbx.extensions."201".name = lib.concatStrings (lib.replicate 26 (builtins.fromJSON ''"\u5c71"'')) + "!";
+      assertions = [];
+    };
+
+    extensionNameTooLong = {
+      module.pbx.extensions."201".name = lib.concatStrings (lib.replicate 27 (builtins.fromJSON ''"\u5c71"''));
+      assertion = ''"201" (81 bytes)'';
+    };
+
     memberIsNoExtension = {
       module.pbx.ringGroups.front.members = lib.mkForce [
         "201"

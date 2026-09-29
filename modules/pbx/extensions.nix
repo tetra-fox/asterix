@@ -28,7 +28,11 @@
         type = types.str;
         default = name;
         defaultText = lib.literalMD "the extension number";
-        description = "Name shown as caller ID, and the mailbox owner's name.";
+        description = ''
+          Name shown as caller ID, and the mailbox owner's name. At most 79
+          bytes, which Asterisk keeps of a caller ID name; a letter outside
+          ASCII takes two to four.
+        '';
       };
       password = mkOption {
         type = secretOrString;
@@ -81,6 +85,10 @@
       };
     }
     else {hangup = true;};
+
+  # an endpoint's caller ID name is read into 80 bytes, and the rest cut off
+  # (res/res_pjsip/pjsip_configuration.c, caller_id_handler)
+  longNames = filterAttrs (_: e: builtins.stringLength e.name > 79) cfg.extensions;
 in {
   options.pbx = {
     extensions = mkOption {
@@ -114,6 +122,15 @@ in {
   };
 
   config = mkIf cfg.enable {
+    assertions = [
+      {
+        assertion = longNames == {};
+        message = "pbx.extensions: Asterisk keeps 79 bytes of a caller ID name and drops the rest, even in the middle of a letter, so these names are too long: ${
+          lib.concatMapStringsSep ", " (number: ''"${number}" (${toString (builtins.stringLength longNames.${number}.name)} bytes)'') (builtins.attrNames longNames)
+        }.";
+      }
+    ];
+
     services.asterisk = {
       pjsip.endpoints =
         mapAttrs (number: e: {

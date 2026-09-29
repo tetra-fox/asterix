@@ -12,8 +12,10 @@ pcaps under rt/vm-state-<node>/. The exit code is the driver's.
 
 import argparse
 import pathlib
+import shutil
 import subprocess
 import sys
+import tempfile
 
 
 def main():
@@ -34,10 +36,12 @@ def main():
     ).stdout.strip()
 
     out = args.out.resolve()
-    # the driver keeps VM disks and sockets here; a path of its own, on disk,
-    # keeps two runs apart and the sockets under the 108 byte limit
-    runtime = out / "rt"
-    runtime.mkdir(parents=True, exist_ok=True)
+    kept = out / "rt"
+    kept.mkdir(parents=True, exist_ok=True)
+    # the driver keeps VM disks and sockets in a new directory of the
+    # temporary directory, apart from other runs: vde_switch binds the real
+    # path of its socket, which has to fit the 108 bytes of sun_path
+    runtime = pathlib.Path(tempfile.mkdtemp(prefix="vmtest-"))
     command = [
         "systemd-run", "--user", "--scope", "--quiet", "-p", f"MemoryMax={args.memory}",
         # systemd-run needs the real XDG_RUNTIME_DIR to reach the user bus
@@ -45,14 +49,21 @@ def main():
         "unshare", "--map-root-user", "--net",
         f"{driver}/bin/nixos-test-driver", "--output_directory", str(out),
     ]
-    if args.interactive:
-        code = subprocess.run(command).returncode
-    else:
-        with open(out / "driver.log", "wb") as log:
-            code = subprocess.run(command + ["--junit-xml", "junit.xml"], stdout=log, stderr=subprocess.STDOUT).returncode
-    # the disk images are large and say nothing the log and pcaps don't
-    for image in runtime.glob("vm-state-*/*.qcow2"):
-        image.unlink()
+    try:
+        if args.interactive:
+            code = subprocess.run(command).returncode
+        else:
+            with open(out / "driver.log", "wb") as log:
+                code = subprocess.run(command + ["--junit-xml", "junit.xml"], stdout=log, stderr=subprocess.STDOUT).returncode
+    finally:
+        # each node's pcaps go to OUT/rt/vm-state-<node>/; the disk images are
+        # large and say nothing the log and pcaps don't
+        for state in runtime.glob("vm-state-*"):
+            for path in state.iterdir():
+                if path.is_file() and path.suffix != ".qcow2":
+                    (kept / state.name).mkdir(exist_ok=True)
+                    shutil.move(path, kept / state.name / path.name)
+        shutil.rmtree(runtime)
     print(f"{args.check}: {'passed' if code == 0 else f'failed ({code})'}, evidence in {out}")
     return code
 

@@ -935,6 +935,43 @@
       assertion = "option names cannot contain | or =, nor their values | (101@default, 102@default)";
     };
 
+    # the options of a mailbox and the [general] keys that app_voicemail
+    # copies into buffers of fixed size, whatever the case of their names: a
+    # value as long as the buffer keeps is not reported
+    voicemailOptionsLongerThanAsteriskKeeps = {
+      module = {config, ...}: {
+        services.asterisk = {
+          voicemail = {
+            mailboxes."101" = {
+              pin = config.lib.asterisk.secret "/run/secrets/vm-101";
+              options = {
+                tz = lib.strings.replicate 79 "t";
+                language = lib.strings.replicate 40 "l";
+                attachfmt = lib.strings.replicate 20 "a";
+                fromstring = lib.strings.replicate 99 "f";
+                Serveremail = lib.strings.replicate 80 "s";
+              };
+            };
+            settings = {
+              pagerfromstring = lib.strings.replicate 100 "p";
+              charset = lib.strings.replicate 32 "c";
+              locale = lib.strings.replicate 19 "l";
+            };
+          };
+          settings."voicemail.conf".sales."200" = "1234,Sales,,,callback=${lib.strings.replicate 80 "c"}|exitcontext=sales";
+        };
+      };
+      assertion = ''
+        services.asterisk: voicemail values that Asterisk would cut (the `-` before a typed mailbox's PIN counts):
+          [general] charset, to 31 bytes
+          [general] pagerfromstring, to 99 bytes
+          option Serveremail of 101@default, to 79 bytes
+          option attachfmt of 101@default, to 19 bytes
+          option language of 101@default, to 39 bytes
+          option callback of 200@sales, to 79 bytes
+      '';
+    };
+
     voicemailEmailWithoutCommand = {
       module = {config, ...}: {
         services.asterisk.voicemail.mailboxes."101" = {

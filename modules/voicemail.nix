@@ -180,10 +180,53 @@
   };
 
   # [general] keys app_voicemail copies into a buffer of fixed size, and the
-  # bytes it keeps of them (apps/app_voicemail.c load_config)
+  # bytes it keeps of them (apps/app_voicemail.c actual_load_config); mailcmd
+  # has an assertion of its own
   generalBytes = {
-    serveremail = 79;
+    aliasescontext = 79;
+    callback = 79;
+    charset = 31;
+    dialout = 79;
+    emaildateformat = 31;
+    exitcontext = 79;
+    externnotify = 159;
+    externpass = 127;
+    externpasscheck = 127;
+    externpassnotify = 127;
     fromstring = 99;
+    listen-control-forward-key = 11;
+    listen-control-pause-key = 11;
+    listen-control-restart-key = 11;
+    listen-control-reverse-key = 11;
+    listen-control-stop-key = 11;
+    locale = 19;
+    pagerdateformat = 31;
+    pagerfromstring = 99;
+    serveremail = 79;
+    tz = 79;
+    userscontext = 79;
+    vm-invalid-password = 79;
+    vm-login = 79;
+    vm-mismatch = 79;
+    vm-newpassword = 79;
+    vm-newuser = 79;
+    vm-passchanged = 79;
+    vm-password = 79;
+    vm-pls-try-again = 79;
+    vm-prepend-timeout = 79;
+    vm-reenterpassword = 79;
+  };
+  # the same for the options of a mailbox (apply_option)
+  optionBytes = {
+    attachfmt = 19;
+    callback = 79;
+    dialout = 79;
+    exitcontext = 79;
+    fromstring = 99;
+    language = 39;
+    locale = 19;
+    serveremail = 79;
+    tz = 79;
   };
   # the same for the fields of a mailbox line (struct ast_vm_user, filled by
   # append_mailbox), where a typed PIN starts with its `-`
@@ -221,6 +264,16 @@
               (limited "${field.name} of ${entry.key}@${line.section}" field.bytes (builtins.elemAt fields field.index))
           )
           mailboxFieldBytes
+          # the options are what follows the fourth comma, split at each | and
+          # each at its first = (apply_options)
+          ++ lib.concatMap (
+            option: let
+              parts = builtins.match "([^=]*)=(.*)" option;
+              name = builtins.head parts;
+            in
+              lib.optional (parts != null && optionBytes ? ${lib.toLower name})
+              (limited "option ${name} of ${entry.key}@${line.section}" optionBytes.${lib.toLower name} (builtins.elemAt parts 1))
+          ) (splitString "|" (concatStringsSep "," (lib.drop 4 fields)))
     )
     lines;
   cutValues = filter (value: value.room < 0) limitedValues;

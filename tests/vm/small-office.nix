@@ -119,9 +119,12 @@ in
     testScript =
       builtins.readFile ./phone.py
       + ''
+        # a provider is up before the office starts, as in reality: the office
+        # qualifies its trunk within 5 s of starting and only retries a minute later
+        provider.start()
+        provider.wait_for_unit("asterisk.service")
         start_all()
         pbx.wait_for_unit("asterisk.service")
-        provider.wait_for_unit("asterisk.service")
 
         # the ring group rings without anyone answering
         reception = Phone(phones, "201", "201", "pw-201", "10.1.0.10", sip_port=5060, cli_port=2300, auto_answer=180)
@@ -131,8 +134,7 @@ in
         with subtest("the trunk registers with the provider"):
             pbx.wait_until_succeeds("asterisk -rx 'pjsip show registrations' | grep -q 'Registered'", timeout=180)
             provider.wait_until_succeeds("asterisk -rx 'pjsip show contacts' | grep -q '5551000/sip:5551000@203.0.113.10'")
-            # calls only go to a reachable contact; an OPTIONS sent while the
-            # provider was still booting is only retried a minute later
+            # calls only go to a reachable contact
             pbx.wait_until_succeeds(
                 "asterisk -rx 'pjsip show contacts' | grep -q 'provider/sip:sip.provider.example .* Avail'", timeout=180
             )

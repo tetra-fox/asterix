@@ -410,9 +410,10 @@ in rec {
   # non-template sections with the keys they inherit, resolved like Asterisk:
   # a parent is the first earlier section of that name, and its keys come
   # first. `type` comes from the first source, as sorcery matches it, every
-  # other key from the last, so repeated keys such as `allow` are not merged.
-  # Sections with a parent that is not rendered before them are left out and
-  # listed in `unresolved` as { name, inherits }.
+  # other key from the last, which is the value Asterisk keeps for a key it
+  # sets once. Keys it adds up, such as `allow` or `match`, keep only the last
+  # source's values here. Sections with a parent that is not rendered before
+  # them are left out and listed in `unresolved` as { name, inherits }.
   resolveInheritance = sections: let
     # what the renderer writes: null values and empty lists are left out
     renderedKeys = section:

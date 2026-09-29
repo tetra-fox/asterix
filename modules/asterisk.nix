@@ -152,7 +152,9 @@
     ofType = type: filter (s: (s.type or null) == type) pjsipObjects;
   in
     unique (filter isName (map host (
-      concatMap (s: listOf (s.match or [])) (ofType "identify")
+      # every section's `match`, templates included: an identify resolves the
+      # `match` lines it inherits as well as its own
+      concatMap (s: listOf (s.match or [])) (attrValues (cfg.settings."pjsip.conf" or {}))
       ++ concatMap (s: lib.optionals (s ? external_signaling_address) [s.external_signaling_address] ++ lib.optionals (s ? external_media_address) [s.external_media_address]) (ofType "transport")
       ++ lib.optionals (rtpGeneral ? stunaddr) [rtpGeneral.stunaddr]
       ++ lib.optionals (rtpGeneral ? turnaddr) [rtpGeneral.turnaddr]

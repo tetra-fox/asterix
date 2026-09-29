@@ -226,6 +226,20 @@
         remove_existing = true;
       };
     };
+    # an identify resolves the host names its template matches too
+    identifyMatchFromTemplate.services.asterisk.settings."pjsip.conf" = {
+      provider = {
+        template = true;
+        type = "identify";
+        match = ["sip.provider.example"];
+      };
+      "identify:101" = {
+        name = "101";
+        inherits = ["provider"];
+        endpoint = "101";
+        match = ["192.0.2.10"];
+      };
+    };
     tlsTransport.services.asterisk.pjsip.transports.tls = {
       protocol = "tls";
       tls.certFile = "/var/lib/acme/pbx/cert.pem";

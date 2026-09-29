@@ -1,7 +1,7 @@
-# Mailboxes render as `mailbox => PIN,full name,email,pager email,options`
+# Mailboxes render as `mailbox => -PIN,full name,email,pager email,options`
 # lines in their context section, with the PIN as a secret placeholder.
-# Mailboxes are declarative: a PIN changed from the phone (VoiceMailMain) is
-# not saved, because the generated configuration is read-only.
+# Mailboxes are declarative: the `-` makes Asterisk refuse a PIN change from
+# the phone, which it would use until the next reload but cannot save.
 {
   config,
   lib,
@@ -59,7 +59,9 @@
           description = ''
             Mailbox PIN, normally a secret reference. A plain string is stored in
             the world-readable Nix store and triggers a warning. It cannot
-            contain a comma, which ends the PIN in the mailbox line.
+            contain a comma, which ends the PIN in the mailbox line. Callers
+            cannot change it from the phone: it is rendered with Asterisk's `-`
+            prefix for unchangeable PINs, so it cannot start with `-` itself.
           '';
         };
         fullName = mkOption {
@@ -115,7 +117,7 @@
 
   mailboxLine = box:
     format.joinFields [
-      (pinText box.pin)
+      "-${pinText box.pin}"
       box.fullName
       (
         if box.email == null

@@ -489,9 +489,9 @@ in {
       expected = [
         "[general]"
         "[default]"
-        "101 => ${placeholderFor "/run/secrets/vm-101"},Alice,alice@example.org,,attach=yes"
+        "101 => -${placeholderFor "/run/secrets/vm-101"},Alice,alice@example.org,,attach=yes"
         "[sales]"
-        "200 => ${placeholderFor "/run/secrets/vm-200"},200"
+        "200 => -${placeholderFor "/run/secrets/vm-200"},200"
       ];
     };
 

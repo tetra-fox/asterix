@@ -191,6 +191,6 @@ in
 
         with subtest("voicemail PINs are secrets"):
             pbx.fail("grep -R 4200 /etc/asterisk/")
-            pbx.succeed("grep -q '200 => 4200,Sales team' /run/asterisk/config/voicemail.conf")
+            pbx.succeed("grep -q '200 => -4200,Sales team' /run/asterisk/config/voicemail.conf")
       '';
   }

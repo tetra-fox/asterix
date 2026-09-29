@@ -3,12 +3,12 @@
 # a message reaches an SMTP server with its recording attached and reads back
 # in every format, the mailbox owner learns about the message, hears it and
 # deletes it after entering a PIN from a secret as DTMF, records a busy
-# greeting callers then hear, a message stops at maxSeconds and a full
-# mailbox takes none, a hint lights a busy lamp, a ring group cancels the
-# phones that did not answer, one extension rings on two devices, call
-# forwarding is kept in astdb across a restart, a ringing call is picked up
-# from another phone, an IVR reads RFC 4733 and SIP INFO DTMF, a call
-# survives a lossy network, codecs with different sample rates are
+# greeting callers then hear but cannot change the PIN, a message stops at
+# maxSeconds and a full mailbox takes none, a hint lights a busy lamp, a ring
+# group cancels the phones that did not answer, one extension rings on two
+# devices, call forwarding is kept in astdb across a restart, a ringing call
+# is picked up from another phone, an IVR reads RFC 4733 and SIP INFO DTMF, a
+# call survives a lossy network, codecs with different sample rates are
 # transcoded, a call is recorded to the spool, and a baresip phone calls a
 # pjsua one
 {
@@ -356,7 +356,7 @@ in
             pbx.fail("test -f /var/lib/asterisk/spool/voicemail/default/203/INBOX/msg0000.txt")
             wait_idle(pbx)
 
-        with subtest("the mailbox owner records a busy greeting"):
+        with subtest("the mailbox owner records a busy greeting, but cannot change the PIN"):
             cara = phone["203"]
             greeting = "/var/lib/asterisk/spool/voicemail/default/203/busy"
             cursor = journal_cursor(pbx)
@@ -374,6 +374,12 @@ in
             wait_journal(pbx, cursor, "Playing 'vm-review\\.")
             cara.dtmf("1")
             wait_journal(pbx, cursor, "Playing 'vm-msgsaved\\.")
+            # back in the options, whose prompt takes digits again
+            wait_journal(pbx, cursor, "Playing 'vm-options\\.", count=2)
+            cursor = journal_cursor(pbx)
+            cara.dtmf("5")
+            # Asterisk cannot save a new PIN, and would drop one it took at the next reload
+            wait_journal(pbx, cursor, "Playing 'vm-no\\.")
             cara.hangup()
             wait_idle(pbx)
 

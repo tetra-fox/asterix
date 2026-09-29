@@ -301,3 +301,19 @@ one. The load tests are too slow for either and run one at a time, such as
 `nix build .#stressTests.vm-scale` with 256 phones.
 `nix fmt` formats everything, and `nix develop` has the Rust toolchain for
 the provisioning server.
+
+`nix build .#provisioning-server-fuzz` builds a libFuzzer target that sends
+what it generates to the provisioning server as one phone's connection. The
+`provisioning-server-fuzz` check runs it briefly; to fuzz on 8 cores until
+stopped, with the corpus and any crash in `DIR`:
+
+```sh
+mkdir -p DIR/corpus
+result/bin/connection -fork=8 -ignore_crashes=1 -close_fd_mask=2 \
+  -dict=pkgs/provisioning-server/fuzz/connection.dict -artifact_prefix=DIR/ \
+  DIR/corpus pkgs/provisioning-server/fuzz/seeds/connection
+```
+
+`-close_fd_mask=2` keeps the server's log out of the fuzzer's output;
+`result/bin/connection FILE` runs one saved input again with the log and, if
+it crashes, the panic message.

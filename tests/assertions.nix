@@ -693,6 +693,18 @@
       '';
     };
 
+    # Goto takes a whole number for a priority and drops a leading + or -, and
+    # Asterisk ends a label at its first ); a space or ( is kept
+    unreachableLabels = {
+      module.services.asterisk.dialplan.contexts.internal.extensions."100" =
+        ["Answer()"]
+        ++ map (label: {
+          app = "NoOp";
+          inherit label;
+        }) ["3" " 12 " "a)b" "+x" "-1" "" " x" "a(b" "3a"];
+      assertion = ''services.asterisk.dialplan: step labels that Goto() cannot reach (a label may not be empty, contain `,` or `)`, start with + or -, or be a whole number): internal/100: "3", " 12 ", "a)b", "+x", "-1", "".'';
+    };
+
     # every record would fail to insert; cel_sqlite3_custom takes the CUT()
     # below for three values
     sqliteValuesUnlikeColumns = {

@@ -61,7 +61,11 @@
             type = types.nullOr types.str;
             default = null;
             example = "voicemail";
-            description = "Priority label, usable as a Goto() target.";
+            description = ''
+              Priority label, usable as a Goto() target. It may not be empty,
+              contain `,` or `)`, start with `+` or `-`, or be a whole number,
+              which Goto() takes for a priority.
+            '';
           };
         };
       }
@@ -275,6 +279,28 @@
     )
     dcfg.contexts
   );
+  # Goto() reads a label that is a whole number as a priority and one that
+  # starts with + or - as a jump from the current step (main/pbx.c
+  # pbx_parse_location), and pbx_config ends a label at its first ) and the
+  # priority at a comma
+  unreachable = label: label == "" || builtins.match "[+-].*|[[:space:]]*[0-9]+[[:space:]]*|.*[),].*" label != null;
+  badLabels = lib.concatLists (
+    mapAttrsToList (
+      name: context:
+        lib.concatLists (mapAttrsToList (
+            ext: steps: let
+              labels = filter (label: label != null && unreachable label) (map (step:
+                if isString step
+                then null
+                else step.label)
+              steps);
+            in
+              optional (labels != []) "${name}/${ext}: ${lib.concatMapStringsSep ", " builtins.toJSON labels}"
+          )
+          context.extensions)
+    )
+    dcfg.contexts
+  );
 in {
   options.services.asterisk.dialplan = {
     general = mkOption {
@@ -386,6 +412,10 @@ in {
           services.asterisk: dialplan contexts that Asterisk would merge, since it only keeps the first 79 bytes of a context's name:
             ${concatStringsSep "\n  " (map (concatStringsSep ", ") mergedContexts)}
         '';
+      }
+      {
+        assertion = badLabels == [];
+        message = "services.asterisk.dialplan: step labels that Goto() cannot reach (a label may not be empty, contain `,` or `)`, start with + or -, or be a whole number): ${concatStringsSep "; " badLabels}.";
       }
       {
         assertion = emptyExtensions == [];

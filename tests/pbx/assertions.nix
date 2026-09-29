@@ -83,6 +83,12 @@
     };
   };
 
+  # the phones' network, which the provisioning cases add adapters and files to
+  phones.pbx.phones = {
+    listenAddress = "10.0.20.10";
+    allowedNetworks = lib.mkDefault ["10.0.20.0/24"];
+  };
+
   cases = {
     baselineIsValid = {
       module = {};
@@ -484,6 +490,45 @@
       };
       assertions = [];
       warning = "ht801.adminPassword is a plain string";
+    };
+
+    # systemd drops every connection with no IPAddressAllow= entry
+    phonesWithoutNetworks = {
+      module = {
+        imports = [phones];
+        pbx.phones = {
+          enable = true;
+          allowedNetworks = [];
+        };
+      };
+      assertions = ["pbx.phones.allowedNetworks is empty, so systemd would drop every connection; list the phones' networks."];
+    };
+
+    # what `systemd-analyze verify` takes and refuses in IPAddressAllow= (it
+    # ignores a refused entry with a warning in its own journal, and an empty
+    # one resets the list)
+    phonesNetworksSystemdRefuses = {
+      module = {
+        imports = [phones];
+        pbx.phones = {
+          enable = true;
+          allowedNetworks = [
+            "10.0.20.0/24 10.0.21.0/24"
+            "fd00:20::/64"
+            "::ffff:10.0.20.0/120"
+            "10.0.20.0/024"
+            "10.0.20.5"
+            "localhost"
+            "10.0.20.0/33"
+            "phones"
+            "10.0.20.021"
+            "[fd00::21]"
+            "10.0.20.0/24 phones"
+            ""
+          ];
+        };
+      };
+      assertions = ["pbx.phones.allowedNetworks: entries must be addresses, networks such as 10.0.20.0/24, or any, localhost, link-local or multicast, which is what systemd takes: `10.0.20.0/33`, `phones`, `10.0.20.021`, `[fd00::21]`, `10.0.20.0/24 phones`, ``."];
     };
 
     # the adapter sends one user name, for the endpoint and its aor

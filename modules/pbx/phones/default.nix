@@ -86,6 +86,50 @@
   # files with secrets, by how their values are escaped
   filesFor = escape: attrNames (filterAttrs (_: file: file.escape == escape && secrets.fromText file.text != []) cfg.files);
 
+  # addresses as the server (Rust's IpAddr) and systemd parse them: IPv4
+  # without leading zeros, IPv6 without brackets or zone
+  octet = "(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])";
+  ipv4 = "${octet}[.]${octet}[.]${octet}[.]${octet}";
+  isIPv4 = address: builtins.match ipv4 address != null;
+  # up to eight groups of hex digits, one `::` for one or more zero groups,
+  # and an IPv4 address as the last two
+  isIPv6 = address: let
+    embedded = builtins.match "(.*:)${ipv4}" address;
+    hex =
+      if embedded == null
+      then address
+      else builtins.head embedded + "0:0";
+    halves = lib.splitString "::" hex;
+    groups = lib.concatMap (half: lib.optionals (half != "") (lib.splitString ":" half)) halves;
+    count = builtins.length groups;
+  in
+    builtins.all (group: builtins.match "[0-9A-Fa-f]{1,4}" group != null) groups
+    && (
+      if builtins.length halves == 1
+      then count == 8
+      else builtins.length halves == 2 && count <= 7
+    );
+  isAddress = address: isIPv4 address || isIPv6 address;
+
+  # entries systemd would not take for IPAddressAllow= (an empty one resets the
+  # list): each holds addresses, with or without a prefix length, or the names
+  # systemd knows
+  invalidNetworks = lib.filter (entry: let
+    tokens = lib.filter (token: builtins.isString token && token != "") (builtins.split "[[:space:]]+" entry);
+    valid = token: let
+      prefix = builtins.match "([^/]*)/0*([0-9]{1,3})" token;
+      length = lib.toInt (lib.last prefix);
+    in
+      builtins.elem token ["any" "localhost" "link-local" "multicast"]
+      || (
+        if prefix == null
+        then isAddress token
+        else (isIPv4 (builtins.head prefix) && length <= 32) || (isIPv6 (builtins.head prefix) && length <= 128)
+      );
+  in
+    tokens == [] || !(builtins.all valid tokens))
+  cfg.allowedNetworks;
+
   renderer = pkgs.writeShellApplication {
     name = "asterisk-provisioning-render";
     runtimeInputs = with pkgs; [
@@ -192,6 +236,14 @@ in {
         {
           assertion = builtins.all (name: builtins.match "[A-Za-z0-9_+-][A-Za-z0-9_.+-]*" name != null) (attrNames cfg.files);
           message = "pbx.phones.files: file names may only contain letters, digits and _.+- (no directories).";
+        }
+        {
+          assertion = cfg.allowedNetworks != [];
+          message = "pbx.phones.allowedNetworks is empty, so systemd would drop every connection; list the phones' networks.";
+        }
+        {
+          assertion = invalidNetworks == [];
+          message = "pbx.phones.allowedNetworks: entries must be addresses, networks such as 10.0.20.0/24, or any, localhost, link-local or multicast, which is what systemd takes: ${lib.concatMapStringsSep ", " (entry: "`${entry}`") invalidNetworks}.";
         }
       ]
       ++ map (ref: {

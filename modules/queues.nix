@@ -31,7 +31,13 @@
       penalty = mkOption {
         type = types.nullOr types.ints.unsigned;
         default = null;
-        description = "Members with a lower penalty are called first.";
+        description = ''
+          Members with a higher penalty are only called when every member with
+          a lower one is paused, busy, in wrap-up time or unreachable, not when
+          they do not answer. With the `wrandom` strategy the penalty is a
+          weight instead: the higher it is, the less likely the member is
+          called first.
+        '';
       };
       name = mkOption {
         type = types.nullOr types.str;

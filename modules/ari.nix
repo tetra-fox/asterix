@@ -152,7 +152,10 @@ in {
               readOnly = mkOption {
                 type = types.bool;
                 default = false;
-                description = "Only allow GET requests.";
+                description = ''
+                  Only allow GET requests. These still read every PJSIP
+                  password, at `/ari/asterisk/config/dynamic/res_pjsip/auth/<name>`.
+                '';
               };
             };
           }

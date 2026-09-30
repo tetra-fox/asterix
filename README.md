@@ -131,6 +131,12 @@ service does not start when a secret in it contains one.
 
 Other secret managers work the same way, since `secret` only takes a path.
 
+While Asterisk runs, the secrets it holds can be read by root, by the
+`asterisk` user and the programs the dialplan starts, by members of the
+`asterisk` group through the CLI (`asterisk -rx 'pjsip show auths'`), by every
+ARI user, read-only ones too, and by AMI users with some action classes, which
+`services.asterisk.ami.users.<name>.write` lists.
+
 A crash leaves no core dump, since it would hold every secret. To debug one,
 set `systemd.services.asterisk.serviceConfig.LimitCORE = "infinity";`.
 

@@ -55,7 +55,13 @@
           "call"
           "originate"
         ];
-        description = "Action classes the user may run (`write`); none by default.";
+        description = ''
+          Action classes the user may run (`write`); none by default.
+          `system` and `command` let the user read every secret Asterisk
+          holds (PJSIPShowAuths, `Command` with any CLI command) and start
+          programs as Asterisk; `call` and `reporting` let it read voicemail
+          PINs (`Getvar` of `VM_INFO(<mailbox>,password)`).
+        '';
       };
       permit = mkOption {
         type = types.listOf types.str;

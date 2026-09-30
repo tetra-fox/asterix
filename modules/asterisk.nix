@@ -127,9 +127,6 @@
             astagidir = "lib/agi-bin";
             astlogdir = "log";
           };
-        # the check runs as whoever builds it, where the asterisk user does
-        # not exist
-        options = removeAttrs (conf.options or {}) ["runuser" "rungroup"];
       }
     );
   # a certificate and its key in one file, so it works for any TLS file:
@@ -248,23 +245,22 @@
       option = parsed.expecting;
       value = null;
     };
-  # extraArguments for the check, without the user and group of -U and -G,
-  # which the build does not have (see checkAsteriskConf)
-  checkExtraArguments =
-    concatMap (
-      item:
-        if item ? argument
-        then [item.argument]
-        else if builtins.elem item.option ["U" "G"] && item.value != null
-        then []
-        else ["-${item.option}"] ++ optional (item.value != null) item.value
-    )
-    extraOptions;
+  # the words Asterisk never reads: its getopt leaves them as operands, and it
+  # takes none
+  ignoredArguments = map (item: item.argument) (filter (item: item ? argument) extraOptions);
+  # -U and -G, and runuser and rungroup of asterisk.conf in any case
+  # (main/options.c); given a user Asterisk exits, as the unit's filter
+  # refuses setuid() even to its own, and it takes a group only as root
+  userAndGroup =
+    map (item: "extraArguments -${item.option}") (filter (item: builtins.elem (item.option or null) ["U" "G"]) extraOptions)
+    ++ map (key: ''settings."asterisk.conf".options.${key}'') (
+      filter (key: builtins.elem (lib.toLower key) ["runuser" "rungroup"]) (attrNames (cfg.settings."asterisk.conf".options or {}))
+    );
   # the check's arguments are passed on for the probe (tests/campaign/probe.nix),
   # which boots Asterisk the same way
   checkArguments =
     optional (builtins.any lowPort listenPorts) "--low-ports"
-    ++ concatMap (argument: ["--argument" argument]) checkExtraArguments
+    ++ concatMap (argument: ["--argument" argument]) cfg.extraArguments
     ++ [
       asteriskBin
       "${checkTree}"
@@ -932,10 +928,13 @@ in {
       default = [];
       example = ["-vvv"];
       description = ''
-        Extra command line arguments for the Asterisk daemon. The build-time
-        check ({option}`services.asterisk.checkConfig`) starts Asterisk with
-        them too, except `-U` and `-G`, whose user and group the build does
-        not have.
+        Extra command line arguments for the Asterisk daemon, which the
+        build-time check ({option}`services.asterisk.checkConfig`) starts
+        Asterisk with too. Asterisk reads only options and their values. The
+        service runs Asterisk as the asterisk user and group, which `-U` and
+        `-G` cannot change: its system call filter keeps Asterisk from
+        changing its user, and Asterisk takes a group only when it starts as
+        root.
       '';
     };
 
@@ -1095,6 +1094,15 @@ in {
             # the check cannot see it: Asterisk goes on in a process of its own
             assertion = !(builtins.any (item: (item.option or null) == "F") extraOptions);
             message = "services.asterisk.extraArguments: with -F Asterisk forks into the background, and systemd stops the service once the process it started has exited.";
+          }
+          {
+            assertion = ignoredArguments == [];
+            message = "services.asterisk.extraArguments: Asterisk ignores words that are not options or their values: ${lib.concatMapStringsSep ", " builtins.toJSON ignoredArguments}.";
+          }
+          {
+            # the check runs Asterisk as whoever builds it, without the unit's filter
+            assertion = userAndGroup == [];
+            message = "services.asterisk: asterisk.service runs Asterisk as the asterisk user and group, which Asterisk cannot switch: given a user it exits, since it cannot become another user and the unit's system call filter refuses it even its own, and it ignores a group unless it starts as root. Remove ${concatStringsSep ", " userAndGroup}.";
           }
           {
             assertion = unitBreakingCredentials == [];

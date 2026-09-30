@@ -34,7 +34,6 @@
   "services.asterisk.dialplan.contexts.<name>.hints = {\"101\":\"Q7Tech/101\"}" = "P3: loads";
   "services.asterisk.dialplan.general = {\"q7unknown\":\"x\"}" = "P3: loads";
   "services.asterisk.extraArguments = [\"--q7-no-such-option\"]" = "rejected by asterisk-config-check";
-  "services.asterisk.extraArguments = string lineBreak" = "P3: loads";
   "services.asterisk.extraConfig = {\"pjsip.conf\":\"[q7]\\ntype = q7type\\n\"}" = "P3: loads";
   "services.asterisk.features.applications.<name>.app = \"Q7NoSuchApp\"" = "P3: loads";
   "services.asterisk.features.applications.<name>.dtmf = \"q7\"" = "P3: loads";

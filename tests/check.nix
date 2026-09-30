@@ -554,14 +554,6 @@
         application = "${pkgs.coreutils}/bin/cat /dev/zero";
       };
     };
-    # -U and -G name the service's user and group, which the build does not
-    # have, so the check leaves them out, as it leaves out runuser and rungroup
-    userAndGroupArguments.services.asterisk.extraArguments = [
-      "-vvv"
-      "-U"
-      "asterisk"
-      "-dGasterisk"
-    ];
     # the examples of the module lists load as they are
     moduleListExamples.services.asterisk.modules = let
       options = (evalSystem []).options.services.asterisk.modules;

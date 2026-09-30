@@ -683,6 +683,27 @@
       assertion = "services.asterisk.extraArguments: with -F Asterisk forks into the background, and systemd stops the service once the process it started has exited.";
     };
 
+    # Asterisk's getopt takes options and their values, and Asterisk never
+    # reads the other words: -, -- and all after it
+    extraArgumentsThatAreNotOptions = {
+      module.services.asterisk.extraArguments = ["vvv" "-dL" "2" "-" "--" "-F"];
+      assertions = [''services.asterisk.extraArguments: Asterisk ignores words that are not options or their values: "vvv", "-", "--", "-F".''];
+    };
+
+    # the unit's system call filter keeps Asterisk from changing its user, even
+    # to the one it runs as, and Asterisk takes a group only when it starts as
+    # root
+    userAndGroup = {
+      module.services.asterisk = {
+        extraArguments = ["-vU" "asterisk" "-Gasterisk"];
+        settings."asterisk.conf".options = {
+          runuser = "asterisk";
+          RunGroup = "asterisk";
+        };
+      };
+      assertions = [''services.asterisk: asterisk.service runs Asterisk as the asterisk user and group, which Asterisk cannot switch: given a user it exits, since it cannot become another user and the unit's system call filter refuses it even its own, and it ignores a group unless it starts as root. Remove extraArguments -U, extraArguments -G, settings."asterisk.conf".options.RunGroup, settings."asterisk.conf".options.runuser.''];
+    };
+
     # the firewall's rules name the interfaces
     firewallInterfaceNames = {
       module.services.asterisk.firewallInterfaces = [

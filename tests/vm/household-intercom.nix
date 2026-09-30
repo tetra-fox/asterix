@@ -142,7 +142,7 @@ in
 
     extraPythonPackages = p: [p.numpy];
 
-    testScript =
+    testScript = {nodes, ...}:
       builtins.readFile ./phone.py
       + builtins.readFile ./tones.py
       + ''
@@ -218,7 +218,8 @@ in
         with subtest("Asterisk starts without an error or a warning"):
             journal = pbx.succeed("journalctl --sync && journalctl -u asterisk.service -b")
             assert not re.search("ERROR|WARNING", journal), journal
-            assert "Asterisk 22." in asterisk(pbx, "core show version")
+            version = asterisk(pbx, "core show version").split()[1]
+            assert version == "${nodes.pbx.services.asterisk.package.version}", version
 
         with subtest("the host does not route between the VLANs"):
             forwarding = pbx.succeed("sysctl net.ipv4.conf.all.forwarding net.ipv6.conf.all.forwarding")

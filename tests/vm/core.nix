@@ -280,7 +280,7 @@ pkgs.testers.runNixOSTest {
     };
   };
 
-  testScript = ''
+  testScript = {nodes, ...}: ''
     ${builtins.readFile ./phone.py}
     def ast(command):
         return pbx.succeed(f"asterisk -rx {shlex.quote(command)}")
@@ -394,7 +394,7 @@ pkgs.testers.runNixOSTest {
         pbx.succeed("test \"$(stat -c %U /var/lib/asterisk)\" = asterisk")
 
     with subtest("CLI wrapper only talks to the running daemon"):
-        pbx.succeed("asterisk -rx 'core show version' | grep -q 'Asterisk 22'")
+        pbx.succeed("asterisk -rx 'core show version' | grep -qF 'Asterisk ${nodes.pbx.services.asterisk.package.version} '")
         pbx.succeed("rasterisk -x 'core show uptime'")
         pbx.fail("asterisk -c")
         pbx.succeed("asterisk -V")

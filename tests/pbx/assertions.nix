@@ -574,6 +574,13 @@
       assertion = "pbx.emergency.notify: 299 are not extensions of pbx.extensions";
     };
 
+    # emergency numbers take digits only; * and # come with the outbound
+    # prefix, as in #911 (vm-pbx-calls)
+    emergencyNumberWithStar = {
+      module.pbx.emergency.numbers = lib.mkForce ["*911"];
+      throws = true;
+    };
+
     objectsWithoutEnable = {
       module.pbx.enable = lib.mkForce false;
       warning = "pbx objects are defined, but pbx.enable is not set";

@@ -9,18 +9,22 @@
 # written with a + too, reaches its destination, and a number without a route
 # on the trunk it arrives on is refused. Outbound: the provider gets the
 # number without the prefix #, and a number too short for the pattern is
-# refused as incomplete. Emergency: each number, with and without the prefix,
-# leaves for the provider within a second of the phone's INVITE from every
-# extension, and so does a second call during the first, while notify rings
-# the other extensions, one of them busy and one not registered; with the
-# provider unreachable, the caller learns it once the trunk's INVITE times
-# out.
+# refused as incomplete. Numbers with * and #: phones registered as #1 and *2
+# ring when their numbers come as %23 and *, which pjsua sends, or as # and
+# %2A, which SIPp sends, and a ring group, queue, conference, voice menu with
+# a # key, page, the voicemail menu, a close-early number and an inbound
+# number reach their objects. Emergency: each number, with and without the
+# prefix, leaves for the provider within a second of the phone's INVITE from
+# every extension, and so does a second call during the first, while notify
+# rings the other extensions, one of them busy and one not registered; with
+# the provider unreachable, the caller learns it once the trunk's INVITE
+# times out.
 #
 #   pbx       10.2.0.10, trunks provider and second
 #   provider  10.2.0.5, accounts 5551000 (provider) and 5552000 (second)
 #   phones    10.2.0.21, runs 201 (rings, no call waiting), 202 (rings), 203
-#             (answers) and 204 (rings, no call waiting, no mailbox); 205 is
-#             never registered
+#             (answers), 204 (rings, no call waiting, no mailbox), #1 and *2
+#             (ring, no mailbox) and SIPp; 205 is never registered
 {
   pkgs,
   self,
@@ -66,6 +70,8 @@ in
               {
                 sip-provider = "provider-password";
                 sip-second = "second-password";
+                sip-hash = "pw-hash";
+                sip-star = "pw-star";
                 vm-200 = "4200";
               }
               // lib.concatMapAttrs (extension: _: {
@@ -94,10 +100,51 @@ in
               "202".ringTime = 2;
               "204".ringTime = 2;
               "205".noAnswer.extension = "203";
+              "#1" = {
+                name = "Hash";
+                password = secret "sip-hash";
+              };
+              "*2" = {
+                name = "Star";
+                password = secret "sip-star";
+              };
             }
           ];
 
-          ivrs.menu.prompt.sound = "test/menu";
+          ivrs.menu = {
+            number = "#64";
+            prompt.sound = "test/menu";
+            options."#".extension = "#1";
+          };
+
+          # every other kind of number, with * and # in it
+          ringGroups.symbols = {
+            number = "6*1";
+            members = [
+              "#1"
+              "*2"
+            ];
+          };
+          queues.symbols.number = "6#2";
+          conferences.symbols.number = "*63";
+          paging.symbols = {
+            number = "65#";
+            members = [
+              "#1"
+              "*2"
+            ];
+          };
+          voicemailMenu = "*97";
+          hours.office = {
+            timezone = "UTC";
+            open = [
+              {
+                days = "mon-fri";
+                time = "09:00-17:00";
+              }
+            ];
+            closeEarly = "*28#";
+          };
 
           inbound = {
             "5551000" = {
@@ -111,6 +158,10 @@ in
             "5552000" = {
               trunk = "second";
               destination.voicemail = "200";
+            };
+            "*5551002#" = {
+              trunk = "provider";
+              destination.extension = "#1";
             };
           };
 
@@ -169,6 +220,7 @@ in
             fullName = "Front desk";
             pin = secret "vm-200";
           };
+          queues.queues.symbols.members = ["PJSIP/*2"];
         };
       };
 
@@ -220,6 +272,7 @@ in
         imports = [
           ./common.nix
           ./phone.nix
+          ./sipp.nix
           (onlyAddress "10.2.0.21")
         ];
       };
@@ -243,6 +296,9 @@ in
         boss = Phone(phones, "203", "203", "pw-203", "10.2.0.10", sip_port=5062, cli_port=2302)
         warehouse = Phone(phones, "204", "204", "pw-204", "10.2.0.10", sip_port=5063, cli_port=2303, auto_answer=180, call_waiting=False)
         everyone = [desk, sales, boss, warehouse]
+        hash_phone = Phone(phones, "hash", "#1", "pw-hash", "10.2.0.10", sip_port=5064, cli_port=2304, auto_answer=180)
+        star_phone = Phone(phones, "star", "*2", "pw-star", "10.2.0.10", sip_port=5065, cli_port=2305, auto_answer=180)
+        symbols = [hash_phone, star_phone]
 
         def invites(phones):
             return {p.name: p.requests("INVITE") for p in phones}
@@ -288,8 +344,8 @@ in
             pbx.wait_until_succeeds("test $(asterisk -rx 'pjsip show registrations' | grep -c Registered) -eq 2", timeout=120)
             # calls only go to a reachable contact
             pbx.wait_until_succeeds("asterisk -rx 'pjsip show contacts' | grep -q 'provider/sip:10.2.0.5.* Avail'", timeout=60)
-            start_phones(everyone)
-            wait_registrations({p: 200 for p in everyone})
+            start_phones(everyone + symbols)
+            wait_registrations({p: 200 for p in everyone + symbols})
 
         with subtest("an extension rings for its ring time, then its no-answer destination takes the call, here a voice menu"):
             mark = len(sip_messages(pbx))
@@ -388,6 +444,73 @@ in
             boss.call("#5")
             assert ended(boss, done) == 484
             assert sent(mark, "INVITE", "10.2.0.5:") == [], "the provider was called"
+
+        def request_uris(mark, source):
+            """Request-URIs of the INVITEs `source` sent the pbx after the
+            first `mark` messages of its capture."""
+            return {m["text"].split(" ", 2)[1] for m in sip_messages(pbx)[mark:] if m["source"] == source and m["text"].startswith("INVITE ")}
+
+        def wait_in(endpoint, context, app):
+            """Waits until a call of `endpoint` runs `app` in `context`."""
+            channel = wait_channel(pbx, endpoint, app=app, timeout=30)
+            assert channel["context"] == context, channel
+
+        def call_at_once(calls):
+            """Each (phone, number) calls at the same time."""
+            cli_parallel([(phone, f"call new {phone.uri(number)}") for phone, number in calls])
+
+        with subtest("phones registered as #1 and *2 ring when their numbers come as %23 or #, and as * or %2A"):
+            mark = len(sip_messages(pbx))
+            before = invites(symbols)
+            call_at_once([(boss, "#1"), (desk, "*2")])
+            for phone in symbols:
+                phone.wait_request("INVITE", after=before[phone.name])
+            hang_up(boss, desk)
+            # pjsua sends # as %23 and * as it is
+            assert request_uris(mark, "10.2.0.21:5062") == {"sip:%231@10.2.0.10"}, request_uris(mark, "10.2.0.21:5062")
+            assert request_uris(mark, "10.2.0.21:5060") == {"sip:*2@10.2.0.10"}, request_uris(mark, "10.2.0.21:5060")
+            # SIPp calls as 203, and writes the numbers as given
+            for phone, number in [(hash_phone, "#1"), (star_phone, "%2A2")]:
+                before = phone.requests("INVITE")
+                sipp(phones, "ring", "10.2.0.10", "-s", number, "-key", "caller", "203", "-au", "203", "-ap", "pw-203", "-i", "10.2.0.21", "-p", "5080")
+                phone.wait_request("INVITE", after=before)
+                wait_idle(pbx)
+            assert request_uris(mark, "10.2.0.21:5080") == {"sip:#1@10.2.0.10:5060", "sip:%2A2@10.2.0.10:5060"}, request_uris(mark, "10.2.0.21:5080")
+
+        with subtest("a ring group, queue, page, conference, the voicemail menu, a voice menu's # key, a close-early number and an inbound number with * and # reach their objects"):
+            # these ring the same phones, so one after the other
+            for number, context, app, ringing in [
+                ("6*1", "pbx-ringgroup-symbols", "Dial", symbols),
+                ("6#2", "pbx-queue-symbols", "Queue", [star_phone]),
+                # Page() puts the caller into a conference
+                ("65#", "pbx-paging-symbols", "ConfBridge", symbols),
+            ]:
+                before = invites(ringing)
+                boss.call(number)
+                wait_in("203", context, app)
+                for phone in ringing:
+                    phone.wait_request("INVITE", after=before[phone.name])
+                hang_up(boss)
+            for phone in symbols:
+                invite = phone.received("INVITE")[-1]
+                assert "Call-Info: <sip:pbx>;answer-after=0" in invite, invite
+            before = hash_phone.requests("INVITE")
+            done = warehouse.disconnects()
+            call_at_once([(boss, "*63"), (desk, "*97"), (sales, "#64"), (warehouse, "*28#")])
+            wait_in("203", "pbx-conference-symbols", "ConfBridge")
+            wait_in("201", "pbx-internal", "VoiceMailMain")
+            wait_in("202", "pbx-ivr-menu", "BackGround")
+            sales.dtmf("#")
+            hash_phone.wait_request("INVITE", after=before)
+            # the toggle answers, says it closed and hangs up
+            warehouse.wait_disconnected(after=done)
+            hint = asterisk(pbx, "core show hint *28#")
+            assert "State:InUse" in hint, hint
+            hang_up(boss, desk, sales)
+            before = hash_phone.requests("INVITE")
+            asterisk(provider, "channel originate PJSIP/*5551002#@5551000 extension s@feed")
+            hash_phone.wait_request("INVITE", after=before)
+            hang_up()
 
         def emergency(caller, dialled, number):
             """Places an emergency call, and returns the seconds from the

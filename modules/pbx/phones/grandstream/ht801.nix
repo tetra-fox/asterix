@@ -131,7 +131,7 @@
     p2 = (commonSettings // device.settings).P2 or null;
     length = builtins.stringLength (toString p2);
   in
-    p2 != null && !secrets.isSecret p2 && (length < 4 || length > 30))
+    p2 != null && !secrets.holdsSecret p2 && (length < 4 || length > 30))
   cfg.devices);
 
   # the P-values of each adapter with a control character, which XML holds
@@ -237,7 +237,7 @@ in {
   };
 
   config = mkIf cfg.enable {
-    warnings = lib.optional (cfg.adminPassword != null && !secrets.isSecret cfg.adminPassword) "pbx.phones.grandstream.ht801.adminPassword is not a secret reference, so it is stored world-readable in the Nix store; use config.lib.asterisk.secret instead.";
+    warnings = lib.optional (cfg.adminPassword != null && !secrets.holdsSecret cfg.adminPassword) "pbx.phones.grandstream.ht801.adminPassword is not a secret reference, so it is stored world-readable in the Nix store; use config.lib.asterisk.secret instead.";
 
     assertions =
       [

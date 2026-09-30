@@ -537,7 +537,7 @@ in {
 
       warnings = map (
         box: "services.asterisk.voicemail.mailboxes.\"${box.mailbox}@${box.context}\".pin is a plain string, so it is stored world-readable in the Nix store; use config.lib.asterisk.secret instead."
-      ) (filter (box: isString box.pin) mailboxes);
+      ) (filter (box: !secrets.holdsSecret box.pin) mailboxes);
     })
   ];
 }

@@ -300,7 +300,11 @@
       concatMap (
         id:
           map (key: ''settings."${file}"."${id}".${key}'') (
-            filter (key: builtins.isString (cfg.settings.${file}.${id}.${key} or null)) secretKeys
+            filter (key: let
+              value = cfg.settings.${file}.${id}.${key} or null;
+            in
+              builtins.isString value && !secrets.holdsSecret value)
+            secretKeys
           )
       ) (attrNames cfg.settings.${file})
   ) (attrNames cfg.settings);

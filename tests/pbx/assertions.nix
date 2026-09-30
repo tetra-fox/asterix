@@ -682,6 +682,20 @@
       warning = "ht801.adminPassword is not a secret reference";
     };
 
+    # its length is known only once the secret is read
+    ht801AdminPasswordInterpolated = {
+      module = {config, ...}: {
+        imports = [phones];
+        pbx.phones.grandstream.ht801 = {
+          enable = true;
+          adminPassword = "${config.lib.asterisk.secret "/run/secrets/ht801-admin"}";
+          devices."201".mac = "c0:74:ad:00:02:01";
+        };
+      };
+      assertions = [];
+      warnings = [];
+    };
+
     # an integer lands in the store just like a string
     ht801IntegerAdminPasswordWarns = {
       module = {

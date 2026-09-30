@@ -1138,6 +1138,20 @@
       warning = ''settings."confbridge.conf"."user:guest".pin is a plain string'';
     };
 
+    # the store holds only their placeholders
+    secretsInterpolatedIntoStringsDoNotWarn = {
+      module = {config, ...}: let
+        inherit (config.lib.asterisk) secret credential;
+      in {
+        services.asterisk = {
+          pjsip.endpoints."101".auth.password = lib.mkForce "${secret "/run/secrets/101"}${credential "pepper"}";
+          voicemail.mailboxes."101".pin = "${secret "/run/secrets/vm"}";
+        };
+      };
+      assertions = [];
+      warnings = [];
+    };
+
     # Asterisk skips a line of more than 8190 bytes; a secret counts when the
     # service starts, and AEL and Lua have parsers of their own
     lineLongerThan8190Bytes = {

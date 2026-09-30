@@ -119,4 +119,8 @@ in rec {
           else {_credential = builtins.elemAt m 1;}
       ) (filter isList (builtins.split placeholderPattern text))
     );
+
+  # A reference, or a string with one interpolated: the store gets only the
+  # placeholder of the secret.
+  holdsSecret = v: isSecret v || (isString v && fromText v != []);
 }

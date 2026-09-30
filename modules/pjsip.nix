@@ -343,14 +343,16 @@
               default = 60;
               description = ''
                 Seconds between registration attempts after a temporary
-                failure: no answer, 408, 500, 502, 503, 504 or 6xx. Asterisk
-                gives up after 10 retries in a row, and at once on any other
-                refusal, such as 403, a 3xx, or 401 and 407 to the credentials
-                it sent; the journal then says `Maximum retries reached` or
-                `Fatal response`. It tries again once res_pjsip reloads, as a
-                deploy that changes pjsip.conf (a new password, say) or
-                `asterisk -rx 'module reload res_pjsip.so'` does, or Asterisk
-                restarts.
+                failure: no answer, a host name that does not resolve, 408,
+                500, 502, 503, 504 or 6xx. The trunk keeps trying for as long
+                as that lasts. After an answer with Retry-After, whatever its
+                status, the next attempt comes that many seconds later
+                instead. On any other refusal, such as 403, a 3xx, or 401 and
+                407 to the credentials it sent, Asterisk gives up at once and
+                the journal says `Fatal response`; it tries again once
+                res_pjsip reloads, as a deploy that changes pjsip.conf (a new
+                password, say) or `asterisk -rx 'module reload res_pjsip.so'`
+                does, or Asterisk restarts.
               '';
             };
             contactUser = mkOption {
@@ -795,6 +797,9 @@
           client_uri = "sip:${t.username}@${server}";
           contact_user = t.registration.contactUser;
           retry_interval = t.registration.retryInterval;
+          # Asterisk gives up after 10 temporary failures by default and
+          # never tries again without a reload; this is the largest it takes
+          max_retries = 4294967295;
           expiration = t.registration.expiration;
           # Asterisk only accepts `endpoint` together with `line`
           inherit (t.registration) line;

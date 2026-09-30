@@ -5,8 +5,8 @@
 # one, is registered at the record's target and port; a 407 challenge is
 # answered with credentials the test checks; a 403 or 302 stops the
 # registration and the journal says why; a registrar answering 503 is asked
-# again every retryInterval, eleven times, then no more. A trunk refused for
-# a wrong password registers once the right one is in and Asterisk reloads,
+# again every retryInterval for as long as it does. A trunk refused for a
+# wrong password registers once the right one is in and Asterisk reloads,
 # which tries the other refused registrations again. Inbound: a call is
 # matched to the trunk whose identify has its source address, given as an
 # address, a host name or through an SRV record, or from any address to the
@@ -392,11 +392,16 @@ in
                     f"to 'sip:{registrar['account']}@203.0.113.5:{registrar['port']}', stopping outbound registration"
                 )
 
-        with subtest("a registrar answering 503 is asked again every retryInterval, eleven times in all"):
-            journal("Maximum retries reached when attempting outbound registration to 'sip:203.0.113.5:5074'")
-            times = [r["time"] for r, _ in requests("REGISTER ", "203.0.113.5:5074")]
+        with subtest("a registrar answering 503 is asked again every retryInterval, beyond the eleven attempts Asterisk's default allows"):
+            # five more than Asterisk's default max_retries would send
+            deadline = time.time() + 30
+            while len(requests("REGISTER ", "203.0.113.5:5074")) < 16:
+                assert time.time() < deadline, requests("REGISTER ", "203.0.113.5:5074")
+                time.sleep(1)
+            times = [r["time"] for r, _ in requests("REGISTER ", "203.0.113.5:5074")][:16]
             gaps = [later - earlier for earlier, later in zip(times, times[1:])]
-            assert len(times) == 11 and all(1 <= gap < 1.5 for gap in gaps), gaps
+            assert all(1 <= gap < 1.5 for gap in gaps), gaps
+            pbx.fail("journalctl -u asterisk.service | grep -q 'Maximum retries reached'")
 
         with subtest("a call is matched to the trunk whose identify has its source, given as an address, a host name or through an SRV record"):
             for source, trunk in [("203.0.113.5", "provider"), ("203.0.113.8", "static"), ("203.0.113.9", "named"), ("203.0.113.7", "srv")]:
@@ -447,10 +452,10 @@ in
 
         with subtest("a refused registration stays stopped until res_pjsip reloads"):
             # their retryInterval is 1 s, and a minute has passed
-            for name, count in [("forbidden", 1), ("moved", 1), ("unavailable", 11)]:
-                assert len(requests("REGISTER ", f"203.0.113.5:{REGISTRARS[name]['port']}")) == count, name
+            for name in ["forbidden", "moved"]:
+                assert len(requests("REGISTER ", f"203.0.113.5:{REGISTRARS[name]['port']}")) == 1, name
             states = registrations()
-            assert all(states[name] == "Rejected" for name in ["forbidden", "moved", "unavailable"]), states
+            assert all(states[name] == "Rejected" for name in ["forbidden", "moved"]), states
 
         with subtest("a host name in identify keeps the address it had until res_pjsip reloads"):
             # gw.provider.example moved along with sip.provider.example

@@ -1262,6 +1262,9 @@ in {
             NoNewPrivileges = true;
             PrivateTmp = true;
             PrivateDevices = true;
+            # the private /dev keeps the host's /dev/shm, where Asterisk and
+            # the programs it starts would write outside their directories
+            TemporaryFileSystem = ["/dev/shm:mode=1777"];
             ProtectSystem = "strict";
             ProtectHome = true;
             ProtectKernelTunables = true;

@@ -370,6 +370,15 @@
       };
       services.asterisk.settings."queues.conf".sales.member = ["PJSIP/101"];
     };
+    # the voicemail menu, before any mailbox exists: its VoiceMailMain needs
+    # app_voicemail
+    pbxVoicemailMenuWithoutMailboxes = {
+      imports = [self.nixosModules.pbx];
+      pbx = {
+        enable = true;
+        voicemailMenu = "*97";
+      };
+    };
     # an endpoint in a context only the AEL dialplan defines, and a Lua one
     aelAndLuaDialplans.services.asterisk = {
       pjsip.endpoints."101".context = lib.mkForce "from-ael";

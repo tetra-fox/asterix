@@ -151,6 +151,10 @@ in {
         })
         cfg.extensions;
 
+      # the voicemail menu's VoiceMailMain needs app_voicemail, which the core
+      # loads only once a mailbox exists
+      voicemail.enable = mkIf (cfg.voicemailMenu != null) (mkDefault true);
+
       voicemail.mailboxes =
         mapAttrs (_: e: {
           fullName = mkDefault e.name;

@@ -1072,6 +1072,34 @@
       '';
     };
 
+    # app_voicemail keeps 63 bytes of each context of cidinternalcontexts,
+    # after the blanks before it, and reads the first 10, where a comma at the
+    # end starts none
+    voicemailInternalContextsLongerThanAsteriskKeeps = {
+      module = {config, ...}: {
+        services.asterisk.voicemail = {
+          mailboxes."101".pin = config.lib.asterisk.secret "/run/secrets/vm-101";
+          settings.cidinternalcontexts = " ${lib.strings.replicate 63 "a"},\t${lib.strings.replicate 64 "b"},";
+        };
+      };
+      assertions = [
+        ''
+          services.asterisk: voicemail values that Asterisk would cut (the `-` before a typed mailbox's PIN counts):
+            context 2 of [general] cidinternalcontexts, to 63 bytes
+        ''
+      ];
+    };
+
+    voicemailElevenInternalContexts = {
+      module = {config, ...}: {
+        services.asterisk.voicemail = {
+          mailboxes."101".pin = config.lib.asterisk.secret "/run/secrets/vm-101";
+          settings.cidinternalcontexts = "a,b,c,d,e,f,g,h,,j,k,";
+        };
+      };
+      assertions = ["services.asterisk.voicemail: Asterisk reads the first 10 contexts of cidinternalcontexts and ignores the rest: k."];
+    };
+
     voicemailEmailWithoutCommand = {
       module = {config, ...}: {
         services.asterisk.voicemail.mailboxes."101" = {

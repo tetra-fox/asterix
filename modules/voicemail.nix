@@ -252,6 +252,19 @@
       bytes = 79;
     }
   ];
+  # cidinternalcontexts as app_voicemail reads it: split at each comma but one
+  # at the end, without the blanks before each context; it keeps 63 bytes of
+  # each of the first 10 (apps/app_voicemail.c actual_load_config)
+  internalContexts = value: let
+    parts = splitString "," value;
+  in
+    map (part: builtins.head (builtins.match "[ \t]*(.*)" part)) (
+      if lib.last parts == ""
+      then lib.init parts
+      else parts
+    );
+  internalContextCount = 10;
+  isInternalContexts = entry: lib.toLower entry.key == "cidinternalcontexts";
   limitedValues =
     lib.concatMap (
       line: let
@@ -261,7 +274,11 @@
         if entry == null || line.section == "zonemessages"
         then []
         else if line.section == "general"
-        then lib.optional (generalBytes ? ${lib.toLower entry.key}) (limited "[general] ${entry.key}" generalBytes.${lib.toLower entry.key} entry.value)
+        then
+          lib.optional (generalBytes ? ${lib.toLower entry.key}) (limited "[general] ${entry.key}" generalBytes.${lib.toLower entry.key} entry.value)
+          ++ lib.optionals (isInternalContexts entry) (
+            lib.imap1 (n: limited "context ${toString n} of [general] ${entry.key}" 63) (lib.take internalContextCount (internalContexts entry.value))
+          )
         else
           lib.concatMap (
             field:
@@ -282,6 +299,14 @@
     )
     lines;
   cutValues = filter (value: value.room < 0) limitedValues;
+  ignoredInternalContexts =
+    lib.concatMap (
+      line: let
+        entry = entryOf line.line;
+      in
+        lib.optionals (entry != null && line.section == "general" && isInternalContexts entry) (lib.drop internalContextCount (internalContexts entry.value))
+    )
+    lines;
 
   # mailboxes referenced by typed PJSIP endpoints (MWI) that are not defined,
   # other than refused ones, which their own assertion names
@@ -457,6 +482,10 @@ in {
             services.asterisk: voicemail values that Asterisk would cut (the `-` before a typed mailbox's PIN counts):
               ${lib.concatMapStringsSep "\n  " (value: "${value.what}, to ${toString value.bytes} bytes") cutValues}
           '';
+        }
+        {
+          assertion = ignoredInternalContexts == [];
+          message = "services.asterisk.voicemail: Asterisk reads the first ${toString internalContextCount} contexts of cidinternalcontexts and ignores the rest: ${concatStringsSep ", " ignoredInternalContexts}.";
         }
       ];
     })

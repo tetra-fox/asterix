@@ -675,6 +675,17 @@
       ];
     };
 
+    # a right/ zone counts leap seconds, which the system clock leaves out
+    rightZoneAsserts = {
+      module.pbx.hours.office.timezone = lib.mkForce "right/America/Los_Angeles";
+      assertions = [
+        ''
+          pbx.hours: time zones of right/, which count leap seconds as the system clock does not, so the hours would open and close 27 s late; use the zone without right/:
+            pbx.hours.office.timezone: right/America/Los_Angeles
+        ''
+      ];
+    };
+
     ht801PlainAdminPasswordWarns = {
       module.pbx.phones = {
         listenAddress = "10.0.20.10";

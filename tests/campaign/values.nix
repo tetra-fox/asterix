@@ -798,7 +798,7 @@ in
     };
     "pbx.hours.<name>.timezone" = {
       valid = ["UTC" "America/Argentina/Buenos_Aires"];
-      invalid = ["Mars/Olympus_Mons" "zone.tab"];
+      invalid = ["Mars/Olympus_Mons" "zone.tab" "right/UTC"];
     };
     # a number needs a destination, or hours with open and closed
     "pbx.inbound.<name>.hours" = {

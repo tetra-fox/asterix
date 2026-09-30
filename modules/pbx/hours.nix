@@ -75,8 +75,9 @@
         type = types.strMatching "[A-Za-z0-9_+-]+(/[A-Za-z0-9_+-]+)*";
         example = "America/Los_Angeles";
         description = ''
-          Time zone of the opening hours, from the tz database (tzdata).
-          Required: NixOS servers usually run in UTC.
+          Time zone of the opening hours, from the tz database (tzdata), but
+          not one of `right/`, which count leap seconds. Required: NixOS
+          servers usually run in UTC.
         '';
       };
       open = mkOption {
@@ -141,6 +142,10 @@
       first > monthDays.${elemAt m 0} || last < first)
     hours.holidays))
   cfg.hours);
+
+  # Asterisk takes the leap seconds of a zone file into its local time
+  # (main/stdtime/localtime.c timesub), which the system clock does not count
+  leapZones = lib.filterAttrs (_: hours: lib.hasPrefix "right/" hours.timezone) cfg.hours;
 
   hoursSection = name: hours: let
     state = stateDevice name;
@@ -239,6 +244,13 @@ in {
         message = ''
           pbx.hours: holidays on a day their month does not have, or that end before they start:
             ${lib.concatStringsSep "\n  " badHolidays}
+        '';
+      }
+      {
+        assertion = leapZones == {};
+        message = ''
+          pbx.hours: time zones of right/, which count leap seconds as the system clock does not, so the hours would open and close 27 s late; use the zone without right/:
+            ${concatMapStringsSep "\n  " (name: "${showOption ["pbx" "hours" name "timezone"]}: ${leapZones.${name}.timezone}") (builtins.attrNames leapZones)}
         '';
       }
     ];

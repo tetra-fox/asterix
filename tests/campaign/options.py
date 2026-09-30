@@ -114,7 +114,9 @@ class Campaign:
             outputs = subprocess.run(
                 ["nix-store", "--query", "--outputs", drv], check=True, capture_output=True, text=True
             ).stdout.split()
-            if all(pathlib.Path(o).exists() for o in outputs):
+            # a failed build can leave its output behind, a path the store
+            # does not count as valid, such as a probe's, which makes $out first
+            if subprocess.run(["nix-store", "--check-validity", *outputs], capture_output=True).returncode == 0:
                 built.add(drv)
         return built
 

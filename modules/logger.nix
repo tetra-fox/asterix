@@ -54,10 +54,12 @@ in {
         Log channels (the `[logfiles]` section), mapping a channel to its
         levels (`debug`, `notice`, `warning`, `error`, `verbose`, `dtmf`,
         `fax`, `security`; `security` loads res_security_log.so). `console`
-        is standard output, which goes to the journal; `syslog.<facility>`
-        logs to syslog; any other name is a file in {file}`/var/log/asterisk`.
-        `console` defaults to `notice,warning,error`; set a channel to `[ ]`
-        to remove it.
+        is standard output, which goes to the journal; Asterisk adds
+        `verbose` to it whatever its levels, so the `verbose` option of
+        asterisk.conf alone decides which verbose messages reach the
+        journal. `syslog.<facility>` logs to syslog; any other name is a file
+        in {file}`/var/log/asterisk`. `console` defaults to
+        `notice,warning,error`; set a channel to `[ ]` to remove it.
       '';
     };
 

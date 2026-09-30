@@ -546,6 +546,9 @@
   waitForBoot = pkgs.writeShellScript "asterisk-wait-for-boot" ''
     for _ in $(seq 1 600); do
       [ -S ${cfg.paths.runtime}/asterisk.ctl ] && break
+      # systemd gives ExecStartPost= the PID of Asterisk, which may exit
+      # before it opens the socket, as it does when it cannot open astdb
+      kill -0 "$MAINPID" 2> /dev/null || exit 1
       sleep 0.2
     done
     exec ${asteriskBin} -C ${cfg.paths.config}/asterisk.conf -rx "core waitfullybooted"

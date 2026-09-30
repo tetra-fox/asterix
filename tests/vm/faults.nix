@@ -2,11 +2,13 @@
 # A secret the asterisk user can't read still reaches Asterisk, since systemd
 # reads credentials as root; one that is a directory fails the reload, which
 # keeps the old configuration, and a bad one fails the start, which systemd
-# retries every 5 s until the file is fixed. After SIGKILL systemd restarts
-# Asterisk within seconds and every registration survives, while the call it
-# carried goes silent; after SIGSTOP nothing notices: the unit stays active,
-# the journal says nothing, and calls time out until SIGCONT, after which
-# everything goes on without a restart. On a full /var/lib/asterisk a
+# retries every 5 s until the file is fixed. An astdb Asterisk cannot open
+# makes it exit as it starts, which fails the start at once, and systemd
+# retries the same way. After SIGKILL systemd restarts Asterisk within
+# seconds and every registration survives, while the call it carried goes
+# silent; after SIGSTOP nothing notices: the unit stays active, the journal
+# says nothing, and calls time out until SIGCONT, after which everything
+# goes on without a restart. On a full /var/lib/asterisk a
 # voicemail caller is cut off once recording starts, leaving an empty message
 # that counts, and an astdb write fails with a vague warning; on a full
 # /var/log/asterisk the SQLite CDR is logged with its record and the CSV one
@@ -230,6 +232,19 @@ in
             wait_journal(pbx, cursor, "Scheduled restart job", timeout=30)
             pbx.succeed("printf pw-203 > /run/test-secrets/sip-203")
             pbx.wait_for_unit("asterisk.service", timeout=30)
+            wait_contacts(pbx, 3)
+
+        with subtest("an astdb Asterisk cannot open makes it exit as it starts, which fails the start at once, and systemd retries"):
+            pbx.succeed("mv /var/lib/asterisk/astdb.sqlite3 /var/lib/asterisk/astdb.sqlite3.away && mkdir /var/lib/asterisk/astdb.sqlite3")
+            cursor = journal_cursor(pbx)
+            pbx.succeed("systemctl restart --no-block asterisk.service")
+            wait_journal(pbx, cursor, "ASTdb initialization failed")
+            # and not once the wait for its control socket has run out
+            wait_journal(pbx, cursor, "Failed with result 'exit-code'", timeout=10)
+            wait_journal(pbx, cursor, "Scheduled restart job", timeout=30)
+            pbx.succeed("systemctl stop asterisk.service")
+            pbx.succeed("rmdir /var/lib/asterisk/astdb.sqlite3 && mv /var/lib/asterisk/astdb.sqlite3.away /var/lib/asterisk/astdb.sqlite3")
+            pbx.succeed("systemctl start asterisk.service")
             wait_contacts(pbx, 3)
 
         with subtest("after SIGKILL systemd restarts Asterisk, every registration survives, and the call it carried goes silent"):

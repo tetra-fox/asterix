@@ -60,7 +60,13 @@
           `system` and `command` let the user read every secret Asterisk
           holds (PJSIPShowAuths, `Command` with any CLI command) and start
           programs as Asterisk; `call` and `reporting` let it read voicemail
-          PINs (`Getvar` of `VM_INFO(<mailbox>,password)`).
+          PINs (`Getvar` of `VM_INFO(<mailbox>,password)`). The actions on
+          configuration files (GetConfig, GetConfigJSON, ListCategories,
+          UpdateConfig, CreateConfig) refuse every file: without
+          `live_dangerously` in asterisk.conf, Asterisk takes only files whose
+          real path is inside its configuration directory, and
+          {file}`/run/asterisk/config` is a link to a new directory from each
+          start and reload.
         '';
       };
       permit = mkOption {

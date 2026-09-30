@@ -334,7 +334,8 @@ in
                   assert "Message: Permission denied" in ami(user, *action)
           assert "Response: Success" in ami("admin", "PJSIPShowAuths")
           assert "pw-201" in ami("admin", "Command", "Command=pjsip show auth 201")
-          # asterix's configuration link is outside the directory GetConfig reads
+          # GetConfig takes only real paths inside the configuration
+          # directory, and that is a link to another directory
           assert "File requires escalated privileges" in ami("admin", "GetConfig", "Filename=pjsip.conf")
 
           # ARI: read-only users too, the trunk's password among them

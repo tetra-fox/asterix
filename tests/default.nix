@@ -145,6 +145,8 @@ in
 
     vm-tenants = import ./vm/tenants.nix {inherit pkgs self;};
 
+    vm-trunks = import ./vm/trunks.nix {inherit pkgs self;};
+
     vm-pbx = import ./vm/pbx.nix {inherit pkgs self;};
 
     vm-pbx-groups = import ./vm/pbx-groups.nix {inherit pkgs self;};

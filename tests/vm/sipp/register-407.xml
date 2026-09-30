@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<!DOCTYPE scenario SYSTEM "sipp.dtd">
+<!--
+  A registrar behind a proxy that asks for credentials with 407, then takes
+  the REGISTER that answers the challenge. SIPp checks only that it carries
+  Proxy-Authorization; the test, which knows the password, checks the digest.
+-->
+<scenario name="register-407">
+  <recv request="REGISTER"/>
+
+  <send>
+    <![CDATA[
+
+      SIP/2.0 407 Proxy Authentication Required
+      [last_Via:]
+      [last_From:]
+      [last_To:];tag=[pid]SIPpTag01[call_number]
+      [last_Call-ID:]
+      [last_CSeq:]
+      Proxy-Authenticate: Digest realm="proxy.provider.example", nonce="4a5f1c0e[call_number]", qop="auth", algorithm=MD5
+      Content-Length: 0
+
+    ]]>
+  </send>
+
+  <recv request="REGISTER">
+    <action>
+      <ereg regexp="Digest " search_in="hdr" header="Proxy-Authorization:" check_it="true" assign_to="_"/>
+    </action>
+  </recv>
+
+  <send>
+    <![CDATA[
+
+      SIP/2.0 200 OK
+      [last_Via:]
+      [last_From:]
+      [last_To:];tag=[pid]SIPpTag01[call_number]
+      [last_Call-ID:]
+      [last_CSeq:]
+      [last_Contact:];expires=3600
+      Content-Length: 0
+
+    ]]>
+  </send>
+</scenario>

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<!DOCTYPE scenario SYSTEM "sipp.dtd">
+<!--
+  A registrar that answers every REGISTER with the status put in place of
+  @status@, such as "403 Forbidden". A test fills it in, as SIPp reads a
+  response's code when it loads the scenario, before keywords. The Contact
+  is where a 3xx sends the client; the other statuses have no use for it.
+-->
+<scenario name="register-refused">
+  <label id="again"/>
+  <recv request="REGISTER"/>
+
+  <send next="again">
+    <![CDATA[
+
+      SIP/2.0 @status@
+      [last_Via:]
+      [last_From:]
+      [last_To:];tag=[pid]SIPpTag01[call_number]
+      [last_Call-ID:]
+      [last_CSeq:]
+      Contact: <sip:[local_ip]:5099>
+      Content-Length: 0
+
+    ]]>
+  </send>
+</scenario>

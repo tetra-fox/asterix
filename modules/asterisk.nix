@@ -320,6 +320,18 @@
     filterAttrs (_: path: lib.hasInfix "\n" path || lib.hasInfix "\r" path || hasSuffix "\\" path) cfg.credentials
   );
 
+  # systemd mounts a service's credentials on a tmpfs of 1 MiB, where each file
+  # takes at least a page (src/shared/creds-util.h, CREDENTIALS_TOTAL_SIZE_MAX)
+  credentialCount = let
+    service = config.systemd.services.asterisk.serviceConfig;
+  in
+    builtins.length (concatMap (key: lib.toList (service.${key} or [])) [
+      "LoadCredential"
+      "LoadCredentialEncrypted"
+      "SetCredential"
+      "SetCredentialEncrypted"
+    ]);
+
   # Asterisk skips a line of a config file longer than 8190 bytes (main/config.c
   # config_text_file_load); render-secrets checks a line with its secrets
   longLines = concatMap (
@@ -1098,6 +1110,10 @@ in {
             # otherwise res_rtp_asterisk uses 5000-31000, which the firewall does not open
             assertion = rtpRange.from < rtpRange.to;
             message = "services.asterisk.rtp.portRange (rtpstart and rtpend in rtp.conf): `from` (${toString rtpRange.from}) must be lower than `to` (${toString rtpRange.to}).";
+          }
+          {
+            assertion = credentialCount <= 256;
+            message = "services.asterisk: asterisk.service would get ${toString credentialCount} credentials, one for each secret file and each of services.asterisk.credentials, and systemd fits at most 256 in the 1 MiB it gives a service's credentials, each taking at least a page of 4 KiB; Asterisk would not start.";
           }
           {
             assertion = longLines == [];

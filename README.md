@@ -138,6 +138,10 @@ While Asterisk runs, the secrets it holds can be read by root, by the
 ARI user, read-only ones too, and by AMI users with some action classes, which
 `services.asterisk.ami.users.<name>.write` lists.
 
+Each secret file reaches Asterisk as a systemd credential, as does each of
+`services.asterisk.credentials`, and systemd holds at most 256 for a service:
+a configuration with more does not build.
+
 A crash leaves no core dump, since it would hold every secret. To debug one,
 set `systemd.services.asterisk.serviceConfig.LimitCORE = "infinity";`.
 

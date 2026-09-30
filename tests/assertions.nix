@@ -649,6 +649,33 @@
       assertion = "services.asterisk.credentials: paths cannot contain a line break or end with a backslash, which would change the lines of asterisk.service: pjsip-tls-cert, pjsip-tls-key.";
     };
 
+    # systemd keeps a service's credentials in 1 MiB, where each takes a page
+    # of 4 KiB at least: with the baseline's secret, 256 fit and 257 do not
+    credentialsFillingTheirFilesystem = {
+      module = {config, ...}: {
+        services.asterisk = {
+          credentials.tls-key = "/run/secrets/tls-key";
+          pjsip.endpoints = lib.genAttrs (map toString (lib.range 1000 1254)) (extension: {
+            context = "internal";
+            auth.password = config.lib.asterisk.secret "/run/secrets/${extension}";
+          });
+        };
+      };
+      assertions = [
+        "services.asterisk: asterisk.service would get 257 credentials, one for each secret file and each of services.asterisk.credentials, and systemd fits at most 256 in the 1 MiB it gives a service's credentials, each taking at least a page of 4 KiB; Asterisk would not start."
+      ];
+    };
+    credentialsFillingTheirFilesystemOneLess = {
+      module = {config, ...}: {
+        services.asterisk.pjsip.endpoints = lib.genAttrs (map toString (lib.range 1000 1254)) (extension: {
+          context = "internal";
+          auth.password = config.lib.asterisk.secret "/run/secrets/${extension}";
+        });
+      };
+      assertions = [];
+      warnings = [];
+    };
+
     # Asterisk forks into the background with -F, which the config check
     # cannot see, and systemd stops the service once its process has exited
     forkArgument = {

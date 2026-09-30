@@ -3,11 +3,14 @@
 # answers, every wrong password is logged in a form fail2ban's asterisk
 # filter matches, malformed SIP and SDP leave Asterisk running without its
 # memory growing, the principals that can read secrets are the ones the
-# README names, and programs the dialplan starts write only to Asterisk's
-# directories and read nothing of /home or other units' secrets (D16).
+# README names, programs the dialplan starts write only to Asterisk's
+# directories and read nothing of /home or other units' secrets (D16), and
+# calls over the trunk, from its address or with its line, reach none of the
+# numbers that go out when a phone dials them (SEC-03).
 #
 #   pbx       10.3.0.10
-#   intruder  10.3.0.66, and 10.3.0.67, which the pbx's SIP ACL denies
+#   intruder  10.3.0.66, and 10.3.0.67, which the pbx's SIP ACL denies, and
+#             10.3.0.5, the trunk's provider
 {
   pkgs,
   self,
@@ -54,6 +57,7 @@ in
             fixed = {
               sip-201 = "pw-201";
               sip-202 = "pw-202";
+              sip-203 = "pw-203";
               sip-sipp = "pw-sipp";
               sip-trunk = "trunk-password";
               vm-201 = "4201";
@@ -80,7 +84,31 @@ in
               voicemail.pin = secret "vm-201";
             };
             "202".password = secret "sip-202";
+            # forwards to an outside number when it does not answer
+            "203" = {
+              password = secret "sip-203";
+              noAnswer.ringGroup = "cell";
+            };
           };
+          ringGroups.cell = {
+            members = ["202"];
+            external = ["5559000"];
+          };
+          ivrs.main = {
+            number = "700";
+            prompt.sound = "beep";
+            directDial = true;
+            options."1".ringGroup = "cell";
+          };
+          outbound = {
+            prefix = "9";
+            trunk = "provider";
+          };
+          emergency = {
+            numbers = ["911"];
+            trunk = "provider";
+          };
+          voicemailMenu = "*97";
           inbound."5551000" = {
             trunk = "provider";
             destination.extension = "201";
@@ -104,7 +132,7 @@ in
               host = "10.3.0.5";
               username = "5551000";
               password = secret "sip-trunk";
-              register = false;
+              # registers, and with that has a line, though nobody answers
               qualifyFrequency = 0;
             };
             # a phone that sends offers no phone sends; its calls are busy
@@ -217,6 +245,10 @@ in
           }
           {
             address = "10.3.0.67";
+            prefixLength = 24;
+          }
+          {
+            address = "10.3.0.5";
             prefixLength = 24;
           }
         ];
@@ -354,5 +386,51 @@ in
               assert report == [f"write {dir}" for dir in ["/var/lib/asterisk", "/var/log/asterisk", "/run/asterisk", "/tmp", "/var/tmp", "/dev/shm"]], report
               for dir in ["/tmp", "/var/tmp", "/dev/shm", "/var/lib/drop", "/srv/drop"]:
                   pbx.fail(f"test -e {dir}/written-by-{app}")
+
+      with subtest("calls from the trunk, from its address or with its line, to numbers that go out when a phone dials them go nowhere"):
+          def invites(mark):
+              """The Request-URIs of the INVITEs the pbx sent after the first
+              `mark` messages of its capture."""
+              return [m["text"].split()[1] for m in sip_messages(pbx)[mark:] if m["source"] == "10.3.0.10:5060" and m["text"].startswith("INVITE ")]
+
+          # the line of the trunk's registration, which nobody answers
+          pbx.wait_until_succeeds("asterisk -rx 'pjsip show registrations' | grep -q '^ provider/'")
+          register = next(m for m in sip_messages(pbx) if m["source"] == "10.3.0.10:5060" and m["text"].startswith("REGISTER sip:10.3.0.5"))
+          contact = re.search(r"^Contact: <sip:[^>]*;line=(\w+)>", register["text"], re.M)
+          assert contact, register["text"]
+          line = contact.group(1)
+
+          # the outbound prefix and a number, the emergency number with and
+          # without it, the menu, its key that rings an outside number and an
+          # extension it dials directly, the voicemail menu, call pickup, and
+          # an extension that forwards outside
+          numbers = ["95551234", "911", "9911", "700", "1", "201", "*97", "*8", "203"]
+          mark = len(sip_messages(pbx))
+          cursor = journal_cursor(pbx)
+          for source, params in [("10.3.0.5", ""), ("10.3.0.66", f";line={line}")]:
+              for number in numbers:
+                  sipp(intruder, "trunk-invite", "10.3.0.10:5060", "-i", source, "-p", "5090", "-s", number, "-key", "caller", "5551000", "-key", "called", number, "-key", "params", params)
+          # each reached the trunk's context, which has none of them, but
+          # call pickup, which chan_pjsip tries without the dialplan and
+          # refuses with nothing to pick up (channels/chan_pjsip.c:3089-3110);
+          # a final response comes again until its ACK arrives
+          finals = {}
+          for m in sip_messages(pbx)[mark:]:
+              call_id = re.search(r"^Call-ID: (\S+)", m["text"], re.M)
+              if call_id and m["source"] == "10.3.0.10:5060" and m["destination"].endswith(":5090") and re.match(r"SIP/2\.0 [2-6]", m["text"]):
+                  finals.setdefault(call_id.group(1), m["text"].split()[1])
+          assert list(finals.values()) == ["403" if number == "*8" else "404" for number in numbers] * 2, finals
+          assert invites(mark) == [], invites(mark)
+          assert not re.search(r"Executing \[.*\] Dial\(", journal_since(pbx, cursor))
+
+          # dialled from inside, they go out through the trunk
+          mark = len(sip_messages(pbx))
+          for number in ["95551234", "911", "203"]:
+              asterisk(pbx, f"channel originate Local/{number}@pbx-internal application Wait 1")
+          expected = ["sip:5551234@10.3.0.5", "sip:911@10.3.0.5", "sip:5559000@10.3.0.5"]
+          deadline = time.time() + 30
+          while sorted(set(invites(mark))) != sorted(expected):
+              assert time.time() < deadline, invites(mark)
+              time.sleep(1)
     '';
   }

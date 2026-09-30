@@ -72,7 +72,9 @@ in {
     description = ''
       Queues of {file}`queues.conf`, from
       {option}`services.asterisk.queues.queues` or `settings`, which keep
-      their members and strategy, as numbers and destinations.
+      their members and strategy, as numbers and destinations. A name has 1
+      to 79 bytes and cannot contain `,` `;` `[` `]` `"` `\` `''${` `$[`, an
+      unclosed `(` or a line break, nor start or end with white space.
     '';
   };
 

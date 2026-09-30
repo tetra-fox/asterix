@@ -156,7 +156,7 @@ in {
         };
       }
     '';
-    description = "Voice menus, keyed by menu name.";
+    description = "Voice menus, keyed by menu name: letters, digits, `_` and `-`.";
   };
 
   config = mkIf cfg.enable {

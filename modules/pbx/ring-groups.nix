@@ -148,7 +148,12 @@ in {
         };
       }
     '';
-    description = "Ring groups: several phones, and numbers outside, for one call.";
+    description = ''
+      Ring groups: several phones, and numbers outside, for one call. A name
+      cannot contain `,` `;` `[` `]` `"` `\` `''${` `$[`, an unclosed `(` or a
+      line break, nor end with white space, and with `external` numbers not
+      `&` either.
+    '';
   };
 
   config = mkIf cfg.enable {

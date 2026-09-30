@@ -121,7 +121,11 @@ in {
     type = types.attrsOf pagingType;
     default = {};
     example = lib.literalExpression ''{ all = { number = "650"; members = [ "201" "202" ]; }; }'';
-    description = "Paging groups, keyed by group name.";
+    description = ''
+      Paging groups, keyed by group name. A name cannot contain `,` `;` `[`
+      `]` `"` `\` `''${` `$[` `(` `)` `^` or a line break, nor end with white
+      space.
+    '';
   };
 
   config = mkIf cfg.enable {

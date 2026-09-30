@@ -79,7 +79,9 @@ in {
     example = lib.literalExpression ''{ board = { number = "800"; }; }'';
     description = ''
       Conference rooms, keyed by room name. ConfBridge takes names of up to
-      79 bytes and tells them apart without regard to case.
+      79 bytes and tells them apart without regard to case. A name cannot be
+      empty or contain `,` `;` `[` `]` `"` `\` `''${` `$[`, an unclosed `(`
+      or a line break, nor end with white space.
     '';
   };
 

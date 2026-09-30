@@ -226,7 +226,12 @@ in {
         };
       }
     '';
-    description = "Opening hours, used by {option}`pbx.inbound` to route calls.";
+    description = ''
+      Opening hours, used by {option}`pbx.inbound` to route calls. A name
+      cannot contain `,` `;` `[` `]` `''${` `$[` `(` or a line break, nor end
+      with white space, and with `closeEarly` not `&` or `=` either, nor be
+      longer than ${toString maxNameLength} bytes.
+    '';
   };
 
   config = mkIf cfg.enable {

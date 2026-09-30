@@ -4,7 +4,8 @@
 # nothing passes the PBX. The PBX's RTP range has four even ports and one of
 # them is the SIP port, which Asterisk skips, so three call legs fill it: a
 # caller whose callee's leg gets no port is declined (603), one whose own leg
-# gets none is refused (488), and the journal says why. The range ends on an
+# gets none is refused (488), the journal says why, and the calls holding the
+# ports go on. The range ends on an
 # even port, whose leg has its RTCP one port past the range, and the firewall
 # lets that in. When a phone's RTP source port changes during a call, as it
 # does behind a NAT that rebinds, strictRtp on (Asterisk's default) or seqno
@@ -181,6 +182,10 @@ in
             ben.wait_disconnected(after=1)
             assert disconnect_reason(ben) == "488", ben.log_text()[-2000:]
             wait_journal(pbx, cursor, "couldn't allocate a port for RTP instance", count=2)
+            # the calls that hold the ports go on
+            wait_hears(dan, [eve.tone])
+            wait_hears(eve, [dan.tone])
+            wait_hears(anna, [anna.tone])
 
         with subtest("RTP skips the SIP port in its range, and RTCP above the range's even end gets through"):
             ports = bound_ports()

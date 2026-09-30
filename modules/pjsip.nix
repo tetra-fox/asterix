@@ -449,17 +449,31 @@
         externalMediaAddress = mkOption {
           type = types.nullOr types.str;
           default = null;
-          description = "Public address put in SDP for peers outside `localNet` (NAT).";
+          description = ''
+            Public address put in SDP for peers outside `localNet` (NAT),
+            where `externalSignalingAddress` says Asterisk applies it.
+          '';
         };
         externalSignalingAddress = mkOption {
           type = types.nullOr types.str;
           default = null;
-          description = "Public address used in SIP headers for peers outside `localNet` (NAT).";
+          description = ''
+            Public address used in SIP headers for peers outside `localNet`
+            (NAT). Asterisk applies it, `externalSignalingPort` and
+            `externalMediaAddress` to what it sends over udp, and over tcp
+            and tls on IPv4. Over tcp and tls on IPv6 it applies them only to
+            endpoints whose `transport` names this transport, and over ws and
+            wss to none. Otherwise a PBX behind NAT sends its private address
+            in SIP headers and SDP.
+          '';
         };
         externalSignalingPort = mkOption {
           type = types.nullOr types.port;
           default = null;
-          description = "Public port used in SIP headers for peers outside `localNet`.";
+          description = ''
+            Public port used in SIP headers for peers outside `localNet`,
+            where `externalSignalingAddress` says Asterisk applies it.
+          '';
         };
         localNet = mkOption {
           type = types.listOf types.str;

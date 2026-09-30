@@ -95,6 +95,9 @@ in
 
     # a seeded sample of tests/campaign/options.nix, which options.py runs whole
     campaign-options = import ./campaign/sample.nix {inherit pkgs self;};
+    # a seeded sample of the generated configurations, which configs.py runs
+    # a campaign of
+    campaign-configs = import ./campaign/configs-sample.nix {inherit pkgs self;};
 
     # opening hours against their oracle at a seeded sample of instants in
     # every zone of tests/campaign/hours.nix, which hours.py sweep runs whole

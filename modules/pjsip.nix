@@ -758,6 +758,9 @@
       extraValues = {
         from_user = t.username;
         from_domain = t.fromDomain;
+        # only identify and the registration's line pick the trunk: anyone
+        # can put its name in From, and a trunk takes calls unauthenticated
+        identify_by = "ip";
       };
     }
     // optionalAttrs t.register {
@@ -1126,6 +1129,9 @@ in {
         SIP provider accounts: an endpoint with outbound authentication, an
         aor pointing at the provider, an identify section for the provider's
         addresses and, unless `register = false`, an outbound registration.
+        A request counts as the trunk's when it comes from an address of its
+        identify or carries its registration's `line`; the user in its From
+        header plays no part, as anyone can send any.
       '';
     };
   };

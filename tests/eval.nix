@@ -133,6 +133,7 @@ in {
           direct_media = no
           from_domain = sip.provider.example
           from_user = 5551000
+          identify_by = ip
           outbound_auth = provider-outbound
 
           [provider]

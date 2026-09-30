@@ -14,9 +14,10 @@
 # extensions changed at runtime, from the dialplan and the CLI, are back to
 # the configuration after `dialplan reload`, `module reload pbx_config.so` and
 # `core reload`, and after a deploy that changes extensions.conf, which also
-# removes a global the configuration no longer has. There is no `dialplan
-# save`; with writeprotect off it cannot write the rendered extensions.conf,
-# and what it saves elsewhere is not loaded.
+# removes a global the configuration no longer has; a deploy that leaves
+# extensions.conf alone, and a reload with nothing changed, keep them. There
+# is no `dialplan save`; with writeprotect off it cannot write the rendered
+# extensions.conf, and what it saves elsewhere is not loaded.
 {
   pkgs,
   self,
@@ -327,6 +328,8 @@ in
         globals.configuration = {
           services.asterisk.dialplan.globals.DEPLOYED = "yes";
         };
+        # a change that leaves extensions.conf alone
+        endpoint.configuration = changes."pjsip.conf".change;
         # with static, which the module sets, pbx_config offers dialplan save
         saveable.configuration = {
           services.asterisk.dialplan.general.writeprotect = false;
@@ -618,6 +621,21 @@ in
                 assert reloads(cursor) == ["module reload pbx_config.so"], reloads(cursor)
                 assert dialplan_globals() == {**nix_globals, **added}, (specialisation, dialplan_globals())
                 assert phones_dialplan() == nix_dialplan, (specialisation, phones_dialplan())
+
+        with subtest("a deploy that leaves extensions.conf alone, and a reload with nothing changed, keep what was changed at runtime"):
+            changed = change_at_runtime()
+            cursor = journal_cursor(pbx)
+            assert switch("endpoint") == ["reloading"]
+            assert reloads(cursor) == ["module reload res_pjsip.so"], reloads(cursor)
+            assert (dialplan_globals(), phones_dialplan()) == changed
+            cursor = journal_cursor(pbx)
+            pbx.succeed("systemctl reload asterisk.service")
+            assert reloads(cursor) == [], reloads(cursor)
+            assert (dialplan_globals(), phones_dialplan()) == changed
+            assert switch() == ["reloading"]
+            assert (dialplan_globals(), phones_dialplan()) == changed
+            asterisk(pbx, "dialplan reload")
+            assert (dialplan_globals(), phones_dialplan()) == (nix_globals, nix_dialplan)
 
         with subtest("dialplan save does not exist, and with writeprotect off it cannot write the rendered extensions.conf, and what it saves elsewhere is not loaded"):
             output = asterisk(pbx, "dialplan save")

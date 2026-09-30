@@ -31,7 +31,8 @@
         description = ''
           Name shown as caller ID, and the mailbox owner's name. At most 79
           bytes, which Asterisk keeps of a caller ID name; a letter outside
-          ASCII takes two to four.
+          ASCII takes two to four. With `voicemail`, no comma, which ends the
+          owner's name in voicemail.conf.
         '';
       };
       password = mkOption {
@@ -54,7 +55,7 @@
           };
         });
         default = null;
-        description = "Mailbox `<number>@default` for the extension.";
+        description = "Mailbox `<number>@default` for the extension, so the number is a mailbox number too, which cannot start with `*` or `#` (see {option}`services.asterisk.voicemail.mailboxes`).";
       };
       ringTime = mkOption {
         type = types.ints.positive;

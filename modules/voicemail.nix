@@ -361,6 +361,8 @@ in {
       description = ''
         Mailboxes, keyed by `mailbox` or `mailbox@context`. Leave messages with
         `VoiceMail(101@default)`, read them with `VoiceMailMain(101@default)`.
+        A mailbox number holds letters, digits and `_*#+-`, and starts with
+        neither `*` nor `#`.
       '';
     };
 

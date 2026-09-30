@@ -208,6 +208,9 @@ in
       touch $out
     '';
   }
+  # the pairwise rows of the environment matrix (tests/campaign/matrix.py)
+  // lib.listToAttrs (map (test: lib.nameValuePair "vm-${test.name}" (import ./vm/matrix.nix {inherit pkgs self sopsSecrets test;}))
+    (lib.importJSON ./campaign/matrix-pairwise.json).tests)
   // evalSuiteParts "eval" (import ./eval.nix {inherit pkgs self;})
   // evalSuiteParts "assertions" (import ./assertions.nix {inherit pkgs self;})
   // evalSuiteParts "pbx-eval" (import ./pbx/eval.nix {inherit pkgs self;})

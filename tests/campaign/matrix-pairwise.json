@@ -1,0 +1,566 @@
+{
+ "generator": "tests/campaign/matrix.py generate",
+ "seed": 1,
+ "strength": 2,
+ "levels": {
+  "package": [
+   "asterisk_20",
+   "asterisk_22",
+   "asterisk_23"
+  ],
+  "nixpkgs": [
+   "nixos-26.05"
+  ],
+  "ip": [
+   "ipv4",
+   "ipv6",
+   "dual"
+  ],
+  "networking": [
+   "scripted",
+   "networkd"
+  ],
+  "firewall": [
+   "iptables",
+   "nftables"
+  ],
+  "nat": [
+   "none",
+   "pbx",
+   "phones",
+   "both"
+  ],
+  "transport": [
+   "udp",
+   "tcp",
+   "tls",
+   "ws",
+   "wss"
+  ],
+  "codecs": [
+   "same",
+   "ulaw-alaw",
+   "ulaw-g722",
+   "g722-g722"
+  ],
+  "dtmf": [
+   "rfc4733",
+   "inband",
+   "info",
+   "auto",
+   "auto_info"
+  ],
+  "secrets": [
+   "sops-nix",
+   "files",
+   "credentials"
+  ]
+ },
+ "constraints": [
+  "inband DTMF only between G.711 phones: Asterisk hears keys sent as tones only in ulaw and alaw calls, and the evaluation warns about an inband endpoint that allows g722 (F135)"
+ ],
+ "known": {
+  "websocket": "the SDP Asterisk sends over WebSocket names its host's IPv4 address, private behind NAT and of the other family for IPv6 phones (F50), and its Contact is one the client cannot reach (F51)",
+  "tcp6-nat": "a pbx behind NAT leaves its external address out of what it sends over TCP and TLS on IPv6: res_pjsip_nat asks for the transport as if IPv4 (res/res_pjsip_nat.c:328, res/res_pjsip.c:653-671)"
+ },
+ "tests": [
+  {
+   "name": "matrix-1",
+   "nixpkgs": "nixos-26.05",
+   "pbxs": [
+    {
+     "name": "pbx1",
+     "package": "asterisk_20",
+     "ip": "ipv4",
+     "networking": "networkd",
+     "firewall": "iptables",
+     "behind-nat": true
+    },
+    {
+     "name": "pbx2",
+     "package": "asterisk_23",
+     "ip": "dual",
+     "networking": "scripted",
+     "firewall": "nftables",
+     "behind-nat": false
+    },
+    {
+     "name": "pbx3",
+     "package": "asterisk_22",
+     "ip": "ipv6",
+     "networking": "scripted",
+     "firewall": "nftables",
+     "behind-nat": true
+    },
+    {
+     "name": "pbx4",
+     "package": "asterisk_22",
+     "ip": "ipv4",
+     "networking": "networkd",
+     "firewall": "nftables",
+     "behind-nat": false
+    },
+    {
+     "name": "pbx5",
+     "package": "asterisk_23",
+     "ip": "ipv6",
+     "networking": "networkd",
+     "firewall": "iptables",
+     "behind-nat": false
+    },
+    {
+     "name": "pbx6",
+     "package": "asterisk_22",
+     "ip": "dual",
+     "networking": "networkd",
+     "firewall": "iptables",
+     "behind-nat": true
+    },
+    {
+     "name": "pbx7",
+     "package": "asterisk_20",
+     "ip": "ipv6",
+     "networking": "scripted",
+     "firewall": "iptables",
+     "behind-nat": true
+    },
+    {
+     "name": "pbx8",
+     "package": "asterisk_20",
+     "ip": "ipv4",
+     "networking": "scripted",
+     "firewall": "nftables",
+     "behind-nat": false
+    },
+    {
+     "name": "pbx9",
+     "package": "asterisk_20",
+     "ip": "dual",
+     "networking": "networkd",
+     "firewall": "nftables",
+     "behind-nat": true
+    },
+    {
+     "name": "pbx10",
+     "package": "asterisk_23",
+     "ip": "ipv4",
+     "networking": "scripted",
+     "firewall": "iptables",
+     "behind-nat": true
+    }
+   ],
+   "rows": [
+    {
+     "pbx": "pbx1",
+     "nat": "both",
+     "transport": "tcp",
+     "codecs": "ulaw-alaw",
+     "dtmf": "info",
+     "secrets": "sops-nix",
+     "known": null,
+     "id": "p001"
+    },
+    {
+     "pbx": "pbx1",
+     "nat": "both",
+     "transport": "tls",
+     "codecs": "g722-g722",
+     "dtmf": "rfc4733",
+     "secrets": "sops-nix",
+     "known": null,
+     "id": "p002"
+    },
+    {
+     "pbx": "pbx1",
+     "nat": "pbx",
+     "transport": "tcp",
+     "codecs": "same",
+     "dtmf": "inband",
+     "secrets": "credentials",
+     "known": null,
+     "id": "p003"
+    },
+    {
+     "pbx": "pbx2",
+     "nat": "phones",
+     "transport": "udp",
+     "codecs": "same",
+     "dtmf": "rfc4733",
+     "secrets": "credentials",
+     "known": null,
+     "id": "p004"
+    },
+    {
+     "pbx": "pbx2",
+     "nat": "none",
+     "transport": "tls",
+     "codecs": "ulaw-alaw",
+     "dtmf": "info",
+     "secrets": "credentials",
+     "known": null,
+     "id": "p005"
+    },
+    {
+     "pbx": "pbx2",
+     "nat": "phones",
+     "transport": "tcp",
+     "codecs": "ulaw-g722",
+     "dtmf": "auto",
+     "secrets": "sops-nix",
+     "known": null,
+     "id": "p006"
+    },
+    {
+     "pbx": "pbx2",
+     "nat": "phones",
+     "transport": "udp",
+     "codecs": "same",
+     "dtmf": "inband",
+     "secrets": "sops-nix",
+     "known": null,
+     "id": "p007"
+    },
+    {
+     "pbx": "pbx2",
+     "nat": "none",
+     "transport": "udp",
+     "codecs": "ulaw-alaw",
+     "dtmf": "auto_info",
+     "secrets": "sops-nix",
+     "known": null,
+     "id": "p008"
+    },
+    {
+     "pbx": "pbx3",
+     "nat": "pbx",
+     "transport": "tls",
+     "codecs": "ulaw-g722",
+     "dtmf": "auto_info",
+     "secrets": "files",
+     "known": "tcp6-nat",
+     "id": "p009"
+    },
+    {
+     "pbx": "pbx3",
+     "nat": "pbx",
+     "transport": "udp",
+     "codecs": "ulaw-alaw",
+     "dtmf": "auto",
+     "secrets": "sops-nix",
+     "known": null,
+     "id": "p010"
+    },
+    {
+     "pbx": "pbx3",
+     "nat": "both",
+     "transport": "udp",
+     "codecs": "same",
+     "dtmf": "auto_info",
+     "secrets": "credentials",
+     "known": null,
+     "id": "p011"
+    },
+    {
+     "pbx": "pbx3",
+     "nat": "pbx",
+     "transport": "udp",
+     "codecs": "ulaw-g722",
+     "dtmf": "rfc4733",
+     "secrets": "files",
+     "known": null,
+     "id": "p012"
+    },
+    {
+     "pbx": "pbx4",
+     "nat": "none",
+     "transport": "ws",
+     "codecs": "g722-g722",
+     "dtmf": "auto",
+     "secrets": "files",
+     "known": "websocket",
+     "id": "p013"
+    },
+    {
+     "pbx": "pbx4",
+     "nat": "phones",
+     "transport": "tls",
+     "codecs": "same",
+     "dtmf": "auto",
+     "secrets": "sops-nix",
+     "known": null,
+     "id": "p014"
+    },
+    {
+     "pbx": "pbx4",
+     "nat": "none",
+     "transport": "tcp",
+     "codecs": "ulaw-alaw",
+     "dtmf": "inband",
+     "secrets": "files",
+     "known": null,
+     "id": "p015"
+    },
+    {
+     "pbx": "pbx4",
+     "nat": "none",
+     "transport": "tls",
+     "codecs": "g722-g722",
+     "dtmf": "auto",
+     "secrets": "files",
+     "known": null,
+     "id": "p016"
+    },
+    {
+     "pbx": "pbx4",
+     "nat": "none",
+     "transport": "udp",
+     "codecs": "same",
+     "dtmf": "rfc4733",
+     "secrets": "credentials",
+     "known": null,
+     "id": "p017"
+    },
+    {
+     "pbx": "pbx5",
+     "nat": "none",
+     "transport": "wss",
+     "codecs": "ulaw-g722",
+     "dtmf": "rfc4733",
+     "secrets": "sops-nix",
+     "known": "websocket",
+     "id": "p018"
+    },
+    {
+     "pbx": "pbx5",
+     "nat": "phones",
+     "transport": "udp",
+     "codecs": "g722-g722",
+     "dtmf": "auto_info",
+     "secrets": "sops-nix",
+     "known": null,
+     "id": "p019"
+    },
+    {
+     "pbx": "pbx5",
+     "nat": "none",
+     "transport": "tls",
+     "codecs": "same",
+     "dtmf": "inband",
+     "secrets": "sops-nix",
+     "known": null,
+     "id": "p020"
+    },
+    {
+     "pbx": "pbx5",
+     "nat": "phones",
+     "transport": "ws",
+     "codecs": "same",
+     "dtmf": "info",
+     "secrets": "files",
+     "known": "websocket",
+     "id": "p021"
+    },
+    {
+     "pbx": "pbx5",
+     "nat": "none",
+     "transport": "tcp",
+     "codecs": "g722-g722",
+     "dtmf": "auto_info",
+     "secrets": "files",
+     "known": null,
+     "id": "p022"
+    },
+    {
+     "pbx": "pbx5",
+     "nat": "phones",
+     "transport": "tcp",
+     "codecs": "same",
+     "dtmf": "rfc4733",
+     "secrets": "files",
+     "known": null,
+     "id": "p023"
+    },
+    {
+     "pbx": "pbx5",
+     "nat": "phones",
+     "transport": "tls",
+     "codecs": "same",
+     "dtmf": "info",
+     "secrets": "files",
+     "known": null,
+     "id": "p024"
+    },
+    {
+     "pbx": "pbx6",
+     "nat": "pbx",
+     "transport": "tcp",
+     "codecs": "same",
+     "dtmf": "inband",
+     "secrets": "credentials",
+     "known": "tcp6-nat",
+     "id": "p025"
+    },
+    {
+     "pbx": "pbx6",
+     "nat": "both",
+     "transport": "udp",
+     "codecs": "ulaw-g722",
+     "dtmf": "info",
+     "secrets": "files",
+     "known": null,
+     "id": "p026"
+    },
+    {
+     "pbx": "pbx6",
+     "nat": "both",
+     "transport": "wss",
+     "codecs": "same",
+     "dtmf": "rfc4733",
+     "secrets": "credentials",
+     "known": "websocket",
+     "id": "p027"
+    },
+    {
+     "pbx": "pbx6",
+     "nat": "both",
+     "transport": "ws",
+     "codecs": "ulaw-g722",
+     "dtmf": "rfc4733",
+     "secrets": "files",
+     "known": "websocket",
+     "id": "p028"
+    },
+    {
+     "pbx": "pbx7",
+     "nat": "both",
+     "transport": "wss",
+     "codecs": "g722-g722",
+     "dtmf": "auto",
+     "secrets": "credentials",
+     "known": "websocket",
+     "id": "p029"
+    },
+    {
+     "pbx": "pbx7",
+     "nat": "both",
+     "transport": "udp",
+     "codecs": "g722-g722",
+     "dtmf": "auto",
+     "secrets": "credentials",
+     "known": null,
+     "id": "p030"
+    },
+    {
+     "pbx": "pbx8",
+     "nat": "phones",
+     "transport": "wss",
+     "codecs": "ulaw-alaw",
+     "dtmf": "inband",
+     "secrets": "files",
+     "known": "websocket",
+     "id": "p031"
+    },
+    {
+     "pbx": "pbx8",
+     "nat": "none",
+     "transport": "udp",
+     "codecs": "ulaw-g722",
+     "dtmf": "auto_info",
+     "secrets": "credentials",
+     "known": null,
+     "id": "p032"
+    },
+    {
+     "pbx": "pbx8",
+     "nat": "none",
+     "transport": "wss",
+     "codecs": "ulaw-alaw",
+     "dtmf": "auto_info",
+     "secrets": "credentials",
+     "known": "websocket",
+     "id": "p033"
+    },
+    {
+     "pbx": "pbx8",
+     "nat": "phones",
+     "transport": "udp",
+     "codecs": "ulaw-alaw",
+     "dtmf": "rfc4733",
+     "secrets": "credentials",
+     "known": null,
+     "id": "p034"
+    },
+    {
+     "pbx": "pbx9",
+     "nat": "both",
+     "transport": "ws",
+     "codecs": "same",
+     "dtmf": "auto_info",
+     "secrets": "sops-nix",
+     "known": "websocket",
+     "id": "p035"
+    },
+    {
+     "pbx": "pbx9",
+     "nat": "pbx",
+     "transport": "wss",
+     "codecs": "g722-g722",
+     "dtmf": "info",
+     "secrets": "sops-nix",
+     "known": "websocket",
+     "id": "p036"
+    },
+    {
+     "pbx": "pbx9",
+     "nat": "pbx",
+     "transport": "udp",
+     "codecs": "g722-g722",
+     "dtmf": "info",
+     "secrets": "files",
+     "known": null,
+     "id": "p037"
+    },
+    {
+     "pbx": "pbx10",
+     "nat": "pbx",
+     "transport": "ws",
+     "codecs": "ulaw-alaw",
+     "dtmf": "rfc4733",
+     "secrets": "files",
+     "known": "websocket",
+     "id": "p038"
+    },
+    {
+     "pbx": "pbx10",
+     "nat": "both",
+     "transport": "ws",
+     "codecs": "same",
+     "dtmf": "inband",
+     "secrets": "credentials",
+     "known": "websocket",
+     "id": "p039"
+    },
+    {
+     "pbx": "pbx10",
+     "nat": "pbx",
+     "transport": "tls",
+     "codecs": "ulaw-g722",
+     "dtmf": "auto_info",
+     "secrets": "files",
+     "known": null,
+     "id": "p040"
+    },
+    {
+     "pbx": "pbx10",
+     "nat": "both",
+     "transport": "tcp",
+     "codecs": "same",
+     "dtmf": "inband",
+     "secrets": "credentials",
+     "known": null,
+     "id": "p041"
+    }
+   ]
+  }
+ ]
+}

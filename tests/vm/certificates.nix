@@ -1,9 +1,12 @@
 # Certificates for the TLS tests, made when a test is built: a test CA,
-# certificates it signs for the pbx node (192.168.1.1, 2001:db8:1::1) and a
-# phones node (192.168.1.2), and certificates a TLS client must refuse for
-# that node: expired, for another host and self-signed. Only `expired`
-# expires.
-{pkgs}:
+# certificates it signs for the pbx node (192.168.1.1, 2001:db8:1::1, or the
+# subject alternative names `pbx` gives) and a phones node (192.168.1.2), and
+# certificates a TLS client must refuse for that node: expired, for another
+# host and self-signed. Only `expired` expires.
+{
+  pkgs,
+  pbx ? "DNS:pbx,IP:192.168.1.1,IP:2001:db8:1::1",
+}:
 pkgs.runCommand "asterisk-test-certificates" {nativeBuildInputs = [pkgs.openssl];} ''
   mkdir $out
   cd $out
@@ -23,7 +26,7 @@ pkgs.runCommand "asterisk-test-certificates" {nativeBuildInputs = [pkgs.openssl]
 
   key ca
   openssl req -x509 -key ca.key -subj /CN=asterisk-test-ca "''${forever[@]}" -out ca.pem
-  sign pbx DNS:pbx,IP:192.168.1.1,IP:2001:db8:1::1 "''${forever[@]}"
+  sign pbx ${pbx} "''${forever[@]}"
   sign phone IP:192.168.1.2 "''${forever[@]}"
   sign expired IP:192.168.1.2 -not_before 20000101000000Z -not_after 20000102000000Z
   sign wrong-host DNS:elsewhere,IP:192.168.1.99 "''${forever[@]}"

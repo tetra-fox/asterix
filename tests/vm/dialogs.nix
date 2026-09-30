@@ -210,8 +210,14 @@ in
 
         def firsts(messages):
             """The messages without retransmissions, which repeat a message as
-            it was."""
-            return [m for i, m in enumerate(messages) if not any(earlier["text"] == m["text"] for earlier in messages[:i])]
+            it was. Asterisk answers each copy of an INVITE a phone sent again
+            with a challenge of its own, which differs only in its nonce and
+            opaque."""
+
+            def plain(text):
+                return re.sub(r'(nonce|opaque)="[^"]*"', r'\1=""', text)
+
+            return [m for i, m in enumerate(messages) if not any(plain(earlier["text"]) == plain(m["text"]) for earlier in messages[:i])]
 
         def dialogue(messages, name):
             """Each message of a dialog as (who sent it: `name` or pbx, the
@@ -324,17 +330,22 @@ in
         with subtest("hold with inactive: the pbx answers inactive and plays music to the other party, and nothing to the phone that holds, until the call is taken back"):
             held = phone["502"]
             mark = len(sip_messages(pbx))
-            sipp_start(phones, "hold-inactive", *SIPP, "-p", "${toString sippPort}", "-mp", "6000", "-rtp_echo", "-s", "502", "-au", "sipp", "-ap", "pw-sipp", PBX_IP)
-            wait_bridged(pbx, "sipp", "502")
+            # the pbx answers late while SIPp calls and changes the call, and
+            # some answers come after SIPp went on
+            with stalled(pbx):
+                sipp_start(phones, "hold-inactive", *SIPP, "-p", "${toString sippPort}", "-mp", "6000", "-rtp_echo", "-s", "502", "-au", "sipp", "-ap", "pw-sipp", PBX_IP)
+                wait_bridged(pbx, "sipp", "502")
             # SIPp echoes what it gets
             wait_hears(held, [held.tone])
             cursor = journal_cursor(pbx)
             # each NOTIFY lets the scenario send its next re-INVITE
-            asterisk(pbx, f"pjsip send notify clear-mwi channel {channel('sipp')}")
-            wait_journal(pbx, cursor, "Started music on hold, class 'default', on channel 'PJSIP/502-")
+            with stalled(pbx):
+                asterisk(pbx, f"pjsip send notify clear-mwi channel {channel('sipp')}")
+                wait_journal(pbx, cursor, "Started music on hold, class 'default', on channel 'PJSIP/502-")
             wait_hears(held, [HOLD_TONE])
-            asterisk(pbx, f"pjsip send notify clear-mwi channel {channel('sipp')}")
-            wait_journal(pbx, cursor, "Stopped music on hold on PJSIP/502-")
+            with stalled(pbx):
+                asterisk(pbx, f"pjsip send notify clear-mwi channel {channel('sipp')}")
+                wait_journal(pbx, cursor, "Stopped music on hold on PJSIP/502-")
             wait_hears(held, [held.tone])
             wait_bridged(pbx, "sipp", "502")
             ended = held.disconnects()
@@ -475,7 +486,9 @@ in
             callee = phone["502"]
             mark = len(sip_messages(pbx))
             ended = callee.disconnects()
-            sipp(phones, "cancel-uac", PBX_IP, *SIPP, "-p", "${toString sippPort}", "-mp", "6000", "-s", "502", "-au", "sipp", "-ap", "pw-sipp")
+            # the pbx answers late, and some answers come after SIPp went on
+            with stalled(pbx):
+                sipp(phones, "cancel-uac", PBX_IP, *SIPP, "-p", "${toString sippPort}", "-mp", "6000", "-s", "502", "-au", "sipp", "-ap", "pw-sipp")
             callee.wait_disconnected(after=ended)
             wait_ended("sipp", "502")
             crossing = leg(mark, SIPP_UAC)
@@ -497,15 +510,18 @@ in
             caller.call("590")
             wait_bridged(pbx, "503", "uas")
             wait_hears(caller, [caller.tone])
-            asterisk(pbx, f"dialplan set chanvar {channel('uas')} PJSIP_SEND_SESSION_REFRESH() invite")
-            # until the pbx answered SIPp's retry
-            deadline = time.time() + 30
-            while True:
-                crossing = leg(mark, SIPP_UAS)
-                if [m for m in sent(crossing, PBX, "SIP/2.0 200") if cseq(m) == "INVITE"]:
-                    break
-                assert time.time() < deadline, summary(crossing)
-                time.sleep(1)
+            # the pbx answers late while the re-INVITEs cross, and some
+            # answers come after SIPp went on
+            with stalled(pbx):
+                asterisk(pbx, f"dialplan set chanvar {channel('uas')} PJSIP_SEND_SESSION_REFRESH() invite")
+                # until the pbx answered SIPp's retry
+                deadline = time.time() + 30
+                while True:
+                    crossing = leg(mark, SIPP_UAS)
+                    if [m for m in sent(crossing, PBX, "SIP/2.0 200") if cseq(m) == "INVITE"]:
+                        break
+                    assert time.time() < deadline, summary(crossing)
+                    time.sleep(1)
             # the pbx owns the Call-ID, so it would retry within 4.1 s of its
             # 491 (res_pjsip_session.c:4324-4328)
             time.sleep(4.5)

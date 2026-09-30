@@ -472,7 +472,9 @@ in
             # SIPp calls as 203, and writes the numbers as given
             for phone, number in [(hash_phone, "#1"), (star_phone, "%2A2")]:
                 before = phone.requests("INVITE")
-                sipp(phones, "ring", "10.2.0.10", "-s", number, "-key", "caller", "203", "-au", "203", "-ap", "pw-203", "-i", "10.2.0.21", "-p", "5080")
+                # the pbx answers late, and some answers come after SIPp went on
+                with stalled(pbx):
+                    sipp(phones, "ring", "10.2.0.10", "-s", number, "-key", "caller", "203", "-au", "203", "-ap", "pw-203", "-i", "10.2.0.21", "-p", "5080")
                 phone.wait_request("INVITE", after=before)
                 wait_idle(pbx)
             assert request_uris(mark, "10.2.0.21:5080") == {"sip:#1@10.2.0.10:5060", "sip:%2A2@10.2.0.10:5060"}, request_uris(mark, "10.2.0.21:5080")

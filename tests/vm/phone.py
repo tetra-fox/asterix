@@ -1,5 +1,6 @@
 # Helpers for driving `sip-phone` (tests/vm/phone.nix), `baresip-phone`
 # (tests/vm/baresip.nix) and SIPp (tests/vm/sipp.nix) from test scripts.
+import contextlib
 import itertools
 import json
 import re
@@ -294,6 +295,17 @@ def sipp_wait(machine, scenario, timeout=90):
     machine.wait_until_succeeds(f"test -f {status}", timeout=timeout)
     code = machine.succeed(f"cat {status}").strip()
     assert code == "0", f"SIPp {scenario} exited with {code}: " + machine.succeed(f"journalctl -u sipp-{scenario}")
+
+
+@contextlib.contextmanager
+def stalled(machine):
+    """Asterisk on `machine` stops for 0.7 s every 1.5 s while the block
+    runs, so it answers late: a client sends its request again, and the
+    answers to both copies can come after the client went on."""
+    pid = machine.succeed("systemctl show -P MainPID asterisk.service").strip()
+    machine.succeed(f"systemd-run --unit=stall --collect -E PATH sh -c 'while kill -STOP {pid}; do sleep 0.7; kill -CONT {pid}; sleep 0.8; done'")
+    yield
+    machine.succeed(f"systemctl stop stall && kill -CONT {pid}")
 
 
 def pjsua_tls(certificates, certificate=None):

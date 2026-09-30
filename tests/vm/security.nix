@@ -337,13 +337,10 @@ in
               time.sleep(10)
               return int(pbx.succeed(f"asterisk -rx 'malloc trim' > /dev/null && grep VmRSS /proc/{pid}/status").split()[1])
 
-          # the first calls grow Asterisk's caches to what it keeps. Asterisk
-          # stops for 0.7 s every 1.5 s meanwhile, so SIPp sends INVITEs again
-          # and the answers to both copies come late, some after SIPp sent its
-          # next INVITE.
-          pbx.succeed(f"systemd-run --unit=stall --collect -E PATH sh -c 'while kill -STOP {pid}; do sleep 0.7; kill -CONT {pid}; sleep 0.8; done'")
-          attack()
-          pbx.succeed(f"systemctl stop stall && kill -CONT {pid}")
+          # the first calls grow Asterisk's caches to what it keeps, answered
+          # late, some after SIPp sent its next INVITE
+          with stalled(pbx):
+              attack()
           warm = resident()
           attack()
           attack()

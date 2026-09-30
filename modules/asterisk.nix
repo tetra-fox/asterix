@@ -658,10 +658,12 @@
     (
       a:
         isAddress a
+        # the kernel takes all of 127.0.0.0/8 as local through lo, which has
+        # only 127.0.0.1 assigned, so the others never show up as addresses
+        && !(lib.hasPrefix "127." a)
         && !(builtins.elem a [
           "0.0.0.0"
           "::"
-          "127.0.0.1"
           "::1"
         ])
     )

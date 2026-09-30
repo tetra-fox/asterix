@@ -155,6 +155,8 @@ in
 
     vm-dtmf = import ./vm/dtmf.nix {inherit pkgs self;};
 
+    vm-upgrade = import ./vm/upgrade.nix {inherit pkgs self;};
+
     # builds the server and runs its unit tests
     provisioning-server = self.packages.${pkgs.stdenv.hostPlatform.system}.provisioning-server;
 

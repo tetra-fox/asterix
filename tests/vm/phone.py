@@ -265,13 +265,35 @@ class Baresip:
         self.command("hangup")
 
 
+def sipp_command(scenario, *args):
+    return (
+        f"sipp -sf /etc/sipp/{scenario}.xml -m 1 -nostdin -timeout 60 -timeout_error "
+        f"-trace_msg -message_file /tmp/sipp-{scenario}.log {shlex.join(args)}"
+    )
+
+
 def sipp(machine, scenario, remote, *args):
     """Plays the SIPp scenario tests/vm/sipp/`scenario`.xml once against
     `remote`, and fails when it does."""
+    machine.succeed(sipp_command(scenario, *args, remote))
+
+
+def sipp_start(machine, scenario, *args):
+    """Plays the SIPp scenario tests/vm/sipp/`scenario`.xml once in the
+    background, for one that waits for a call or for the test; sipp_wait()
+    fails when it did."""
+    status = f"/tmp/sipp-{scenario}.status"
     machine.succeed(
-        f"sipp -sf /etc/sipp/{scenario}.xml -m 1 -nostdin -timeout 60 -timeout_error "
-        f"-trace_msg -message_file /tmp/sipp-{scenario}.log {shlex.join(args)} {remote}"
+        f"rm -f {status} && systemd-run --unit=sipp-{scenario} --collect -E PATH sh -c "
+        + shlex.quote(f"{sipp_command(scenario, *args)}; echo $? > {status}")
     )
+
+
+def sipp_wait(machine, scenario, timeout=90):
+    status = f"/tmp/sipp-{scenario}.status"
+    machine.wait_until_succeeds(f"test -f {status}", timeout=timeout)
+    code = machine.succeed(f"cat {status}").strip()
+    assert code == "0", f"SIPp {scenario} exited with {code}: " + machine.succeed(f"journalctl -u sipp-{scenario}")
 
 
 def pjsua_tls(certificates, certificate=None):
@@ -441,6 +463,19 @@ def within(seconds, trigger, times):
     `seconds` after it."""
     later = [moment - trigger for moment in times if moment >= trigger]
     assert later and min(later) <= seconds, f"nothing within {seconds} s after {trigger}: {times}"
+
+
+def rtp_packets(machine, interface="eth1"):
+    """RTP packets among the UDP datagrams of udp_datagrams(): the capture
+    time, source and destination, SSRC and sequence number."""
+    packets = []
+    for when, source, destination, payload in udp_datagrams(machine, interface):
+        # version 2, and not RTCP, whose packet types 200 to 204 fill the
+        # byte that holds the marker bit and payload type in RTP
+        if len(payload) >= 12 and payload[0] >> 6 == 2 and not 200 <= payload[1] <= 204:
+            sequence, _, ssrc = struct.unpack_from("!HII", payload, 2)
+            packets.append({"time": when, "source": source, "destination": destination, "ssrc": ssrc, "sequence": sequence})
+    return packets
 
 
 def netem(machine, interface, *settings):

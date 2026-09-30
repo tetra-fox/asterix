@@ -115,6 +115,8 @@ in
 
     vm-transfers = import ./vm/transfers.nix {inherit pkgs self;};
 
+    vm-dialogs = import ./vm/dialogs.nix {inherit pkgs self;};
+
     vm-conference = import ./vm/conference.nix {inherit pkgs self;};
 
     vm-recordings = import ./vm/recordings.nix {inherit pkgs self;};

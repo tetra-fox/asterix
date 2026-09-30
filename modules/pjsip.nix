@@ -214,7 +214,12 @@
       type = types.nullOr types.str;
       default = null;
       example = ''"Kitchen" <101>'';
-      description = "Caller ID presented for calls from this endpoint.";
+      description = ''
+        Caller ID presented for calls from this endpoint, as Asterisk reads
+        one: `"name" <number>`, a number alone or a name alone. In the name,
+        a backslash takes the character after it as it is, so `\\` is one
+        backslash.
+      '';
     };
     dtmfMode = mkOption {
       type = types.nullOr (

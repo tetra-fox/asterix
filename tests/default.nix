@@ -151,6 +151,8 @@ in
 
     vm-transports = import ./vm/transports.nix {inherit pkgs self;};
 
+    vm-security = import ./vm/security.nix {inherit pkgs self;};
+
     vm-firewall = import ./vm/firewall.nix {inherit pkgs self;};
 
     vm-tenants = import ./vm/tenants.nix {inherit pkgs self;};

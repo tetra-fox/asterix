@@ -99,6 +99,9 @@ in
                   then "0"
                   else "1"
                 }";
+                # the pbx restarts between configurations: a keepalive it
+                # misses then would keep calls away from it for a minute
+                aor.qualifyFrequency = 0;
               })
             accounts;
           };
@@ -128,6 +131,8 @@ in
               password = "pw-${n}";
               context = "ringing";
               matchProviderHost = false;
+              # as the provider's
+              qualifyFrequency = 0;
               registration = {
                 contactUser = n;
                 retryInterval = 2;

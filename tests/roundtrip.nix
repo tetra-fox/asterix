@@ -1,7 +1,8 @@
 # P7: a string written through the options reads back from Asterisk
 # unchanged, through the CLI and, in the dialplan, as the data of a step.
 # The value has every character that means something in a configuration
-# file, the dialplan or an argument list.
+# file, the dialplan or an argument list. Where the dialplan options say
+# Asterisk fills in variables as it loads the dialplan, it does.
 {
   pkgs,
   self,
@@ -39,8 +40,16 @@
             };
           };
           dialplan = {
-            globals.ROUNDTRIP = value;
-            contexts.roundtrip.extensions."1" = ["NoOp(${value})"];
+            globals = {
+              ROUNDTRIP = value;
+              LOADED_A = "\${LOADED_B}a";
+              LOADED_B = "b";
+              LOADED_C = "\${LOADED_B}c";
+            };
+            contexts.roundtrip = {
+              extensions."1" = ["NoOp(${value})"];
+              hints."2" = "PJSIP/\${LOADED_B}";
+            };
           };
           queues.queues.roundtrip.members = [
             {
@@ -80,6 +89,19 @@
     {
       command = "dialplan show roundtrip";
       text = "1. NoOp(${value}) ";
+    }
+    # with the globals written before them, in the order of their names
+    {
+      command = "dialplan show globals";
+      text = "   LOADED_A=a\n";
+    }
+    {
+      command = "dialplan show globals";
+      text = "   LOADED_C=bc\n";
+    }
+    {
+      command = "dialplan show roundtrip";
+      text = "hint: PJSIP/b ";
     }
     # the name column is as wide as the longest parameter name
     {

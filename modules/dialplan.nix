@@ -386,7 +386,12 @@ in {
           OPERATOR = "101";
         }
       '';
-      description = "Global variables (`[globals]`), readable as `\${NAME}` in the dialplan.";
+      description = ''
+        Global variables (`[globals]`), readable as `''${NAME}` in the
+        dialplan. Asterisk fills in `''${...}` and `$[...]` in a value once,
+        when it loads the dialplan, with the globals written before it, in
+        the order of their names.
+      '';
     };
 
     contexts = mkOption {
@@ -404,7 +409,12 @@ in {
           phones.includes = [ "internal" ];
         }
       '';
-      description = "Dialplan contexts.";
+      description = ''
+        Dialplan contexts. Asterisk fills in `''${...}` in extension names,
+        hints, includes, ignore patterns and switches once, when it loads the
+        dialplan, with the global variables, and in steps each time a call
+        runs them.
+      '';
     };
 
     knownContexts = mkOption {

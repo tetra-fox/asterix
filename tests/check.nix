@@ -321,14 +321,15 @@
     };
   };
 
-  # each feature alone and with each other one
+  # each feature alone, with each other one, and all at once
   featureCases = let
     names = builtins.attrNames features;
   in
     lib.mapAttrs' (name: lib.nameValuePair "feature-${name}") features
     // lib.listToAttrs (lib.concatLists (lib.imap0 (i: a:
       map (b: lib.nameValuePair "features-${a}-${b}" {imports = [features.${a} features.${b}];}) (lib.drop (i + 1) names))
-    names));
+    names))
+    // {features-all.imports = builtins.attrValues features;};
 
   # IPv4 addresses become loopback ones, which need no namespace
   passingWithoutUserNamespaces = {

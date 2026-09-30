@@ -126,7 +126,11 @@
         example = {
           "101" = "PJSIP/101";
         };
-        description = "Device state hints (`exten => 101,hint,PJSIP/101`) for BLF and presence.";
+        description = ''
+          Device state hints (`exten => 101,hint,PJSIP/101`) for BLF and
+          presence. A hint may only have a `(` after a variable, as in
+          `PJSIP/''${GLOBAL(PHONE)}`, since Asterisk cuts it there otherwise.
+        '';
       };
       extraConfig = mkOption {
         type = types.lines;
@@ -320,6 +324,22 @@
     )
     dcfg.contexts
   );
+  # pbx_config reads a hint like a step, App(arguments), and keeps what comes
+  # before its first ( unless that part has a variable or expression
+  # (pbx/pbx_config.c:1859-1866)
+  cutHints = lib.concatLists (
+    mapAttrsToList (
+      name: context:
+        map (ext: "${name}/${ext}") (
+          filter (ext: let
+            before = builtins.head (lib.splitString "(" context.hints.${ext});
+          in
+            lib.hasInfix "(" context.hints.${ext} && !(lib.hasInfix "\${" before || lib.hasInfix "$[" before))
+          (attrNames context.hints)
+        )
+    )
+    dcfg.contexts
+  );
   # Goto() reads a label that is a whole number as a priority and one that
   # starts with + or - as a jump from the current step (main/pbx.c
   # pbx_parse_location), and pbx_config ends a label at its first ) and the
@@ -466,6 +486,10 @@ in {
       {
         assertion = badExtensionNames == [];
         message = "services.asterisk.dialplan: invalid extension name(s) (no commas, semicolons or spaces): ${concatStringsSep ", " badExtensionNames}.";
+      }
+      {
+        assertion = cutHints == [];
+        message = "services.asterisk.dialplan: hints that Asterisk cuts at their first ( unless a variable comes before it: ${concatStringsSep ", " cutHints}.";
       }
       {
         assertion = reservedContexts == [];

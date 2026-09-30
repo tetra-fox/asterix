@@ -716,6 +716,17 @@
       assertion = "invalid extension name(s)";
     };
 
+    # pbx_config reads a hint like a step, App(arguments), and keeps what
+    # comes before its first ( unless a variable comes first
+    # (pbx/pbx_config.c:1859-1866)
+    hintWithParenthesis = {
+      module.services.asterisk.dialplan.contexts.internal.hints = {
+        "101" = "Custom:front(1)";
+        "102" = "PJSIP/\${GLOBAL(PHONE)}";
+      };
+      assertions = ["services.asterisk.dialplan: hints that Asterisk cuts at their first ( unless a variable comes before it: internal/101."];
+    };
+
     # manager.c skips a section called general in any case, which it reads as
     # its settings, so no such user can log in
     # their ports are only opened together with services.asterisk.openFirewall

@@ -443,10 +443,11 @@ in {
           exten => leg,1,GotoIf($["''${CHANNEL(channeltype)}" != "Local"]?done)
            same => n,Set(CHANNEL(hangup_handler_push)=pbx-confirm,drop,1)
            same => n(done),Return()
-          exten => s,1,Read(PBX_CONFIRM,followme/no-recording&followme/options,1,,3,5)
-           same => n,GotoIf($["''${PBX_CONFIRM}" = "1"]?accept)
-           same => n,Set(GOSUB_RESULT=CONTINUE)
-           same => n(accept),Return()'';
+          exten => s,1,Set(GOSUB_RESULT=CONTINUE)
+           same => n,Read(PBX_CONFIRM,followme/no-recording&followme/options,1,,3,5)
+           same => n,GotoIf($["''${PBX_CONFIRM}" != "1"]?reject)
+           same => n,Set(GOSUB_RESULT=)
+           same => n(reject),Return()'';
       };
     };
 

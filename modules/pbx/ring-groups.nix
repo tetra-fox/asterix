@@ -158,9 +158,10 @@ in {
         pbx-confirm = {
           comment = mkDefault "from pbx.ringGroups: confirmation of external members";
           extensions = {
-            # a Dial U() routine on the external leg: GOSUB_RESULT=CONTINUE
-            # hangs that leg up, and the Local channel ends with it
+            # a Dial U() routine on the external leg, which Dial hangs up, and
+            # the Local channel with it, unless 1 was pressed (apps/app_dial.c)
             s = [
+              (pbxLib.app "Set" ["GOSUB_RESULT=CONTINUE"])
               (pbxLib.app "Read" [
                 "PBX_CONFIRM"
                 "followme/no-recording&followme/options"
@@ -169,12 +170,12 @@ in {
                 3
                 5
               ])
-              (pbxLib.app "GotoIf" [''$["''${PBX_CONFIRM}" = "1"]?accept''])
-              (pbxLib.app "Set" ["GOSUB_RESULT=CONTINUE"])
+              (pbxLib.app "GotoIf" [''$["''${PBX_CONFIRM}" != "1"]?reject''])
+              (pbxLib.app "Set" ["GOSUB_RESULT="])
               {
                 app = "Return";
                 args = [];
-                label = "accept";
+                label = "reject";
               }
             ];
             # Dial finishes `s` even after the call is gone, so the ;1 side of

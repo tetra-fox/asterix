@@ -328,17 +328,22 @@ in
           def attack():
               sipp(intruder, "malformed", "10.3.0.10", "-i", "10.3.0.67", "-s", "201", "-m", "300", "-l", "50", "-r", "100", "-timeout", "300")
               sipp(intruder, "malformed-sdp", "10.3.0.10", "-i", "10.3.0.66", "-s", "600", "-au", "sipp", "-ap", "pw-sipp", "-m", "300", "-l", "1", "-r", "100", "-timeout", "300")
-              wait_idle(pbx)
 
           def resident():
-              """Asterisk's resident memory in KiB, once the offers' INVITE
-              transactions have ended, 5 s (timer I) after their ACK, and malloc
-              has given back the free pages of its heap."""
+              """Asterisk's resident memory in KiB, once the calls are gone, their
+              INVITE transactions have ended, 5 s (timer I) after their ACK, and
+              malloc has given back the free pages of its heap."""
+              wait_idle(pbx)
               time.sleep(10)
               return int(pbx.succeed(f"asterisk -rx 'malloc trim' > /dev/null && grep VmRSS /proc/{pid}/status").split()[1])
 
-          # the first calls grow Asterisk's caches to what it keeps
+          # the first calls grow Asterisk's caches to what it keeps. Asterisk
+          # stops for 0.7 s every 1.5 s meanwhile, so SIPp sends INVITEs again
+          # and the answers to both copies come late, some after SIPp sent its
+          # next INVITE.
+          pbx.succeed(f"systemd-run --unit=stall --collect -E PATH sh -c 'while kill -STOP {pid}; do sleep 0.7; kill -CONT {pid}; sleep 0.8; done'")
           attack()
+          pbx.succeed(f"systemctl stop stall && kill -CONT {pid}")
           warm = resident()
           attack()
           attack()

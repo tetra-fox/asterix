@@ -6,10 +6,14 @@
   IPv6 addresses to an IPv4 transport, 30 audio streams, lines that are not
   SDP, and a Content-Length that cuts the offer short. Asterisk refuses the
   lines that are not SDP with 400 and takes every other offer to the
-  dialplan, whose busy answer each waits for.
+  dialplan, whose busy answer each waits for. Responses are matched to their
+  INVITE's transaction: when Asterisk answers late, SIPp sends the INVITE
+  again, and the answers to that copy can come after the next INVITE went
+  out. SIPp drops a late provisional response and answers a late final one
+  with its ACK again.
 -->
 <scenario name="malformed-sdp">
-  <send retrans="500">
+  <send retrans="500" start_txn="challenged">
     <![CDATA[
 
       INVITE sip:[service]@[remote_ip]:[remote_port] SIP/2.0
@@ -34,10 +38,10 @@
     ]]>
   </send>
 
-  <recv response="100" optional="true"/>
-  <recv response="401" auth="true"/>
+  <recv response="100" optional="true" response_txn="challenged"/>
+  <recv response="401" auth="true" response_txn="challenged"/>
 
-  <send>
+  <send ack_txn="challenged">
     <![CDATA[
 
       ACK sip:[service]@[remote_ip]:[remote_port] SIP/2.0
@@ -53,7 +57,7 @@
   </send>
 
   <!-- 100 codecs, PCMU among them -->
-  <send retrans="500">
+  <send retrans="500" start_txn="codecs">
     <![CDATA[
 
       INVITE sip:[service]@[remote_ip]:[remote_port] SIP/2.0
@@ -178,10 +182,10 @@
     ]]>
   </send>
 
-  <recv response="100" optional="true"/>
-  <recv response="486"/>
+  <recv response="100" optional="true" response_txn="codecs"/>
+  <recv response="486" response_txn="codecs"/>
 
-  <send>
+  <send ack_txn="codecs">
     <![CDATA[
 
       ACK sip:[service]@[remote_ip]:[remote_port] SIP/2.0
@@ -197,7 +201,7 @@
   </send>
 
   <!-- IPv6 addresses in the offer to an IPv4 transport -->
-  <send retrans="500">
+  <send retrans="500" start_txn="ipv6">
     <![CDATA[
 
       INVITE sip:[service]@[remote_ip]:[remote_port] SIP/2.0
@@ -223,10 +227,10 @@
     ]]>
   </send>
 
-  <recv response="100" optional="true"/>
-  <recv response="486"/>
+  <recv response="100" optional="true" response_txn="ipv6"/>
+  <recv response="486" response_txn="ipv6"/>
 
-  <send>
+  <send ack_txn="ipv6">
     <![CDATA[
 
       ACK sip:[service]@[remote_ip]:[remote_port] SIP/2.0
@@ -242,7 +246,7 @@
   </send>
 
   <!-- 30 audio streams -->
-  <send retrans="500">
+  <send retrans="500" start_txn="streams">
     <![CDATA[
 
       INVITE sip:[service]@[remote_ip]:[remote_port] SIP/2.0
@@ -296,10 +300,10 @@
     ]]>
   </send>
 
-  <recv response="100" optional="true"/>
-  <recv response="486"/>
+  <recv response="100" optional="true" response_txn="streams"/>
+  <recv response="486" response_txn="streams"/>
 
-  <send>
+  <send ack_txn="streams">
     <![CDATA[
 
       ACK sip:[service]@[remote_ip]:[remote_port] SIP/2.0
@@ -315,7 +319,7 @@
   </send>
 
   <!-- lines that are not SDP -->
-  <send retrans="500">
+  <send retrans="500" start_txn="lines">
     <![CDATA[
 
       INVITE sip:[service]@[remote_ip]:[remote_port] SIP/2.0
@@ -337,10 +341,10 @@
     ]]>
   </send>
 
-  <recv response="100" optional="true"/>
-  <recv response="400"/>
+  <recv response="100" optional="true" response_txn="lines"/>
+  <recv response="400" response_txn="lines"/>
 
-  <send>
+  <send ack_txn="lines">
     <![CDATA[
 
       ACK sip:[service]@[remote_ip]:[remote_port] SIP/2.0
@@ -356,7 +360,7 @@
   </send>
 
   <!-- a Content-Length that ends the offer in its second line -->
-  <send retrans="500">
+  <send retrans="500" start_txn="cut">
     <![CDATA[
 
       INVITE sip:[service]@[remote_ip]:[remote_port] SIP/2.0
@@ -381,10 +385,10 @@
     ]]>
   </send>
 
-  <recv response="100" optional="true"/>
-  <recv response="486"/>
+  <recv response="100" optional="true" response_txn="cut"/>
+  <recv response="486" response_txn="cut"/>
 
-  <send>
+  <send ack_txn="cut">
     <![CDATA[
 
       ACK sip:[service]@[remote_ip]:[remote_port] SIP/2.0

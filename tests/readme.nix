@@ -111,7 +111,7 @@
     }
     {
       lang = "nix";
-      start = "{ config, ... }:\nlet\n  secret =";
+      start = "# pbx.nix: extensions";
     }
     {
       lang = "nix";
@@ -139,6 +139,12 @@
   secretsFile = builtins.toFile "secrets.yaml" ''
     sip-101: ""
     sip-102: ""
+    vm-101: ""
+    sip-201: ""
+    sip-202: ""
+    vm-201: ""
+    vm-202: ""
+    sip-trunk: ""
   '';
   sopsBase = {
     imports = [sops-nix.nixosModules.sops];
@@ -159,9 +165,13 @@
     };
   };
 
-  # the quick start: flake.nix with pbx.nix, and the host's own
+  # the quick start's flake.nix with `pbx` as the text of its pbx.nix and
+  # `module` in place of asterix.nixosModules.default, and the host's own
   # configuration.nix with what sops-nix needs
-  quickStart = let
+  quickStart = {
+    pbx,
+    module ? "asterix.nixosModules.default",
+  }: let
     configuration = nixFile "configuration" ''
       {
         boot.isContainer = true;
@@ -169,32 +179,42 @@
         sops.age.keyFile = "${sopsKey}";
       }
     '';
-    pbx = nixFile "pbx" (lib.replaceStrings ["./secrets.yaml"] [''"${secretsFile}"''] (elemAt readme 1).text);
-    flake = import (nixFile "flake" (lib.replaceStrings ["./configuration.nix" "./pbx.nix"] [''"${configuration}"'' ''"${pbx}"''] (elemAt readme 0).text));
-    ours = import ../flake.nix;
+    pbxFile = nixFile "pbx" (lib.replaceStrings ["./secrets.yaml"] [''"${secretsFile}"''] pbx);
+    flake = import (nixFile "flake" (lib.replaceStrings ["asterix.nixosModules.default" "./configuration.nix" "./pbx.nix"] [module ''"${configuration}"'' ''"${pbxFile}"''] (elemAt readme 0).text));
   in {
-    config =
+    inherit flake;
+    system =
       (flake.outputs {
         inherit nixpkgs sops-nix;
         asterix = self;
-      }).nixosConfigurations.pbx.config;
-    # the inputs it tells users to set are the ones this flake has
-    problems =
-      lib.optional (
-        flake.inputs.nixpkgs.url
-        != ours.inputs.nixpkgs.url
-        || flake.inputs.sops-nix.url != ours.inputs.sops-nix.url
-        || !(builtins.all (input: ours.inputs ? ${input}) (builtins.attrNames flake.inputs.asterix.inputs))
-      ) {
-        flakeInputs = {
-          readme = flake.inputs;
-          inherit (ours) inputs;
-        };
+      }).nixosConfigurations.pbx;
+  };
+  quick = quickStart {pbx = (elemAt readme 1).text;};
+  # the inputs it tells users to set are the ones this flake has
+  flakeProblems = let
+    inherit (quick) flake;
+    ours = import ../flake.nix;
+  in
+    lib.optional (
+      flake.inputs.nixpkgs.url
+      != ours.inputs.nixpkgs.url
+      || flake.inputs.sops-nix.url != ours.inputs.sops-nix.url
+      || !(builtins.all (input: ours.inputs ? ${input}) (builtins.attrNames flake.inputs.asterix.inputs))
+    ) {
+      flakeInputs = {
+        readme = flake.inputs;
+        inherit (ours) inputs;
       };
+    };
+  # the PBX layer's block as pbx.nix, with nixosModules.pbx in place of
+  # nixosModules.default, as the text before it says
+  pbxQuick = quickStart {
+    pbx = (elemAt readme 8).text;
+    module = "asterix.nixosModules.pbx";
   };
 
   systems = {
-    quick-start = quickStart.config;
+    quick-start = quick.system.config;
     secrets = evalConfig [
       sopsBase
       endpoint101
@@ -208,28 +228,17 @@
       endpoint101
       (fragment "readme-settings" (elemAt readme 4))
     ];
-    # VoiceMail(101@default) needs the mailbox, which loads app_voicemail
+    # on a host set up as the quick start is
     dialplan = evalConfig [
-      ({config, ...}: {
-        services.asterisk = {
-          enable = true;
-          voicemail.mailboxes."101".pin = config.lib.asterisk.secret "/run/secrets/vm-101";
-        };
-      })
+      sopsBase
+      {services.asterisk.enable = true;}
       (import (nixFile "readme-dialplan" (elemAt readme 6).text))
     ];
-    # the block imports the pbx layer from the flake input `asterix`, as
-    # flake.nix has it, and uses the sops secrets it names
-    pbx = evalConfig pbxModules;
-    pbx-menus = evalConfig (pbxModules ++ [(fragment "readme-pbx-menus" (elemAt readme 9))]);
+    pbx = pbxQuick.system.config;
+    pbx-menus = (pbxQuick.system.extendModules {modules = [(fragment "readme-pbx-menus" (elemAt readme 9))];}).config;
     phones = evalConfig phoneModules;
     phone-files = evalConfig (phoneModules ++ [(fragment "provisioning-files" (elemAt provisioning 1))]);
   };
-  pbxModules = [
-    sopsBase
-    {sops.secrets = lib.genAttrs ["sip-201" "vm-201" "sip-202" "vm-202" "sip-trunk"] (_: {});}
-    (import (nixFile "readme-pbx" "asterix: ${(elemAt readme 8).text}") self)
-  ];
   # the pbx layer and an endpoint 101 whose password is the sops secret sip-101
   phoneModules = [
     self.nixosModules.pbx
@@ -309,7 +318,7 @@ in {
     then outline
     else
       lib.concatLists (lib.mapAttrsToList systemProblems systems)
-      ++ quickStart.problems
+      ++ flakeProblems
       ++ escapingProblems
       ++ renderedProblems
       ++ fuzzingProblems

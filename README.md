@@ -208,6 +208,10 @@ in
       outbound.extensions."_9X." = [ "Dial(\${TRUNK}/\${EXTEN:1})" ];
     };
   };
+
+  # the mailbox VoiceMail(101@default) leaves messages in
+  sops.secrets.vm-101.reloadUnits = [ "asterisk.service" ];
+  services.asterisk.voicemail.mailboxes."101".pin = config.lib.asterisk.secret config.sops.secrets.vm-101.path;
 }
 ```
 
@@ -232,15 +236,20 @@ The helpers `var` and `app` are in `config.lib.asterisk.dialplan`, and in
 `nixosModules.pbx` adds `pbx.*` on top of the options above: extensions with
 voicemail, ring groups, queues, conference rooms, voice menus, paging, opening
 hours and routes to and from trunks, the way a PBX admin thinks of them. It
-imports the core, so it replaces `nixosModules.default` in `imports`.
+imports the core, so it replaces `asterix.nixosModules.default` in the quick
+start's flake.nix:
 
 ```nix
-{ config, ... }:
+# pbx.nix: extensions 201 and 202, and calls to and from a provider
+{ config, lib, ... }:
 let
   secret = name: config.lib.asterisk.secret config.sops.secrets.${name}.path;
 in
 {
-  imports = [ asterix.nixosModules.pbx ];
+  sops.defaultSopsFile = ./secrets.yaml;
+  sops.secrets = lib.genAttrs [ "sip-201" "sip-202" "vm-201" "vm-202" "sip-trunk" ] (_: {
+    reloadUnits = [ "asterisk.service" ];
+  });
 
   pbx = {
     enable = true;

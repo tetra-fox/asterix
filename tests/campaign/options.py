@@ -26,7 +26,7 @@ EXPR = """
 let
   flake = builtins.getFlake "{flake}";
   pkgs = flake.inputs.nixpkgs.legacyPackages.x86_64-linux;
-  campaign = import "${{flake}}/tests/campaign/options.nix" {{
+  campaign = import "${{flake}}/tests/campaign/{nix}" {{
     inherit pkgs;
     self = flake;
   }};
@@ -39,8 +39,12 @@ SMALL = 3
 
 
 class Campaign:
-    def __init__(self, args):
+    """nix-eval-jobs and builds over the `jobs` of NIX, a file of
+    tests/campaign; configs.py uses it too."""
+
+    def __init__(self, args, nix="options.nix"):
         self.args = args
+        self.nix = nix
         # a copy in the store, so every evaluation sees the same tree
         self.flake = subprocess.run(
             ["nix", "eval", "--raw", "--impure", "--expr",
@@ -59,7 +63,7 @@ class Campaign:
         ).stdout.strip() + "/bin/nix-eval-jobs"
 
     def expr(self, body):
-        return EXPR.format(flake=self.flake, body=body)
+        return EXPR.format(flake=self.flake, nix=self.nix, body=body)
 
     def manifest(self):
         text = subprocess.run(

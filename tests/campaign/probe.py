@@ -161,10 +161,11 @@ def drive(spec_path, out, asterisk):
 
 
 def messages(log):
-    """The messages of the log, without the line Asterisk starts a file with."""
+    """The messages of the log, without the line Asterisk starts a file with
+    each time it opens it."""
     result = []
-    for number, line in enumerate(log.read_text().splitlines(), 1):
-        if number == 1 and not line.startswith("{"):
+    for line in log.read_text().splitlines():
+        if line.startswith("[") and "Asterisk" in line:
             continue
         entry = json.loads(line)
         result.append(

@@ -172,6 +172,8 @@ in
 
     vm-impairments = import ./vm/impairments.nix {inherit pkgs self;};
 
+    vm-faults-trunk = import ./vm/faults-trunk.nix {inherit pkgs self;};
+
     # builds the server and runs its unit tests
     provisioning-server = self.packages.${pkgs.stdenv.hostPlatform.system}.provisioning-server;
 

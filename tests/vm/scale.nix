@@ -1,7 +1,10 @@
 # 256 phones, each with its own password from a secret: they all register,
 # 128 calls run at the same time with audio both ways on all 256 legs, a
-# rotated password is applied with a reload while the calls go on, all 256
-# phones meet in one conference, and a restart keeps every registration
+# reload every 10 s for 5 minutes, each applying a rotated password, keeps
+# every call and its audio, and once the calls end Asterisk has as many
+# descriptors and no more taskprocessors than before them (its heap in use
+# and resident memory are printed); all 256 phones meet in one conference,
+# and a restart keeps every registration
 #
 #   VLAN 1  pbx, phones1 to phones4 with 64 phones each (1000-1063, ...)
 {
@@ -11,16 +14,15 @@
   inherit (pkgs) lib;
 
   extensions = map toString (lib.range 1000 1255);
+  load = import ./load-nodes.nix {inherit lib;};
 
   phoneMachine = {
     imports = [
       ./common.nix
       ./phone.nix
+      load.sizing
     ];
-    virtualisation = {
-      memorySize = 2048;
-      cores = 4;
-    };
+    virtualisation.memorySize = 2048;
   };
 in
   pkgs.testers.runNixOSTest {
@@ -34,11 +36,9 @@ in
           (import ./secrets.nix {
             fixed = lib.listToAttrs (map (extension: lib.nameValuePair "sip-${extension}" "pw-${extension}") extensions);
           })
+          load.pbx
         ];
-        virtualisation = {
-          memorySize = 2048;
-          cores = 4;
-        };
+        virtualisation.memorySize = 2048;
 
         services.asterisk = {
           enable = true;
@@ -79,6 +79,7 @@ in
 
     testScript =
       builtins.readFile ./phone.py
+      + builtins.readFile ./usage.py
       + ''
         start_all()
         pbx.wait_for_unit("asterisk.service")
@@ -104,6 +105,10 @@ in
             start_phones(everyone)
             timed("256 registrations", lambda: wait_contacts(pbx, 256, timeout=300))
 
+        idle = usage(pbx)
+        idle_descriptors = lasting_descriptors(pbx)
+        heap = {"idle": heap_in_use(pbx)}
+
         with subtest("128 calls at once, with audio both ways on all 256 legs"):
             cli_parallel([(phone[a], f"call new {phone[a].uri(b)}") for a, b in pairs])
             pbx.wait_until_succeeds("asterisk -rx 'core show channels count' | grep -qx '128 active calls'", timeout=180)
@@ -111,19 +116,43 @@ in
             found = sorted(sorted(members) for members in bridges(pbx).values())
             assert found == sorted(sorted(pair) for pair in pairs), found
 
-        with subtest("a rotated password is applied with a reload while the calls go on"):
-            cursor = journal_cursor(pbx)
+        with subtest("a reload every 10 s for 5 minutes, each with a rotated password, keeps the calls"):
+            heap["calls"] = heap_in_use(pbx)
             calls = channel_stats(pbx)
-            pbx.succeed("printf rotated-1000 > /run/test-secrets/sip-1000")
-            timed("reload", lambda: pbx.succeed("systemctl reload asterisk.service"))
-            assert "asterisk-config: module reload res_pjsip.so" in journal_since(pbx, cursor)
-            assert "rotated-1000" in asterisk(pbx, "pjsip show auth 1000")
-            wait_calls_continue(pbx, everyone, calls, timeout=120)
+            began = time.time()
+            for i in range(30):
+                cursor = journal_cursor(pbx)
+                pbx.succeed(f"printf rotated-{i} > /run/test-secrets/sip-1000")
+                timed(f"reload {i}", lambda: pbx.succeed("systemctl reload asterisk.service"))
+                assert "asterisk-config: module reload res_pjsip.so" in journal_since(pbx, cursor)
+                assert f"rotated-{i}" in asterisk(pbx, "pjsip show auth 1000")
+                sample = usage(pbx)
+                print(f"after reload {i}: {sample}")
+                assert sample["channels"] == 256, sample
+                time.sleep(max(0, began + 10 * (i + 1) - time.time()))
+            calls = wait_calls_continue(pbx, everyone, calls, timeout=120)
+            heap["calls, after the reloads"] = heap_in_use(pbx)
             cli_parallel([(phone[a], "call hangup_all") for a, _ in pairs])
             timed("hanging up", lambda: wait_idle(pbx, timeout=300))
-            # the phone still has the old password
+            # a call's serializer goes a moment after its channels
+            pbx.wait_until_succeeds(
+                f"test $(asterisk -rx 'core show taskprocessors' | sed -n 's/^\\([0-9]*\\) taskprocessors$/\\1/p') -le {int(idle['taskprocessors'])}",
+                timeout=60,
+            )
+            heap["idle again"] = heap_in_use(pbx)
+            after = usage(pbx)
+            print(f"before the calls: {idle}, after them: {after}")
+            print(f"heap in use in KiB: {heap}")
+            assert after["bridges"] == 0, after
+            descriptors = lasting_descriptors(pbx)
+            assert descriptors == idle_descriptors, f"{idle_descriptors} descriptors before the calls, {descriptors} after"
+            # phone 1000 kept its old password, so its registration lapsed at
+            # its first refresh during the rotations; it registers again once
+            # the password matches
             pbx.succeed("printf pw-1000 > /run/test-secrets/sip-1000")
             pbx.succeed("systemctl reload asterisk.service")
+            phone["1000"].cli("acc reg")
+            wait_contacts(pbx, 256, timeout=60)
 
         with subtest("all 256 phones in one conference"):
             cli_parallel([(p, f"call new {p.uri('8000')}") for p in everyone])

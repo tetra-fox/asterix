@@ -310,6 +310,9 @@ The checks use nixpkgs' `asterisk`, and also build the examples with
 `asterisk_20` and `asterisk_23`. `.#packageChecks.<package>` has every check
 with one of `asterisk_20`, `asterisk_22` or `asterisk_23`, such as
 `nix build .#packageChecks.asterisk_23.probe`.
+`python3 tests/campaign/packages.py DIR` builds all but the VM tests with each
+of them, one at a time, with the logs in `DIR`, and with
+`--nixpkgs github:NixOS/nixpkgs/nixos-unstable` on that nixpkgs instead.
 
 `nix build .#provisioning-server-fuzz` builds a libFuzzer target that sends
 what it generates to the provisioning server as one phone's connection. The

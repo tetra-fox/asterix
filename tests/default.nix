@@ -168,6 +168,8 @@ in
     vm-upgrade = import ./vm/upgrade.nix {inherit pkgs self;};
     vm-faults = import ./vm/faults.nix {inherit pkgs self;};
 
+    vm-impairments = import ./vm/impairments.nix {inherit pkgs self;};
+
     # builds the server and runs its unit tests
     provisioning-server = self.packages.${pkgs.stdenv.hostPlatform.system}.provisioning-server;
 

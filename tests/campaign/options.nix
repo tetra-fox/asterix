@@ -7,6 +7,10 @@
 {
   pkgs,
   self,
+  # the q7s of each option's strings carry a tag of the option, so the
+  # strings of many options can be told apart in one configuration
+  # (readback.nix)
+  tagged ? false,
 }: let
   inherit (pkgs) lib;
   inherit
@@ -409,6 +413,10 @@
     empty = "";
     lineBreak = "q7\nq7";
   };
+  adversarialOf = option:
+    if tagged
+    then lib.mapAttrs (_: lib.replaceStrings ["q7"] ["q7${builtins.substring 0 8 (builtins.hashString "sha256" option)}"]) adversarial
+    else adversarial;
 
   # a value of type `t` with `s` where a string goes, or null; maps get it
   # under `key`
@@ -606,7 +614,7 @@
     key = spec.key or "q7key";
     strings =
       if spec.strings or true
-      then adversarial
+      then adversarialOf option
       else {};
     # a value the table gives says more than the same value from the type
     given = map (entry: showValue (unwrap entry).value) (spec.valid or [] ++ spec.invalid or [] ++ spec.warn or []);
@@ -669,7 +677,7 @@
           if name == "empty"
           then null
           else s;
-      }) (removeAttrs adversarial ["lineBreak"]));
+      }) (removeAttrs (adversarialOf option) ["lineBreak"]));
 
   # options that cannot be set: read-only, or removed from nixpkgs' module
   fixed =
@@ -814,7 +822,7 @@
   };
   job = meta: stub // {inherit meta;};
 in {
-  inherit cases outcome claims combined;
+  inherit cases evaluate outcome claims combined;
 
   checksOf = case: bootChecks (evaluate "light" case);
 

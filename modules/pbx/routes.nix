@@ -66,12 +66,12 @@
         example = "9";
         description = ''
           Digits dialled before a number outside, removed before the call
-          leaves. Can be empty. A pbx number that starts with them still
-          reaches the pbx: with `9`, a ring group on 900 takes the calls to
-          900, so 00 outside cannot be dialled. So does a call pickup code
-          (`pickupexten` of features.conf) that starts with them, which
-          chan_pjsip takes before the dialplan: with `9` and a pickup code of
-          `981`, 81 outside cannot be dialled.
+          leaves; the number outside has two digits or more. Can be empty. A
+          pbx number that starts with them still reaches the pbx: with `9`, a
+          ring group on 900 takes the calls to 900, so 00 outside cannot be
+          dialled. So does a call pickup code (`pickupexten` of features.conf)
+          that starts with them, which chan_pjsip takes before the dialplan:
+          with `9` and a pickup code of `981`, 81 outside cannot be dialled.
         '';
       };
       trunk = mkOption {

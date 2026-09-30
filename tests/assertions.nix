@@ -1217,6 +1217,36 @@
       ];
     };
 
+    # app_voicemail sends a mailbox's MWI as box@context and Asterisk compares
+    # the names exactly, so a mailbox named without its context gets none
+    mwiForMailboxWithoutContext = {
+      module = {config, ...}: {
+        services.asterisk = {
+          voicemail.mailboxes = {
+            "101".pin = config.lib.asterisk.secret "/run/secrets/vm-101";
+            "200@sales".pin = config.lib.asterisk.secret "/run/secrets/vm-200";
+          };
+          pjsip.endpoints."101".mailboxes = [
+            "101"
+            "200"
+            "200@sales"
+            "101@default@x"
+          ];
+        };
+      };
+      assertions = [
+        ''
+          services.asterisk: PJSIP endpoints name voicemail boxes without their context, and Asterisk sends a mailbox's MWI only as box@context:
+            pjsip.endpoints.101.mailboxes: 101, write 101@default
+            pjsip.endpoints.101.mailboxes: 200, write 200@sales
+        ''
+        ''
+          services.asterisk: PJSIP endpoints reference voicemail boxes that are not defined:
+            pjsip.endpoints.101.mailboxes: 101@default@x
+        ''
+      ];
+    };
+
     mwiForUndefinedMailbox = {
       module = {config, ...}: {
         services.asterisk = {

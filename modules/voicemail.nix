@@ -307,31 +307,31 @@
     )
     lines;
 
-  # mailboxes referenced by typed PJSIP endpoints (MWI) that are not defined,
-  # other than refused ones, which their own assertion names
+  # the mailboxes typed PJSIP endpoints name for MWI, which app_voicemail
+  # sends as box@context, to a mailbox's aliases too (queue_mwi_event), and
+  # Asterisk compares exactly (main/stasis_state.c)
   voicemailConf = cfg.settings."voicemail.conf" or {};
   knownMailboxes = voicemailMailboxes cfg;
-  # Asterisk compares the mailboxes of MWI exactly (main/stasis_state.c), and
-  # app_voicemail sends a mailbox's MWI to its aliases too (queue_mwi_event)
-  hasMailbox = mailbox: let
-    ref = splitMailbox mailbox;
+  mwiNames = lib.genAttrs (
+    lib.concatLists (mapAttrsToList (context: boxes: map (box: "${box}@${context}") (builtins.attrNames boxes)) knownMailboxes.contexts)
+    ++ builtins.attrNames knownMailboxes.aliases
+  ) (_: true);
+  mwiReferences = lib.concatLists (mapAttrsToList (endpoint: e: map (ref: {inherit endpoint ref;}) e.mailboxes) cfg.pjsip.endpoints);
+  withoutContext = filter (m: !(hasInfix "@" m.ref)) mwiReferences;
+  # such a mailbox with the contexts that have it, or else the default one
+  withContexts = box: let
+    contexts = lib.optionals (knownMailboxes != null) (filter (context: knownMailboxes.contexts.${context} ? ${box}) (builtins.attrNames knownMailboxes.contexts));
   in
-    knownMailboxes == null || (knownMailboxes.contexts.${ref.context} or {}) ? ${ref.box} || knownMailboxes.aliases ? "${ref.box}@${ref.context}";
-  refused =
-    map (box: {
-      box = box.mailbox;
-      inherit (box) context;
-    })
-    (badNumbers ++ reservedContexts);
-  missingMailboxes = lib.concatLists (
-    mapAttrsToList (
-      endpoint: e:
-        map (ref: "pjsip.endpoints.${endpoint}.mailboxes: ${ref}") (
-          filter (ref: !(hasMailbox ref) && !(builtins.elem (splitMailbox ref) refused)) e.mailboxes
-        )
-    )
-    cfg.pjsip.endpoints
-  );
+    map (context: "${box}@${context}") (
+      if contexts == []
+      then ["default"]
+      else contexts
+    );
+  # the others that are not defined, other than refused ones, which their own
+  # assertion names
+  refused = map (box: "${box.mailbox}@${box.context}") (badNumbers ++ reservedContexts);
+  missingMailboxes = filter (m: hasInfix "@" m.ref && knownMailboxes != null && !(mwiNames ? ${m.ref}) && !(builtins.elem m.ref refused)) mwiReferences;
+  showReference = m: "pjsip.endpoints.${m.endpoint}.mailboxes: ${m.ref}";
 
   # mailboxes of the final voicemail.conf with an e-mail or pager address
   mailedBoxes = lib.concatLists (
@@ -565,10 +565,17 @@ in {
           message = "services.asterisk.voicemail.format: Asterisk records at most 10 formats and ignores the rest (${concatStringsSep ", " storedFormats}).";
         }
         {
+          assertion = withoutContext == [];
+          message = ''
+            services.asterisk: PJSIP endpoints name voicemail boxes without their context, and Asterisk sends a mailbox's MWI only as box@context:
+              ${lib.concatMapStringsSep "\n  " (m: "${showReference m}, write ${concatStringsSep " or " (withContexts m.ref)}") withoutContext}
+          '';
+        }
+        {
           assertion = missingMailboxes == [];
           message = ''
             services.asterisk: PJSIP endpoints reference voicemail boxes that are not defined:
-              ${concatStringsSep "\n  " missingMailboxes}
+              ${lib.concatMapStringsSep "\n  " showReference missingMailboxes}
           '';
         }
       ];

@@ -93,6 +93,28 @@
         ["provider" "provider" "<caller>" "the caller chooses the number"]
       ];
     };
+    # a ring group whose name has a /, an @ and a {, which its Local channels
+    # and Dial's arguments carry
+    groupNamedOddly = {
+      modules = [
+        office
+        {
+          pbx = {
+            ringGroups."a/b@c{d" = {
+              members = ["202"];
+              external = ["5559001"];
+            };
+            inbound."5551000" = {
+              trunk = "provider";
+              destination.ringGroup = "a/b@c{d";
+            };
+          };
+        }
+      ];
+      paths = [
+        ["provider" "provider" "5559001" null]
+      ];
+    };
     # the core alone: the trunk's context includes the phones', which dials
     # out
     inboundIncludesPhones = {

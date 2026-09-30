@@ -45,18 +45,27 @@ ENDS = {"hangup", "busy", "congestion"}
 
 
 def split_top(text, separator):
-    """`text` split at `separator` outside parentheses, brackets and ${}."""
-    parts, depth, current = [], 0, ""
-    for c in text:
-        if c in "([{":
+    """`text` split at `separator` outside parentheses, brackets and ${},
+    which Asterisk fills in before it splits (main/app.c
+    __ast_app_separate_args); a brace alone is a character like any other."""
+    parts, depth, current, i = [], 0, "", 0
+    while i < len(text):
+        if text.startswith("${", i):
+            end = expression_end(text, i)
+            current += text[i:end]
+            i = end
+            continue
+        c = text[i]
+        if c in "([":
             depth += 1
-        elif c in ")]}" and depth:
+        elif c in ")]" and depth:
             depth -= 1
         if c == separator and not depth:
             parts.append(current)
             current = ""
         else:
             current += c
+        i += 1
     return parts + [current]
 
 
@@ -364,8 +373,10 @@ class Walk:
             device = device.strip()
             tech, _, rest = device.partition("/")
             if tech.lower() == "local":
-                exten, _, context = rest.split("/")[0].rpartition("@")
-                self.enter(trunk, context, exten, path, Channel(exten, outside=channel.outside), ())
+                # the options follow the last /, the context the first @
+                # (main/core_local.c local_alloc)
+                exten, _, context = (rest.rpartition("/")[0] if "/" in rest else rest).partition("@")
+                self.enter(trunk, context or "default", exten, path, Channel(exten, outside=channel.outside), ())
             elif tech.upper() == "PJSIP":
                 resource = rest.split("/")[0]
                 number, at, endpoint = resource.rpartition("@")

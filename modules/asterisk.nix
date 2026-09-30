@@ -1150,6 +1150,9 @@ in {
         "pjproject.conf" = {};
         "stasis.conf" = {};
         "manager.conf".general.enabled = mkOptionDefault false;
+        # also there with the server off: a reload that finds no http.conf
+        # leaves the server running (main/http.c __ast_http_load)
+        "http.conf".general.enabled = mkOptionDefault false;
         "udptl.conf".general = {};
         "confbridge.conf".general = {};
         "indications.conf".general.country = mkOptionDefault "us";

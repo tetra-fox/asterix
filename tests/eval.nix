@@ -1296,6 +1296,13 @@ in {
       ];
     };
 
+    # a deploy that turns the server off changes http.conf instead of
+    # removing it, which the reload of http would ignore
+    testHttpConfWithTheServerOff = {
+      expr = lib.hasInfix "enabled = no" ((rendered [phone])."http.conf" or "");
+      expected = true;
+    };
+
     testChanSipAlwaysNoloaded = {
       expr = lib.hasInfix "noload => chan_sip.so" (rendered [phone])."modules.conf";
       expected = true;

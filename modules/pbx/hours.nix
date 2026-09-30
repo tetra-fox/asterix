@@ -104,10 +104,11 @@
         default = null;
         example = "*28";
         description = ''
-          Number a phone dials to close now, and again to open again, for
-          example when everyone leaves early. It also works as a busy lamp
-          key, lit while closed. The state is kept by Asterisk (astdb), not
-          in the Nix configuration.
+          Number a phone dials to close now, whatever `open` says, for
+          example when everyone leaves early, and again to go back to `open`.
+          It stays closed until then, across days and restarts. It also works
+          as a busy lamp key, lit while closed this way. The state is kept by
+          Asterisk (astdb), not in the Nix configuration.
         '';
       };
     };

@@ -73,7 +73,7 @@ KNOWN = [
     },
     {
         "bug": "tcp6-nat",
-        "why": "a pbx behind NAT leaves its external address out of what it sends over TCP and TLS on IPv6: res_pjsip_nat asks for the transport as if IPv4 (res/res_pjsip_nat.c:328, res/res_pjsip.c:653-671)",
+        "why": "a pbx behind NAT leaves its external address out of what it sends over TCP and TLS on IPv6 to endpoints that name no transport, as the matrix's: res_pjsip_nat finds such a transport only through one the endpoint names (res/res_pjsip_nat.c:328, res/res_pjsip.c:653-671)",
         "levels": {"transport": ["tcp", "tls"], "ip": ["ipv6", "dual"], "nat": ["pbx", "both"]},
     },
 ]

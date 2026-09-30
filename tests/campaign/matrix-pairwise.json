@@ -61,7 +61,7 @@
  ],
  "known": {
   "websocket": "the SDP Asterisk sends over WebSocket names its host's IPv4 address, private behind NAT and of the other family for IPv6 phones (F50), and its Contact is one the client cannot reach (F51)",
-  "tcp6-nat": "a pbx behind NAT leaves its external address out of what it sends over TCP and TLS on IPv6: res_pjsip_nat asks for the transport as if IPv4 (res/res_pjsip_nat.c:328, res/res_pjsip.c:653-671)"
+  "tcp6-nat": "a pbx behind NAT leaves its external address out of what it sends over TCP and TLS on IPv6 to endpoints that name no transport, as the matrix's: res_pjsip_nat finds such a transport only through one the endpoint names (res/res_pjsip_nat.c:328, res/res_pjsip.c:653-671)"
  },
  "tests": [
   {

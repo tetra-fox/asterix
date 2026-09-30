@@ -267,9 +267,9 @@ with subtest("A calls B, and each hears the other in its codec"):
 
     each("A calls B", answered, calling())
 
-with subtest("behind NAT, the pbx names its own address to phones on TCP and TLS over IPv6"):
-    # res_pjsip_nat maps no TCP or TLS transport over IPv6, so it leaves their
-    # messages the pbx's own address (res/res_pjsip_nat.c:328, res/res_pjsip.c:653-671)
+with subtest("behind NAT, the pbx names its own address over TCP and TLS on IPv6 to endpoints that name no transport"):
+    # res_pjsip_nat finds a TCP or TLS transport on IPv6 only through one the endpoint
+    # names, and these name none (res/res_pjsip_nat.c:328, res/res_pjsip.c:653-671)
     # TODO: run the call script on these rows once Asterisk rewrites them
 
     def unrewritten(row):

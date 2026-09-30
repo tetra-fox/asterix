@@ -87,6 +87,16 @@ in
     # a seeded sample of tests/campaign/options.nix, which options.py runs whole
     campaign-options = import ./campaign/sample.nix {inherit pkgs self;};
 
+    # opening hours against their oracle at a seeded sample of instants in
+    # every zone of tests/campaign/hours.nix, which hours.py sweep runs whole
+    campaign-hours = let
+      hours = import ./campaign/hours.nix {inherit pkgs self;};
+    in
+      hours.run {
+        inherit (hours) zones;
+        sample = 400;
+      };
+
     examples-config-minimal = examples.derivations.minimal;
     examples-config-household-intercom = examples.derivations.household-intercom;
     examples-config-household-intercom-ht801 = examples.derivations.household-intercom-ht801;

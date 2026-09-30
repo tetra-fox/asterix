@@ -31,12 +31,21 @@
   usedFeatures = lib.filterAttrs (key: _: (fcfg.featureMap.${key} or "") != "") featureModules;
   parksCalls = usedFeatures ? parkcall;
 
+  # Asterisk keeps 10 keys of a sequence (include/asterisk/features_config.h
+  # AST_FEATURE_MAX_LEN): an application's as it loads it
+  # (main/features_config.c:1362), a built-in one's when a call uses it
+  # (main/bridge_basic.c:371-376)
+  tooLong = dtmf: builtins.stringLength dtmf > 10;
+  longSequences =
+    map (key: "featureMap.${key}") (builtins.attrNames (lib.filterAttrs (_: tooLong) fcfg.featureMap))
+    ++ map (name: "applications.${name}.dtmf") (builtins.attrNames (lib.filterAttrs (_: a: tooLong a.dtmf) fcfg.applications));
+
   applicationType = types.submodule {
     options = {
       dtmf = mkOption {
         type = types.str;
         example = "*9";
-        description = "Key sequence that triggers the feature.";
+        description = "Key sequence that triggers the feature, at most 10 keys.";
       };
       activateOn = mkOption {
         type = types.enum [
@@ -85,12 +94,12 @@ in {
         automixmon = "*3";
       };
       description = ''
-        Built-in features and their key sequences (`[featuremap]`). They are
-        only available on calls dialled with the matching Dial() options
-        (`t`/`T` for transfers, `k`/`K` for parkcall, `x`/`X` for automixmon,
-        ...). The modules that provide them are loaded: res_parking.so for
-        `parkcall`, bridge_builtin_features.so for `disconnect` and
-        `automixmon`, which also needs app_mixmonitor.so.
+        Built-in features and their key sequences of at most 10 keys
+        (`[featuremap]`). They are only available on calls dialled with the
+        matching Dial() options (`t`/`T` for transfers, `k`/`K` for parkcall,
+        `x`/`X` for automixmon, ...). The modules that provide them are
+        loaded: res_parking.so for `parkcall`, bridge_builtin_features.so for
+        `disconnect` and `automixmon`, which also needs app_mixmonitor.so.
       '';
     };
 
@@ -113,6 +122,13 @@ in {
   };
 
   config = mkIf cfg.enable {
+    assertions = [
+      {
+        assertion = longSequences == [];
+        message = "services.asterisk.features: key sequences longer than the 10 keys Asterisk keeps: ${lib.concatStringsSep ", " longSequences}.";
+      }
+    ];
+
     services.asterisk.modules.needed = lib.mapAttrs' (key: lib.nameValuePair "services.asterisk.features.featureMap.${key}") usedFeatures;
     # res_parking declines to load without its file
     services.asterisk.settings."res_parking.conf" = mkIf parksCalls {};

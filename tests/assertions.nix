@@ -716,6 +716,29 @@
       assertion = "invalid extension name(s)";
     };
 
+    # Asterisk keeps the first 10 keys of a feature's sequence
+    featureKeysLongerThan10 = {
+      module.services.asterisk.features = {
+        featureMap = {
+          blindxfer = "#1234567890";
+          atxfer = "*123456789";
+        };
+        applications = {
+          monkeys = {
+            dtmf = "*1234567890";
+            app = "Playback";
+            args = "tt-monkeys";
+          };
+          weasels = {
+            dtmf = "*123456788";
+            app = "Playback";
+            args = "tt-weasels";
+          };
+        };
+      };
+      assertions = ["services.asterisk.features: key sequences longer than the 10 keys Asterisk keeps: featureMap.blindxfer, applications.monkeys.dtmf."];
+    };
+
     # pbx_config reads a hint like a step, App(arguments), and keeps what
     # comes before its first ( unless a variable comes first
     # (pbx/pbx_config.c:1859-1866)

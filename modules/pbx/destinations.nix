@@ -17,9 +17,17 @@
 
   cfg = config.pbx;
   pbxLib = import ./lib.nix {inherit lib;};
-  inherit (import ../lib.nix {inherit lib;}) hasMailbox voicemailMailboxes;
+  inherit (import ../lib.nix {inherit lib;}) splitMailbox voicemailMailboxes;
 
   knownMailboxes = voicemailMailboxes config.services.asterisk;
+  # VoiceMail() takes the context in any case, but files the message under the
+  # mailbox as dialed (apps/app_voicemail.c leave_voicemail), and reaches no
+  # mailbox through an alias: find_user swaps the alias's mailbox and context
+  reachesMailbox = mailbox: let
+    ref = splitMailbox mailbox;
+    contexts = builtins.filter (context: lib.toLower context == lib.toLower ref.context) (builtins.attrNames knownMailboxes.contexts);
+  in
+    knownMailboxes == null || builtins.any (context: knownMailboxes.contexts.${context} ? ${ref.box}) contexts;
   knownContexts = config.services.asterisk.dialplan.knownContexts;
 
   use = where: dest: optional (dest != null) {inherit where dest;};
@@ -47,7 +55,7 @@
     else if dest ? ivr
     then cfg.ivrs ? ${dest.ivr}
     else if dest ? voicemail
-    then hasMailbox knownMailboxes dest.voicemail.mailbox
+    then reachesMailbox dest.voicemail.mailbox
     else if dest ? context
     then knownContexts == null || builtins.elem dest.context.context knownContexts
     else true;

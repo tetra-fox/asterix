@@ -9,7 +9,7 @@
       mailbox = mkOption {
         type = types.str;
         example = "200@sales";
-        description = "Mailbox of voicemail.conf, from {option}`services.asterisk.voicemail.mailboxes`, `settings`, `extraConfig` or an included file: `box` or `box@context`.";
+        description = "Mailbox of voicemail.conf, from {option}`services.asterisk.voicemail.mailboxes`, `settings`, `extraConfig` or an included file: `box` or `box@context`. VoiceMail() finds the context in any case, but files the message under the box as written here, so the box is spelled as in voicemail.conf, and it reaches no mailbox through an alias.";
       };
       greeting = mkOption {
         type = types.enum [

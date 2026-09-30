@@ -31,7 +31,7 @@
   vcfg = cfg.voicemail;
   asteriskLib = import ../lib {inherit lib;};
   inherit (asteriskLib) format secrets;
-  inherit (import ./lib.nix {inherit lib;}) entryOf hasMailbox splitMailbox toSection voicemailLines voicemailMailboxes;
+  inherit (import ./lib.nix {inherit lib;}) entryOf splitMailbox toSection voicemailLines voicemailMailboxes voicemailSectionKind;
 
   mailboxType = types.submodule (
     {name, ...}: let
@@ -48,7 +48,7 @@
           type = types.str;
           default = ref.context;
           defaultText = lib.literalMD "the part of the attribute name after `@`, or `default`";
-          description = "Voicemail context the mailbox belongs to.";
+          description = "Voicemail context the mailbox belongs to. Asterisk reads `general`, `zonemessages` and the context `aliasescontext` names, in any case, as no voicemail context.";
         };
         pin = mkOption {
           type = format.types.secretOrString;
@@ -162,16 +162,14 @@
     )
     mailboxes;
 
-  # voicemail.conf sections that are not voicemail contexts
-  reservedSections = [
-    "general"
-    "zonemessages"
-  ];
-
   # the lines of the generated voicemail.conf with their section; app_voicemail
-  # reads the ones outside the reserved sections as `mailbox => PIN,name,...`
+  # reads the ones of voicemail contexts as `mailbox => PIN,name,...`
   lines = voicemailLines (cfg.renderedFiles."voicemail.conf" or "");
-  mailboxLines = filter (mailbox: !(builtins.elem mailbox.section reservedSections)) lines;
+  kindOf = voicemailSectionKind lines;
+  mailboxLines = filter (mailbox: kindOf mailbox.section == "context") lines;
+
+  # typed mailboxes in a section that is no voicemail context
+  reservedContexts = filter (box: kindOf box.context != "context") mailboxes;
 
   # secrets in them, which app_voicemail splits at every comma
   mailboxLineSecrets = lib.concatMap (mailbox: secrets.fromText mailbox.line) mailboxLines;
@@ -270,10 +268,11 @@
       line: let
         entry = entryOf line.line;
         fields = splitString "," entry.value;
+        kind = kindOf line.section;
       in
-        if entry == null || line.section == "zonemessages"
+        if entry == null || kind == "zonemessages" || kind == "aliases"
         then []
-        else if line.section == "general"
+        else if kind == "general"
         then
           lib.optional (generalBytes ? ${lib.toLower entry.key}) (limited "[general] ${entry.key}" generalBytes.${lib.toLower entry.key} entry.value)
           ++ lib.optionals (isInternalContexts entry) (
@@ -304,7 +303,7 @@
       line: let
         entry = entryOf line.line;
       in
-        lib.optionals (entry != null && line.section == "general" && isInternalContexts entry) (lib.drop internalContextCount (internalContexts entry.value))
+        lib.optionals (entry != null && kindOf line.section == "general" && isInternalContexts entry) (lib.drop internalContextCount (internalContexts entry.value))
     )
     lines;
 
@@ -312,17 +311,23 @@
   # other than refused ones, which their own assertion names
   voicemailConf = cfg.settings."voicemail.conf" or {};
   knownMailboxes = voicemailMailboxes cfg;
+  # Asterisk compares the mailboxes of MWI exactly (main/stasis_state.c), and
+  # app_voicemail sends a mailbox's MWI to its aliases too (queue_mwi_event)
+  hasMailbox = mailbox: let
+    ref = splitMailbox mailbox;
+  in
+    knownMailboxes == null || (knownMailboxes.contexts.${ref.context} or {}) ? ${ref.box} || knownMailboxes.aliases ? "${ref.box}@${ref.context}";
   refused =
     map (box: {
       box = box.mailbox;
       inherit (box) context;
     })
-    badNumbers;
+    (badNumbers ++ reservedContexts);
   missingMailboxes = lib.concatLists (
     mapAttrsToList (
       endpoint: e:
         map (ref: "pjsip.endpoints.${endpoint}.mailboxes: ${ref}") (
-          filter (ref: !(hasMailbox knownMailboxes ref) && !(builtins.elem (splitMailbox ref) refused)) e.mailboxes
+          filter (ref: !(hasMailbox ref) && !(builtins.elem (splitMailbox ref) refused)) e.mailboxes
         )
     )
     cfg.pjsip.endpoints
@@ -332,7 +337,7 @@
   mailedBoxes = lib.concatLists (
     mapAttrsToList (
       _: section:
-        lib.optionals (!(builtins.elem section.name reservedSections)) (
+        lib.optionals (kindOf section.name == "context") (
           mapAttrsToList (box: _: "${box}@${section.name}") (
             filterAttrs (
               _: line: let
@@ -542,8 +547,10 @@ in {
           }.";
         }
         {
-          assertion = lib.intersectLists reservedSections contexts == [];
-          message = "services.asterisk.voicemail.mailboxes: `general` and `zonemessages` cannot be used as voicemail contexts.";
+          assertion = reservedContexts == [];
+          message = "services.asterisk.voicemail.mailboxes: `general`, `zonemessages` and the context aliasescontext names are reserved, in any case: ${
+            concatStringsSep ", " (map (box: "${box.mailbox}@${box.context}") reservedContexts)
+          }.";
         }
         {
           assertion = !mailCommandKnown || mailedBoxes == [] || (voicemailConf.general.mailcmd or null) != null;

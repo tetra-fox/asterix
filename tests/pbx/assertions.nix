@@ -361,6 +361,40 @@
       ];
     };
 
+    # VoiceMail() takes the context in any case, but files the message under
+    # the mailbox as dialed, and reaches no mailbox through an alias
+    voicemailDestinationContextInAnyCase = {
+      module = {config, ...}: let
+        inherit (config.lib.asterisk) secret;
+      in {
+        pbx = {
+          extensions."202" = {
+            noAnswer.voicemail = "201@Default";
+            busy.voicemail = "300@sales";
+          };
+          ringGroups.front.noAnswer.voicemail = "1234@devices";
+          queues.support.noAnswer.voicemail = "Alice@Sales";
+        };
+        services.asterisk = {
+          voicemail.settings.aliasescontext = "aliases";
+          settings."voicemail.conf" = {
+            Sales = {
+              "300" = "${secret "/run/secrets/vm-300"},Sales";
+              alice = "${secret "/run/secrets/vm-alice"},Alice";
+            };
+            aliases."1234@devices" = "201@default";
+          };
+        };
+      };
+      assertions = [
+        ''
+          pbx: destinations that do not exist:
+            pbx.ringGroups.front.noAnswer: voicemail 1234@devices
+            pbx.queues.support.noAnswer: voicemail Alice@Sales
+        ''
+      ];
+    };
+
     # Asterisk keeps 79 bytes of a caller ID name; each of these characters
     # takes 3
     extensionNameOf79Bytes = {

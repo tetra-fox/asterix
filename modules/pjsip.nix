@@ -293,7 +293,9 @@
               Voicemail boxes whose message-waiting state is sent to the device,
               in NOTIFYs it did not ask for. Asterisk refuses a device's own
               subscription to message-summary with 404, so the device has to take
-              these NOTIFYs.
+              these NOTIFYs. Each names a mailbox as voicemail.conf spells it,
+              since Asterisk compares them in their case, or an alias from the
+              section voicemail.conf's `aliasescontext` names.
             '';
           };
         };

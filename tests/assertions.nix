@@ -1175,6 +1175,48 @@
       assertion = "Asterisk records at most 10 formats and ignores the rest";
     };
 
+    # app_voicemail takes general and zonemessages in any case, and the
+    # section aliasescontext names, for no voicemail context, so it never
+    # loads a mailbox there
+    voicemailReservedContextsInAnyCase = {
+      module = {config, ...}: {
+        services.asterisk.voicemail = {
+          mailboxes = {
+            "101@General".pin = config.lib.asterisk.secret "/run/secrets/vm-101";
+            "102@zoneMessages".pin = config.lib.asterisk.secret "/run/secrets/vm-102";
+            "103@MyAliases".pin = config.lib.asterisk.secret "/run/secrets/vm-103";
+            "104@sales".pin = config.lib.asterisk.secret "/run/secrets/vm-104";
+          };
+          settings.aliasescontext = "myaliases";
+        };
+      };
+      assertions = ["services.asterisk.voicemail.mailboxes: `general`, `zonemessages` and the context aliasescontext names are reserved, in any case: 101@General, 102@zoneMessages, 103@MyAliases."];
+    };
+
+    # app_voicemail sends a mailbox's MWI to its aliases too, while a mailbox
+    # named in another case gets none
+    mwiForAliasAndMailboxInAnotherCase = {
+      module = {config, ...}: {
+        services.asterisk = {
+          voicemail = {
+            mailboxes."101".pin = config.lib.asterisk.secret "/run/secrets/vm";
+            settings.aliasescontext = "myaliases";
+          };
+          settings."voicemail.conf".MyAliases."1234@devices" = "101@default";
+          pjsip.endpoints."101".mailboxes = [
+            "1234@devices"
+            "101@Default"
+          ];
+        };
+      };
+      assertions = [
+        ''
+          services.asterisk: PJSIP endpoints reference voicemail boxes that are not defined:
+            pjsip.endpoints.101.mailboxes: 101@Default
+        ''
+      ];
+    };
+
     mwiForUndefinedMailbox = {
       module = {config, ...}: {
         services.asterisk = {

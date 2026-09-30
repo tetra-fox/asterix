@@ -231,9 +231,10 @@ in {
         }
       '';
       description = ''
-        Numbers calls arrive at from trunks, keyed by the number the trunk
-        sends, and where their calls go: `destination`, or `hours` with
-        `open` and `closed`. With pbx, calls from a trunk start in
+        Numbers calls arrive at from trunks, keyed by the user part of the
+        Request-URI the trunk sends (a number only in To does not count), and
+        where their calls go: `destination`, or `hours` with `open` and
+        `closed`. With pbx, calls from a trunk start in
         `pbx-inbound-<trunk>`, which holds these numbers, unless the trunk
         sets a `context` of its own. Other numbers are rejected.
       '';

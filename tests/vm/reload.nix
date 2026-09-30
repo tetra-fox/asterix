@@ -10,7 +10,13 @@
 # registrations survive each restart (they live in astdb). With checkConfig
 # off, a PJSIP object Asterisk rejects keeps its previous version on a
 # reload, until the next restart drops it, and the journal says so both
-# times; a file a module rejects as a whole fails the deploy.
+# times; a file a module rejects as a whole fails the deploy. Globals and
+# extensions changed at runtime, from the dialplan and the CLI, are back to
+# the configuration after `dialplan reload`, `module reload pbx_config.so` and
+# `core reload`, and after a deploy that changes extensions.conf, which also
+# removes a global the configuration no longer has. There is no `dialplan
+# save`; with writeprotect off it cannot write the rendered extensions.conf,
+# and what it saves elsewhere is not loaded.
 {
   pkgs,
   self,
@@ -242,6 +248,14 @@ in
           "cdr_custom.so"
           "cel_custom.so"
         ];
+        # a global, which the dialplan changes at runtime next to one of its own
+        dialplan.globals.SOURCE = "nix";
+        dialplan.contexts.runtime.extensions.s = [
+          "Set(GLOBAL(SOURCE)=dialplan)"
+          "Set(GLOBAL(RUNTIME)=dialplan)"
+          "Answer()"
+          "Hangup()"
+        ];
       };
 
       # a credential systemd decrypts itself, which the test rotates by
@@ -308,6 +322,14 @@ in
             checkConfig = false;
             confbridge.bridges.reload_check.settings.max_membres = 5;
           };
+        };
+        # a global added to extensions.conf, which switching back removes
+        globals.configuration = {
+          services.asterisk.dialplan.globals.DEPLOYED = "yes";
+        };
+        # with static, which the module sets, pbx_config offers dialplan save
+        saveable.configuration = {
+          services.asterisk.dialplan.general.writeprotect = false;
         };
       };
     };
@@ -552,5 +574,72 @@ in
             alice.hangup()
             wait_idle(pbx)
             assert registers() == registered
+
+        def dialplan_globals():
+            return dict(re.findall(r"^   (\w+)=(.*)$", asterisk(pbx, "dialplan show globals"), re.M))
+
+        def phones_dialplan():
+            # without the line numbers, which a global added above the context moves
+            return re.sub(r" +\[extensions\.conf:\d+\]", "", asterisk(pbx, "dialplan show phones"))
+
+        nix_globals, nix_dialplan = dialplan_globals(), phones_dialplan()
+
+        def change_at_runtime():
+            """Globals set from the dialplan, one the configuration sets and one
+            of its own, and one from the CLI; an extension added and one of the
+            configuration's removed from the CLI. Returns the globals and the
+            dialplan of phones."""
+            before = dialplan_globals()
+            asterisk(pbx, "channel originate Local/s@runtime application NoOp")
+            pbx.wait_until_succeeds("asterisk -rx 'dialplan show globals' | grep -qx '   RUNTIME=dialplan'")
+            wait_idle(pbx)
+            asterisk(pbx, "dialplan set global CLI cli")
+            asterisk(pbx, "dialplan add extension 198,1,NoOp(runtime) into phones")
+            asterisk(pbx, "dialplan remove extension _10X@phones")
+            changed = dialplan_globals(), phones_dialplan()
+            assert changed[0] == {**before, "SOURCE": "dialplan", "RUNTIME": "dialplan", "CLI": "cli"}, changed[0]
+            assert "'198' =>" in changed[1] and "'_10X' =>" not in changed[1], changed[1]
+            return changed
+
+        with subtest("what was changed at runtime is back to the configuration after dialplan reload, module reload and core reload from the CLI"):
+            assert nix_globals["SOURCE"] == "nix", nix_globals
+            # dialplan reload last, before the next deploy
+            for command in ["core reload", "module reload pbx_config.so", "dialplan reload"]:
+                change_at_runtime()
+                asterisk(pbx, command)
+                assert dialplan_globals() == nix_globals, (command, dialplan_globals())
+                assert phones_dialplan() == nix_dialplan, (command, phones_dialplan())
+
+        with subtest("a deploy that changes extensions.conf brings back the configuration, with a global it adds, and switching back removes that global"):
+            for specialisation, added in (("globals", {"DEPLOYED": "yes"}), (None, {})):
+                change_at_runtime()
+                cursor = journal_cursor(pbx)
+                assert switch(specialisation) == ["reloading"]
+                assert reloads(cursor) == ["module reload pbx_config.so"], reloads(cursor)
+                assert dialplan_globals() == {**nix_globals, **added}, (specialisation, dialplan_globals())
+                assert phones_dialplan() == nix_dialplan, (specialisation, phones_dialplan())
+
+        with subtest("dialplan save does not exist, and with writeprotect off it cannot write the rendered extensions.conf, and what it saves elsewhere is not loaded"):
+            output = asterisk(pbx, "dialplan save")
+            assert "No such command 'dialplan save'" in output, output
+            assert switch("saveable") == ["reloading"]
+            # pbx_config adds dialplan save only when it loads (pbx_config.c load_module)
+            output = asterisk(pbx, "dialplan save")
+            assert "No such command 'dialplan save'" in output, output
+            pbx.succeed("systemctl restart asterisk.service")
+            rendered = pbx.succeed("sha256sum /run/asterisk/config/extensions.conf")
+            change_at_runtime()
+            output = asterisk(pbx, "dialplan save")
+            assert "Failed to create file '/run/asterisk/config/extensions.conf'" in output, output
+            assert pbx.succeed("sha256sum /run/asterisk/config/extensions.conf") == rendered
+            # it appends extensions.conf to the path it is given
+            output = asterisk(pbx, "dialplan save /var/lib/asterisk/")
+            assert "Dialplan successfully saved into '/var/lib/asterisk//extensions.conf'" in output, output
+            pbx.succeed("grep -qF 'exten => 198,1,NoOp(runtime)' /var/lib/asterisk/extensions.conf")
+            asterisk(pbx, "dialplan reload")
+            assert (dialplan_globals(), phones_dialplan()) == (nix_globals, nix_dialplan)
+            assert switch() == ["reloading"]
+            output = asterisk(pbx, "dialplan save")
+            assert "I can't save dialplan now" in output, output
       '';
   }

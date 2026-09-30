@@ -181,6 +181,9 @@
               username = "5551000";
               password = secret "trunk";
               register = false;
+              # a qualify, which fails without DNS, would mark the provider
+              # unreachable at a random moment among the calls to it
+              qualifyFrequency = 0;
             };
             # the phone of 201 is this Asterisk, which answers busy
             endpoints = {

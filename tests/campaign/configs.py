@@ -13,6 +13,7 @@ oracle (routing.py).
                       [--parallel 1] [--max-load 16]
     configs.py sample FILE OUT [--seed 1] [--valid 6] [--mutants 42]
                                [--probes 2] [--calls 8]
+    configs.py sample FILE --check
     configs.py tollfraud OUT [--seed N] [--count 2000]
     configs.py compare CASE PROBE
 
@@ -39,11 +40,13 @@ showed at. `shrink` makes the smallest configuration of a signature that
 still fails, with the same tiers, into OUT/shrunk/. `vm` runs P4 in VM tests
 (vm.nix) with the phones and provider there. `sample` writes the seeded
 configurations of the gate's campaign-configs check (configs-sample.nix)
-once they pass, and `compare` is that check's comparison of a probe with
-the oracle. `tollfraud` walks valid configurations with inbound numbers
-and calls out from each trunk to every trunk's Dial (tollfraud.nix,
-SEC-03), with the ways out in OUT/paths.json, and compares the named ones
-with those the oracle finds in the model (routing.ways_out).
+once they pass, with the arguments that draw them, and with --check draws
+them again from those and compares, as that check does; `compare` is that
+check's comparison of a probe with the oracle. `tollfraud` walks valid
+configurations with inbound numbers and calls out from each trunk to every
+trunk's Dial (tollfraud.nix, SEC-03), with the ways out in OUT/paths.json,
+and compares the named ones with those the oracle finds in the model
+(routing.ways_out).
 """
 
 import argparse
@@ -55,6 +58,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 
 # the modules of this directory import each other; no bytecode in the tree
@@ -536,40 +540,68 @@ def compare(args):
     sys.exit(1 if problems else 0)
 
 
-def sample(args):
-    """The gate's sample: valid configurations, mutations rejected at T0,
-    and probed ones with at most --calls calls that end on their own; each
-    checked here first, since the sample holds what passes today."""
-    campaign = options.Campaign(args, "configs.nix")
-    rng = random.Random(args.seed)
-    valid = draw(generate.configurations(wide=True), args.valid, args.seed)
+def sample_cases(seed, valid_count, mutants, probes, calls):
+    """The configurations of the gate's sample for SEED: valid ones,
+    mutations rejected at T0, and probed ones with at most CALLS calls that
+    end on their own."""
+    rng = random.Random(seed)
+    valid = draw(generate.configurations(wide=True), valid_count, seed)
     cases_ = [{"id": f"v{i}", "kind": "valid", "model": m} for i, m in enumerate(valid)]
     # the mutations the tiers reject at T0; a time zone only the build checks
     t0_mutations = [m for m in generate.MUTATIONS if m is not generate.m_timezone]
-    while sum(c["kind"] == "mutant" for c in cases_) < args.mutants:
+    while sum(c["kind"] == "mutant" for c in cases_) < mutants:
         case = mutant(f"m{len(cases_)}", rng.choice(valid), rng.choice(t0_mutations).__name__, rng.randrange(2**32))
         if case:
             cases_.append(case)
-    for i, m in enumerate(draw(generate.configurations(fast=True), args.probes, args.seed + 1)):
-        case = probed(f"p{i}", m, args.seed + i)
+    for i, m in enumerate(draw(generate.configurations(fast=True), probes, seed + 1)):
+        case = probed(f"p{i}", m, seed + i)
         # in their order, and none of closing early, whose state one call leaves to the next
         quick = [p for p in case["plan"] if "call" in p and not p["expect"].get("long") and not p.get("state")]
-        case["plan"] = [quick[k] for k in sorted(rng.sample(range(len(quick)), min(args.calls, len(quick))))]
+        case["plan"] = [quick[k] for k in sorted(rng.sample(range(len(quick)), min(calls, len(quick))))]
         cases_.append(case)
-    evaluated = evaluate(campaign, "sample", cases_, set(), rng)
-    failures = verdicts(campaign, cases_, evaluated)
-    for f in failures:
-        print(f"{f['case']}: {f['signature']}", file=sys.stderr)
-    if failures:
-        sys.exit("the sample holds configurations that fail today; fix them or pick another seed")
+    return cases_
+
+
+def sample_text(args, cases_):
+    """The sample file: the arguments that draw it, then a line per
+    configuration."""
     entries_ = [
         {"id": c["id"], "expect": "reject" if c["kind"] == "mutant" else "accept", "modules": [generate.modules(c["model"])]}
         | ({"model": c["model"], "plan": [{"call": p["call"], "expect": p["expect"], "why": p["why"]} for p in c["plan"]]} if c["kind"] == "probe" else {})
         for c in cases_
     ]
-    # a line per configuration
-    args.file.write_text("[\n" + ",\n".join(json.dumps(e, ensure_ascii=False) for e in entries_) + "\n]\n")
-    print(f"{len(entries_)} configurations, seed {args.seed}: {args.file}")
+    head = json.dumps({key: getattr(args, key) for key in SAMPLE_ARGUMENTS})[:-1]
+    return head + ', "configurations": [\n' + ",\n".join(json.dumps(e, ensure_ascii=False) for e in entries_) + "\n]}\n"
+
+
+# what draws a sample, recorded in its file
+SAMPLE_ARGUMENTS = ["seed", "valid", "mutants", "probes", "calls"]
+
+
+def sample(args):
+    """Writes the gate's sample after checking it through the tiers, since
+    it holds what passes today; with --check, draws the sample FILE records
+    the arguments of again and compares, without Nix."""
+    if args.check:
+        recorded = json.loads(args.file.read_text())
+        for key in SAMPLE_ARGUMENTS:
+            setattr(args, key, recorded[key])
+        cases_ = sample_cases(args.seed, args.valid, args.mutants, args.probes, args.calls)
+        if sample_text(args, cases_) != args.file.read_text():
+            command = " ".join(f"--{key} {recorded[key]}" for key in SAMPLE_ARGUMENTS)
+            sys.exit(f"{args.file} is not what its arguments draw now; write it again with configs.py sample {args.file} OUT {command}")
+        print(f"{args.file} is what seed {args.seed} draws")
+        return
+    campaign = options.Campaign(args, "configs.nix")
+    cases_ = sample_cases(args.seed, args.valid, args.mutants, args.probes, args.calls)
+    evaluated = evaluate(campaign, "sample", cases_, set(), random.Random(args.seed))
+    failures = verdicts(campaign, cases_, evaluated)
+    for f in failures:
+        print(f"{f['case']}: {f['signature']}", file=sys.stderr)
+    if failures:
+        sys.exit("the sample holds configurations that fail today; fix them or pick another seed")
+    args.file.write_text(sample_text(args, cases_))
+    print(f"{len(cases_)} configurations, seed {args.seed}: {args.file}")
 
 
 def size(case):
@@ -665,7 +697,8 @@ def main():
     v.add_argument("--max-load", type=float, default=16, help="the load under which another VM test starts")
     g = sub.add_parser("sample")
     g.add_argument("file", type=pathlib.Path)
-    g.add_argument("out", type=pathlib.Path, help="where the evaluations and builds of the check go")
+    g.add_argument("out", type=pathlib.Path, nargs="?", help="where the evaluations and builds of the check go")
+    g.add_argument("--check", action="store_true", help="draw FILE again from the arguments it records, and compare")
     g.add_argument("--seed", type=int, default=1)
     g.add_argument("--valid", type=int, default=6)
     g.add_argument("--mutants", type=int, default=42)
@@ -686,11 +719,15 @@ def main():
         p.add_argument("--jobs", type=int, default=6, help="builds at once")
         p.add_argument("--chunk", type=int, default=1000, help="configurations per nix-eval-jobs run")
     args = parser.parse_args()
-    if args.command != "compare":
+    if getattr(args, "out", None):
         args.out = args.out.resolve()
         args.out.mkdir(parents=True, exist_ok=True)
         # what Hypothesis keeps between runs goes with the run, not the tree
         hypothesis.configuration.set_hypothesis_home_dir(args.out / "hypothesis")
+    elif args.command == "sample":
+        if not args.check:
+            parser.error("sample needs OUT, or --check")
+        hypothesis.configuration.set_hypothesis_home_dir(tempfile.mkdtemp())
     {"run": run, "shrink": shrink, "vm": vm, "sample": sample, "tollfraud": tollfraud, "compare": compare}[args.command](args)
 
 

@@ -154,7 +154,7 @@
   # the valid configurations of campaign/configs-sample.json; `configs.py
   # tollfraud` walks thousands like them
   campaign = import ./campaign/configs.nix {inherit pkgs self;};
-  generated = builtins.filter (case: case.expect == "accept") (builtins.fromJSON (builtins.readFile ./campaign/configs-sample.json));
+  generated = builtins.filter (case: case.expect == "accept") (builtins.fromJSON (builtins.readFile ./campaign/configs-sample.json)).configurations;
   sampleWalks = lib.listToAttrs (map (case: let
     name = "generated-${case.id}";
   in

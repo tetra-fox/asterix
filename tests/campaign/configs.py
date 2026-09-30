@@ -12,6 +12,7 @@ oracle (routing.py).
     configs.py vm OUT [--seed N] [--count 500] [--per-test 25] [--calls 6]
     configs.py sample FILE OUT [--seed 1] [--valid 6] [--mutants 42]
                                [--probes 2] [--calls 8]
+    configs.py tollfraud OUT [--seed N] [--count 2000]
     configs.py compare CASE PROBE
 
 It needs a Python with Hypothesis, such as `nix shell --impure --expr
@@ -38,7 +39,11 @@ still fails, with the same tiers, into OUT/shrunk/. `vm` runs P4 in VM tests
 (vm.nix), one at a time, with the phones and provider there. `sample`
 writes the seeded configurations of the gate's campaign-configs check
 (configs-sample.nix) once they pass, and `compare` is that check's
-comparison of a probe with the oracle.
+comparison of a probe with the oracle. `tollfraud` walks valid
+configurations with inbound numbers and calls out from each trunk to every
+trunk's Dial (tollfraud.nix, SEC-03), with the ways out in OUT/paths.json,
+and compares the named ones with those the oracle finds in the model
+(routing.ways_out).
 """
 
 import argparse
@@ -443,6 +448,55 @@ def vm_verdicts(batch, out, test):
     return found
 
 
+def tollfraud(args):
+    """SEC-03: every way from a trunk to a trunk's Dial, walked through the
+    dialplan Asterisk loads (tollfraud.nix) in valid configurations with
+    inbound numbers and calls out; each must be one the configuration names,
+    and those the oracle finds in the model."""
+    seed = args.seed if args.seed is not None else random.randrange(2**31)
+    print(f"seed {seed}, {load()}", flush=True)
+    campaign = options.Campaign(args, "configs.nix")
+    began = time.monotonic()
+    models = draw(generate.configurations(wide=True).filter(lambda m: m["inbound"] and m["outbound"]), args.count, seed)
+    cases_ = [{"id": f"t{i}", "kind": "valid", "model": m} for i, m in enumerate(models)]
+    (args.out / "cases.json").write_text(json.dumps(cases_))
+    print(f"{len(cases_)} configurations drawn ({time.monotonic() - began:.0f} s)", flush=True)
+    results = t0(campaign, "t0", [{"modules": [generate.modules(c["model"])], "tollfraud": True} for c in cases_])
+    walks = [r["tollfraud"] for r in results if "tollfraud" in r]
+    started = time.monotonic()
+    built = campaign.build(walks)
+    print(f"T1 walks: {len(built)} of {len(walks)} built ({time.monotonic() - started:.0f} s, {load()})", flush=True)
+    failures, paths = [], []
+    for case, meta in zip(cases_, results):
+        if "error" in meta or meta["outcome"]["failed"]:
+            text = meta.get("error") or "\n".join(meta["outcome"]["failed"])
+            failures.append(failure("P2", "T0", f"rejected: {normalise(text)}", text, case))
+            continue
+        if meta["tollfraud"] not in built:
+            failures.append(failure("SEC-03", "T1", "the walk did not run", meta["tollfraud"], case))
+            continue
+        out = subprocess.run(["nix-store", "--query", "--outputs", meta["tollfraud"]], check=True, capture_output=True, text=True).stdout.strip()
+        walk = json.loads((pathlib.Path(out) / "report.json").read_text())
+        for p in walk["paths"]:
+            paths.append({"case": case["id"], **p})
+            if p["finding"]:
+                failures.append(failure("SEC-03", "T1", p["finding"], json.dumps(p, ensure_ascii=False), case))
+        for u in walk["unresolved"]:
+            failures.append(failure("SEC-03", "T1", f"not followed: {normalise(u['what'])}", json.dumps(u, ensure_ascii=False), case))
+        # the named ways out against those the oracle finds in the model, so a
+        # way the walk cannot follow shows too
+        walked = {(p["from"], p["via"], p["number"]) for p in walk["paths"] if not p["finding"]}
+        expected = routing.ways_out(case["model"])
+        for way in sorted(expected - walked):
+            failures.append(failure("SEC-03", "T1", "the walk missed a way out the oracle finds", json.dumps(way, ensure_ascii=False), case))
+        for way in sorted(walked - expected):
+            failures.append(failure("SEC-03", "T1", "the walk found a way out the oracle does not", json.dumps(way, ensure_ascii=False), case))
+    (args.out / "paths.json").write_text(json.dumps(paths, indent=1, ensure_ascii=False))
+    named = [p for p in paths if not p["finding"]]
+    print(f"{len(paths)} ways out walked, {len(named)} named, in {len({p['case'] for p in named})} configurations", flush=True)
+    report(args, seed, cases_, {}, failures, time.monotonic() - began)
+
+
 def compare(args):
     """The calls of a probed case of the gate's sample against their
     predictions."""
@@ -586,10 +640,14 @@ def main():
     g.add_argument("--mutants", type=int, default=42)
     g.add_argument("--probes", type=int, default=2)
     g.add_argument("--calls", type=int, default=8, help="calls per probed configuration")
+    t = sub.add_parser("tollfraud")
+    t.add_argument("out", type=pathlib.Path)
+    t.add_argument("--seed", type=int)
+    t.add_argument("--count", type=int, default=2000)
     c = sub.add_parser("compare")
     c.add_argument("case", type=pathlib.Path)
     c.add_argument("probe", type=pathlib.Path)
-    for p in [r, s, v, g]:
+    for p in [r, s, v, g, t]:
         p.add_argument("--no-t1", action="store_true", help="evaluate only")
         p.add_argument("--flake", default=".")
         p.add_argument("--workers", type=int, default=2)
@@ -602,7 +660,7 @@ def main():
         args.out.mkdir(parents=True, exist_ok=True)
         # what Hypothesis keeps between runs goes with the run, not the tree
         hypothesis.configuration.set_hypothesis_home_dir(args.out / "hypothesis")
-    {"run": run, "shrink": shrink, "vm": vm, "sample": sample, "compare": compare}[args.command](args)
+    {"run": run, "shrink": shrink, "vm": vm, "sample": sample, "tollfraud": tollfraud, "compare": compare}[args.command](args)
 
 
 if __name__ == "__main__":

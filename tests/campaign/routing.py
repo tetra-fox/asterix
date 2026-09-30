@@ -475,6 +475,34 @@ def plan(m, seed):
     return calls
 
 
+def ways_out(m):
+    """The numbers outside that calls from the trunks reach, as (the trunk a
+    call comes from, the trunk it goes out through, the number): from each
+    route of `inbound`, through every destination a call can take whatever
+    the time, the keys and who answers, to the numbers outside of the ring
+    groups it reaches, called through the group's `trunk`, by default
+    `outbound.trunk`. A group rings its members' phones, not their
+    extensions' destinations."""
+    found = set()
+    outbound = (m["outbound"] or {}).get("trunk")
+    for route in m["inbound"].values():
+        seen = set()
+        pending = [route[slot] for slot in ["destination", "open", "closed"] if slot in route]
+        while pending:
+            (kind, value), = pending.pop().items()
+            if kind not in ("extension", "ringGroup", "queue", "ivr") or (kind, value) in seen:
+                continue
+            seen.add((kind, value))
+            o = m[generate.KIND_OPTION[kind]][value]
+            if kind == "ringGroup":
+                found.update((route["trunk"], o.get("trunk") or outbound, number) for number in o.get("external", []))
+            pending += [o[slot] for slot in ["busy", "noAnswer", "noInput", "invalid"] if slot in o]
+            pending += list(o.get("options", {}).values())
+            if kind == "ivr" and o.get("directDial"):
+                pending += [{"extension": number} for number in m["extensions"]]
+    return found
+
+
 # the contexts of pbx objects
 OBJECT_PREFIXES = tuple(f"pbx-{k}-" for k in KIND_CONTEXT.values())
 

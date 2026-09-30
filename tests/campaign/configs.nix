@@ -1,6 +1,7 @@
 # The generated-configuration campaign (configs.py): configurations of the
 # pbx layer, written by generate.py as JSON, evaluated (T0), booted by
-# Asterisk (T1) and called through the probe (probe.nix). A configuration is
+# Asterisk (T1), called through the probe (probe.nix) and walked from its
+# trunks to their Dials (tollfraud.nix). A configuration is
 # a list of modules; in their JSON, { "_secret": path } is a secret reference
 # and every other value is what the option takes.
 {
@@ -24,6 +25,7 @@
   lightEval = import ./light-eval.nix {inherit pkgs;};
   fullEval = (import ../eval-lib.nix {inherit pkgs self;}).evalConfig;
   probe = import ./probe.nix {inherit pkgs self;};
+  tollfraud = import ./tollfraud.nix {inherit pkgs self;};
 
   decode = value:
     if isAttrs value
@@ -149,8 +151,8 @@ in {
   inherit bootChecks decode evaluate outcome overrideModule;
 
   # jobs for nix-eval-jobs, one per entry: each has `modules`, and `mode`
-  # ("light" or "full"), `overrides` (P6) and `probe` (a spec for probe.nix)
-  # as wanted
+  # ("light" or "full"), `overrides` (P6), `probe` (a spec for probe.nix)
+  # and `tollfraud` (the walk of tollfraud.nix) as wanted
   jobs = entries:
     listToAttrs (lib.imap0 (i: entry: let
       mode = entry.mode or "light";
@@ -166,6 +168,15 @@ in {
               name = "g${toString i}";
               config = evaluate mode entry.modules;
               inherit (entry.probe) commands calls;
+            })
+            .drvPath;
+        }
+        // optionalAttrs (entry.tollfraud or false && o.failed == []) {
+          tollfraud =
+            builtins.unsafeDiscardStringContext
+            (tollfraud {
+              name = "g${toString i}";
+              config = evaluate mode entry.modules;
             })
             .drvPath;
         }

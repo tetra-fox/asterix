@@ -395,6 +395,27 @@
       ];
     };
 
+    # with searchcontexts VoiceMail() takes a mailbox from any context,
+    # whatever context it is given
+    voicemailDestinationWithSearchContexts = {
+      module = {config, ...}: {
+        pbx.extensions."202" = {
+          noAnswer.voicemail = "300";
+          busy.voicemail = "301@sales";
+        };
+        services.asterisk = {
+          voicemail.settings.searchcontexts = true;
+          settings."voicemail.conf".sales."300" = "${config.lib.asterisk.secret "/run/secrets/vm-300"},Sales";
+        };
+      };
+      assertions = [
+        ''
+          pbx: destinations that do not exist:
+            pbx.extensions."202".busy: voicemail 301@sales
+        ''
+      ];
+    };
+
     # Asterisk keeps 79 bytes of a caller ID name; each of these characters
     # takes 3
     extensionNameOf79Bytes = {

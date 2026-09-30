@@ -56,20 +56,26 @@
       value = lib.trim (builtins.elemAt parts 1);
     };
 
+  # the value app_voicemail reads of `key`, in lower case, from the [general]
+  # of voicemail.conf's `lines`: the last one of the sections called general
+  # in any case, or null
+  voicemailGeneral = lines: key:
+    lib.foldl' (
+      value: line: let
+        entry = entryOf line.line;
+      in
+        if lib.toLower line.section == "general" && entry != null && lib.toLower entry.key == key
+        then entry.value
+        else value
+    )
+    null
+    lines;
+
   # what app_voicemail takes a section of voicemail.conf for, by its name in
   # any case: `general`, `zonemessages`, `aliases` for the one aliasescontext
   # of `lines` names, or else `context` (apps/app_voicemail.c load_users)
   voicemailSectionKind = lines: let
-    # the last aliasescontext of [general], the one app_voicemail reads
-    aliases = lib.toLower (lib.foldl' (
-        value: line: let
-          entry = entryOf line.line;
-        in
-          if lib.toLower line.section == "general" && entry != null && lib.toLower entry.key == "aliasescontext"
-          then entry.value
-          else value
-      ) ""
-      lines);
+    aliases = lib.toLower (toString (voicemailGeneral lines "aliasescontext"));
   in
     name: let
       lower = lib.toLower name;
@@ -83,8 +89,9 @@ in {
   inherit splitMailbox voicemailLines entryOf voicemailSectionKind;
 
   # the mailboxes of voicemail.conf, as { contexts.<context>.<box> = true;
-  # aliases."<box>@<context>" = true; }, raw text included, or null when the
-  # file includes others, which can hold any mailbox
+  # aliases."<box>@<context>" = true; search; }, raw text included, or null
+  # when the file includes others, which can hold any mailbox; `search` is
+  # searchcontexts, with which app_voicemail finds a mailbox in any context
   voicemailMailboxes = core: let
     lines = voicemailLines (core.renderedFiles."voicemail.conf" or "");
     kindOf = voicemailSectionKind lines;
@@ -113,6 +120,7 @@ in {
       aliases = lib.genAttrs (map (e: let
         ref = splitMailbox e.key;
       in "${ref.box}@${ref.context}") (ofKind "aliases")) (_: true);
+      search = format.isTrue (voicemailGeneral lines "searchcontexts");
     };
 
   # typed option values as section keys: scalars become defaults, so settings

@@ -20,12 +20,13 @@
   inherit (import ../lib.nix {inherit lib;}) splitMailbox voicemailMailboxes;
 
   knownMailboxes = voicemailMailboxes config.services.asterisk;
-  # VoiceMail() takes the context in any case, but files the message under the
-  # mailbox as dialed (apps/app_voicemail.c leave_voicemail), and reaches no
+  # VoiceMail() takes the context in any case, or any context with
+  # searchcontexts, but files the message under the mailbox as dialed
+  # (apps/app_voicemail.c find_user and leave_voicemail), and reaches no
   # mailbox through an alias: find_user swaps the alias's mailbox and context
   reachesMailbox = mailbox: let
     ref = splitMailbox mailbox;
-    contexts = builtins.filter (context: lib.toLower context == lib.toLower ref.context) (builtins.attrNames knownMailboxes.contexts);
+    contexts = builtins.filter (context: knownMailboxes.search || lib.toLower context == lib.toLower ref.context) (builtins.attrNames knownMailboxes.contexts);
   in
     knownMailboxes == null || builtins.any (context: knownMailboxes.contexts.${context} ? ${ref.box}) contexts;
   knownContexts = config.services.asterisk.dialplan.knownContexts;

@@ -67,7 +67,7 @@ class Phone:
         # keep that search short when many phones share a machine
         flags.append(f"--rtp-port={20000 + 8 * (self.sip_port - 5000)}")
         return (
-            f"sip-phone start {self.name} {self.user} {shlex.quote(self.password)} "
+            f"sip-phone start {self.name} {shlex.quote(self.user)} {shlex.quote(self.password)} "
             f"{shlex.quote(self.server)} {self.sip_port} {self.cli_port} {self.tone} {' '.join(flags)} {self.options} {extra}"
         )
 

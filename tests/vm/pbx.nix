@@ -1,13 +1,14 @@
 # The pbx layer on a running system: opening hours in their time zone with
-# holidays and the close-early toggle, whose busy lamp follows it within 2 s,
-# inbound calls routed by them, a hunt group ringing one phone after the
-# other, an external ring group member who has to press 1 before the call is
-# theirs, emergency calls that notify two extensions without waiting for them,
-# the busy and no-answer destinations of an extension, a voice menu driven by
-# DTMF, and pages, which leave out the caller and members in a call. Wherever
-# an extension is called, all of its devices ring, and its busy lamp shows it
-# ringing and free again within 2 s. A second Asterisk plays the SIP provider
-# and the mobile phone of the external member.
+# holidays and the close-early toggle, whose busy lamp follows it within 2 s
+# and which, lamp included, holds across a restart, inbound calls routed by
+# them, a hunt group ringing one phone after the other, an external ring
+# group member who has to press 1 before the call is theirs, emergency calls
+# that notify two extensions without waiting for them, the busy and no-answer
+# destinations of an extension, a voice menu driven by DTMF, and pages, which
+# leave out the caller and members in a call. Wherever an extension is
+# called, all of its devices ring, and its busy lamp shows it ringing and free
+# again within 2 s. A second Asterisk plays the SIP provider and the mobile
+# phone of the external member.
 #
 #   pbx       10.2.0.10, clock set by the test
 #   provider  10.2.0.5
@@ -374,6 +375,18 @@ in
             pbx.wait_until_succeeds("test -f /var/lib/asterisk/spool/voicemail/default/200/INBOX/msg0000.txt", timeout=120)
             assert {p.name: p.requests("INVITE") for p in (reception, sales)} == before, "the ring group rang while closed"
             wait_idle(pbx)
+
+        with subtest("closed early stays closed across a restart, and its lamp lit"):
+            shown = lamp("*28", "On the phone")
+            pbx.succeed("systemctl restart asterisk.service")
+            pbx.wait_for_unit("asterisk.service")
+            pbx.wait_until_succeeds("asterisk -rx 'core show hint *28' | grep -q 'State:InUse'", timeout=60)
+            assert hours() == "closed"
+            # Asterisk restores reception's subscription from astdb and tells it again
+            retry(lambda _: len(lamp("*28", "On the phone")) > len(shown), timeout_seconds=60)
+            out = [moment for moment in lamp("*28", "Ready") if moment > shown[-1]]
+            assert not out, f"the lamp of *28 went out at {out}"
+            pbx.wait_until_succeeds("asterisk -rx 'pjsip show registrations' | grep -q 'Registered'", timeout=180)
 
         with subtest("reopening sends them to the ring group"):
             disconnects = boss.disconnects()

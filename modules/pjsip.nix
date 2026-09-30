@@ -162,7 +162,13 @@
             "198.51.100.0/24"
             "sip.provider.example"
           ];
-          description = "Source addresses, networks or host names identifying this endpoint.";
+          description = ''
+            Source addresses, networks or host names identifying this endpoint.
+            Asterisk resolves host names, through their SRV records where they
+            have them but not NAPTR, when it loads pjsip.conf, so a changed
+            address counts only after `asterisk -rx 'module reload res_pjsip.so'`
+            or a restart.
+          '';
         };
         settings = settingsOption "identify";
       };
@@ -301,7 +307,11 @@
           port = mkOption {
             type = types.nullOr types.port;
             default = null;
-            description = "Provider SIP port; defaults to the transport's standard port.";
+            description = ''
+              Provider SIP port. Without it, Asterisk looks up the host's
+              NAPTR and SRV records, which can name another host and port, and
+              falls back to the transport's standard port.
+            '';
           };
           username = mkOption {
             type = types.str;
@@ -331,7 +341,17 @@
             retryInterval = mkOption {
               type = types.ints.positive;
               default = 60;
-              description = "Seconds between registration attempts after a failure.";
+              description = ''
+                Seconds between registration attempts after a temporary
+                failure: no answer, 408, 500, 502, 503, 504 or 6xx. Asterisk
+                gives up after 10 retries in a row, and at once on any other
+                refusal, such as 403, a 3xx, or 401 and 407 to the credentials
+                it sent; the journal then says `Maximum retries reached` or
+                `Fatal response`. It tries again once res_pjsip reloads, as a
+                deploy that changes pjsip.conf (a new password, say) or
+                `asterisk -rx 'module reload res_pjsip.so'` does, or Asterisk
+                restarts.
+              '';
             };
             contactUser = mkOption {
               type = types.nullOr types.str;
@@ -360,8 +380,9 @@
             default = true;
             description = ''
               Identify inbound requests coming from `host` as this trunk, in
-              addition to `identify.match`. When a network in `identify.match`
-              already contains the host's address, Asterisk skips it and logs a
+              addition to `identify.match`, whose description says when a host
+              name is resolved. When a network in `identify.match` already
+              contains the host's address, Asterisk skips it and logs a
               misleading "did not resolve to any address" warning; turn this
               off then.
             '';

@@ -49,6 +49,14 @@
   };
   readme = import ./readme.nix {inherit pkgs self;};
 
+  # the examples' configuration and checks with another Asterisk package, a
+  # sample of the checks with each package (packages.nix)
+  packageChecks = import ./packages.nix {inherit pkgs self sops-nix;};
+  examplesWith = package:
+    pkgs.linkFarm "asterisk-examples-config-${package}" (
+      lib.mapAttrs (name: _: packageChecks.${package}."examples-config-${name}") examples.derivations
+    );
+
   sources = extensions:
     lib.fileset.toSource {
       root = ../.;
@@ -101,6 +109,8 @@ in
     examples-config-household-intercom = examples.derivations.household-intercom;
     examples-config-household-intercom-ht801 = examples.derivations.household-intercom-ht801;
     examples-config-small-office = examples.derivations.small-office;
+    examples-config-asterisk_20 = examplesWith "asterisk_20";
+    examples-config-asterisk_23 = examplesWith "asterisk_23";
 
     readme = reportFailures "asterisk-readme-eval" readme.problems;
     readme-config = pkgs.linkFarm "asterisk-readme-config" readme.derivations;

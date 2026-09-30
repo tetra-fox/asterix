@@ -15,6 +15,9 @@ in rec {
           {
             boot.isContainer = true;
             system.stateVersion = "26.05";
+            # pkgs.asterisk, as on the VM tests' nodes: eval-config.nix imports
+            # nixpkgs again, without the overlay of tests/packages.nix
+            services.asterisk.package = lib.mkDefault pkgs.asterisk;
           }
         ]
         ++ modules;

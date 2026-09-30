@@ -203,6 +203,18 @@
       assertion = "numbers may only contain digits, * and #: 61O (pbx.queues.support)";
     };
 
+    # its mailbox would start with #, which Asterisk reads as a directive in
+    # voicemail.conf; without a mailbox the number works (vm-pbx-calls)
+    hashExtensionWithMailbox = {
+      module = {config, ...}: {
+        pbx.extensions."#1" = {
+          password = config.lib.asterisk.secret "/run/secrets/hash";
+          voicemail.pin = config.lib.asterisk.secret "/run/secrets/vm-hash";
+        };
+      };
+      assertions = ["services.asterisk.voicemail.mailboxes: mailbox numbers may only contain letters, digits and _*#+-, and not start with * or #: #1@default."];
+    };
+
     # *8 unless features.conf says otherwise
     numberIsCallPickup = {
       module.pbx.hours.office.closeEarly = "*8";

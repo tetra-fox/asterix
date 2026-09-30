@@ -135,6 +135,11 @@
   mailboxes = attrValues vcfg.mailboxes;
   contexts = unique (map (box: box.context) mailboxes);
 
+  # app_voicemail ignores a mailbox that starts with * (apps/app_voicemail.c
+  # find_or_create), and Asterisk reads a line that starts with # as a directive
+  validNumber = box: builtins.match "[A-Za-z0-9_+-][A-Za-z0-9_*#+-]*" box.mailbox != null;
+  badNumbers = filter (box: !validNumber box) mailboxes;
+
   badFields =
     filter (
       box:
@@ -278,14 +283,21 @@
     lines;
   cutValues = filter (value: value.room < 0) limitedValues;
 
-  # mailboxes referenced by typed PJSIP endpoints (MWI) that are not defined
+  # mailboxes referenced by typed PJSIP endpoints (MWI) that are not defined,
+  # other than refused ones, which their own assertion names
   voicemailConf = cfg.settings."voicemail.conf" or {};
   knownMailboxes = voicemailMailboxes cfg;
+  refused =
+    map (box: {
+      box = box.mailbox;
+      inherit (box) context;
+    })
+    badNumbers;
   missingMailboxes = lib.concatLists (
     mapAttrsToList (
       endpoint: e:
         map (ref: "pjsip.endpoints.${endpoint}.mailboxes: ${ref}") (
-          filter (ref: !(hasMailbox knownMailboxes ref)) e.mailboxes
+          filter (ref: !(hasMailbox knownMailboxes ref) && !(builtins.elem (splitMailbox ref) refused)) e.mailboxes
         )
     )
     cfg.pjsip.endpoints
@@ -468,10 +480,12 @@ in {
               ];
             }
           ]
+          # a mailbox the assertion below refuses is left out, so that the
+          # assertion reports it and not the config format
           ++ map (box: {
             ${box.context}.${box.mailbox} = mkDefault (mailboxLine box);
           })
-          mailboxes
+          (filter validNumber mailboxes)
         );
 
         syntax."voicemail.conf".arrowSections = contexts;
@@ -491,10 +505,10 @@ in {
           }).";
         }
         {
-          # app_voicemail ignores a mailbox that starts with *, the key that
-          # jumps to extension a in VoiceMailMain (apps/app_voicemail.c find_or_create)
-          assertion = builtins.all (box: builtins.match "[A-Za-z0-9_#+-][A-Za-z0-9_*#+-]*" box.mailbox != null) mailboxes;
-          message = "services.asterisk.voicemail.mailboxes: mailbox numbers may only contain letters, digits and _*#+-, and not start with *.";
+          assertion = badNumbers == [];
+          message = "services.asterisk.voicemail.mailboxes: mailbox numbers may only contain letters, digits and _*#+-, and not start with * or #: ${
+            concatStringsSep ", " (map (box: "${box.mailbox}@${box.context}") badNumbers)
+          }.";
         }
         {
           assertion = lib.intersectLists reservedSections contexts == [];

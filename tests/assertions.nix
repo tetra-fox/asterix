@@ -950,6 +950,13 @@
       assertion = "mailbox numbers may only contain letters, digits and _*#+-, and not start with *";
     };
 
+    # Asterisk reads a line of voicemail.conf that starts with # as a
+    # directive
+    voicemailMailboxStartingWithHash = {
+      module.services.asterisk.voicemail.mailboxes."#42".pin = "1234";
+      assertion = "and not start with * or #: #42@default.";
+    };
+
     # app_voicemail splits the options at | and each at its first =
     voicemailOptionWithPipe = {
       module = {config, ...}: {

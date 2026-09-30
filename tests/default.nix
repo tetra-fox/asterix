@@ -92,6 +92,7 @@ in
     pbx-external = import ./pbx/external.nix {inherit pkgs self;};
     pbx-extensions = import ./pbx/extensions.nix {inherit pkgs self;};
     pbx-names = import ./pbx/names.nix {inherit pkgs self;};
+    pbx-menus = import ./pbx/menus.nix {inherit pkgs self;};
 
     # a seeded sample of tests/campaign/options.nix, which options.py runs whole
     campaign-options = import ./campaign/sample.nix {inherit pkgs self;};

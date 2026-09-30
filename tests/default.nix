@@ -109,6 +109,8 @@ in
 
     vm-reload = import ./vm/reload.nix {inherit pkgs self sopsSecrets;};
 
+    vm-change = import ./vm/change.nix {inherit pkgs self;};
+
     vm-minimal = import ./vm/minimal.nix {inherit pkgs self sopsSecrets;};
 
     vm-household-intercom = import ./vm/household-intercom.nix {inherit pkgs self sopsSecrets;};

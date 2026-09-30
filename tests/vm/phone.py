@@ -372,15 +372,18 @@ def asterisk(machine, command):
     return machine.succeed(f"asterisk -rx {shlex.quote(command)}")
 
 
-def sip_messages(machine, interface="eth1"):
-    """SIP messages over UDP that `machine` sent or received on `interface`,
-    from the capture QEMU writes of it (common.nix), in order: the capture
-    time in seconds, source and destination as address:port, and the text.
-    The times of one machine's capture come from one clock."""
+def udp_datagrams(machine, interface="eth1"):
+    """UDP datagrams that `machine` sent or received on `interface`, from the
+    capture QEMU writes of it (common.nix), in order: the capture time in
+    seconds, source and destination as address:port, and the payload. The
+    times of one machine's capture come from one clock."""
     data = (machine.state_dir / f"{interface}.pcap").read_bytes()
     # QEMU writes a little-endian capture with microseconds
     assert data[:4] == b"\xd4\xc3\xb2\xa1", data[:4]
-    messages = []
+    # pieces of fragmented datagrams by identification and addresses, by
+    # offset, and the length of those whose last piece arrived
+    fragments = {}
+    lengths = {}
     offset = 24
     while offset + 16 <= len(data):
         seconds, micros, length, _ = struct.unpack_from("<IIII", data, offset)
@@ -389,21 +392,41 @@ def sip_messages(machine, interface="eth1"):
         # the last frame may still be on its way to the file
         if len(frame) < length:
             break
-        # IPv4 over Ethernet, carrying UDP, and not a fragment
-        if frame[12:14] != b"\x08\x00" or frame[23] != 17 or struct.unpack_from("!H", frame, 20)[0] & 0x3FFF:
+        # IPv4 over Ethernet, carrying UDP
+        if frame[12:14] != b"\x08\x00" or frame[23] != 17:
             continue
-        ip = 14 + (frame[14] & 0x0F) * 4
-        source_port, destination_port, udp_length = struct.unpack_from("!HHH", frame, ip)
-        text = frame[ip + 8 : ip + udp_length].decode(errors="replace")
+        packet = frame[14 + (frame[14] & 0x0F) * 4 : 14 + struct.unpack_from("!H", frame, 16)[0]]
+        flags = struct.unpack_from("!H", frame, 20)[0]
+        # a SIP message over 1500 bytes, such as an INVITE with credentials
+        # and many codecs, comes in fragments
+        if flags & 0x3FFF:
+            key = frame[18:20] + frame[26:34]
+            pieces = fragments.setdefault(key, {})
+            pieces[(flags & 0x1FFF) * 8] = packet
+            if not flags & 0x2000:
+                lengths[key] = (flags & 0x1FFF) * 8 + len(packet)
+            packet = b"".join(pieces[start] for start in sorted(pieces))
+            # the pieces do not overlap, so all are there once they add up
+            if len(packet) != lengths.get(key):
+                continue
+            del fragments[key], lengths[key]
+        source_port, destination_port, udp_length = struct.unpack_from("!HHH", packet)
+        yield (
+            seconds + micros / 1e6,
+            f"{socket.inet_ntoa(frame[26:30])}:{source_port}",
+            f"{socket.inet_ntoa(frame[30:34])}:{destination_port}",
+            packet[8:udp_length],
+        )
+
+
+def sip_messages(machine, interface="eth1"):
+    """SIP messages among the UDP datagrams of udp_datagrams(): the capture
+    time, source and destination, and the text."""
+    messages = []
+    for when, source, destination, payload in udp_datagrams(machine, interface):
+        text = payload.decode(errors="replace")
         if re.match(r"SIP/2\.0 |[A-Z]+ sip:", text):
-            messages.append(
-                {
-                    "time": seconds + micros / 1e6,
-                    "source": f"{socket.inet_ntoa(frame[26:30])}:{source_port}",
-                    "destination": f"{socket.inet_ntoa(frame[30:34])}:{destination_port}",
-                    "text": text,
-                }
-            )
+            messages.append({"time": when, "source": source, "destination": destination, "text": text})
     return messages
 
 

@@ -1,7 +1,10 @@
 # The sandbox does not break TLS, SRTP or realtime scheduling: a TLS
 # transport whose certificate and key are root-only files, SRTP (SDES) media,
 # which Asterisk relays although both endpoints have directMedia, Asterisk
-# running with SCHED_RR, and a call over them. Each TLS method
+# running with SCHED_RR, and a call over them. A phone with SDES keys over TLS
+# calls a plain RTP phone, which calls a phone with DTLS-SRTP over UDP: both
+# ends hear each other, and on the encrypted leg the capture holds no plain
+# RTP or RTCP, only packets with an authentication tag. Each TLS method
 # accepts the versions it names, and the client and Asterisk's log say why
 # the others are refused; `sslv23` negotiates up to 1.3. With verifyServer,
 # Asterisk connects only to a server with a valid certificate its CA list
@@ -107,7 +110,7 @@ in
           self.nixosModules.default
           ./common.nix
           (import ./secrets.nix {
-            fixed = lib.listToAttrs (map (extension: lib.nameValuePair "sip-${extension}" "pw-${extension}") ["101" "102" "103" "104" "105"]);
+            fixed = lib.listToAttrs (map (extension: lib.nameValuePair "sip-${extension}" "pw-${extension}") ["101" "102" "103" "104" "105" "106" "107"]);
           })
         ];
 
@@ -172,6 +175,8 @@ in
                       verifyClient = true;
                     };
                 };
+                # for the plain RTP phone and the DTLS-SRTP one
+                udp = {};
               };
 
             endpoints =
@@ -183,10 +188,23 @@ in
                 # Asterisk relays encrypted media all the same
                 directMedia = true;
               })
-              // lib.genAttrs ["103" "104" "105"] (extension: {
+              // lib.genAttrs ["103" "104" "105" "106"] (extension: {
                 context = "phones";
                 auth.password = config.lib.asterisk.secret "/run/test-secrets/sip-${extension}";
               })
+              // {
+                # with a certificate Asterisk makes for each call, and the
+                # phone's certificate checked against the fingerprint in its SDP
+                "107" = {
+                  context = "phones";
+                  auth.password = config.lib.asterisk.secret "/run/test-secrets/sip-107";
+                  settings = {
+                    media_encryption = "dtls";
+                    dtls_auto_generate_cert = true;
+                    dtls_verify = "fingerprint";
+                  };
+                };
+              }
               // lib.mapAttrs (_: server: {
                 context = "phones";
                 transport = "verify";
@@ -219,8 +237,11 @@ in
       };
     };
 
+    extraPythonPackages = p: [p.numpy];
+
     testScript =
       builtins.readFile ./phone.py
+      + builtins.readFile ./tones.py
       + ''
         methods = json.loads('${builtins.toJSON methods}')
         servers = json.loads('${builtins.toJSON servers}')
@@ -258,6 +279,82 @@ in
             assert (alice.requests("INVITE"), bob.requests("INVITE")) == (0, 1)
             alice.hangup()
             wait_idle(pbx)
+
+        def last_sdp(phone, direction):
+            """The last INVITE, or 200 answer to one, that the phone sent (TX)
+            or received (RX)"""
+            messages = re.findall(rf"{direction} \d+ bytes (?:Request msg INVITE|Response msg 200/INVITE)/.*?\n--end msg--", phone.log_text(), re.S)
+            assert messages, (phone.name, direction)
+            return messages[-1]
+
+        def media(phone, mark):
+            """The datagrams of the pbx's capture, after its first `mark`,
+            between the pbx and the RTP and RTCP ports of the phone's current
+            call, as rtp, rtcp and dtls: the payload and whether it went to
+            the phone"""
+            port = re.search(r"^m=audio (\d+) ", last_sdp(phone, "TX"), re.M)
+            assert port, phone.name
+            ends = {f"192.168.1.2:{port.group(1)}", f"192.168.1.2:{int(port.group(1)) + 1}"}
+            found = {"rtp": [], "rtcp": [], "dtls": []}
+            for _, source, destination, payload in list(udp_datagrams(pbx))[mark:]:
+                if source in ends or destination in ends:
+                    first, second = payload[:2]
+                    # the first byte tells DTLS from RTP and RTCP (RFC 7983)
+                    kind = "dtls" if 20 <= first <= 63 else "rtcp" if 200 <= second <= 204 else "rtp"
+                    found[kind].append({"payload": payload, "to_phone": destination in ends})
+            return found
+
+        def both_ways(datagrams):
+            return {d["to_phone"] for d in datagrams} == {True, False}
+
+        def in_clear(packet):
+            """Whether RTCP is a whole compound in the clear, which SRTCP's
+            encryption after the first header, index and tag rule out"""
+            offset = 0
+            while offset + 4 <= len(packet) and packet[offset] >> 6 == 2 and 200 <= packet[offset + 1] <= 206:
+                offset += (int.from_bytes(packet[offset + 2 : offset + 4], "big") + 1) * 4
+            return offset == len(packet)
+
+        with subtest("an SRTP phone calls a plain RTP phone, which calls a DTLS-SRTP phone: both hear each other, and nothing on the encrypted leg is in the clear"):
+            carol = Phone(phones, "carol", "106", "pw-106", "pbx", sip_port=5170, cli_port=2313)
+            dave = Phone(phones, "dave", "107", "pw-107", "pbx", sip_port=5180, cli_port=2314)
+            carol.start()
+            dave.start("--use-srtp=2 --srtp-secure=0 --srtp-keying=1")
+            wait_registrations({carol: 200, dave: 200})
+            # the DTLS phone is only called: Asterisk restarts DTLS at each
+            # renegotiation, such as pjsua's UPDATE after an answer of several
+            # codecs, which pjsua ignores, and then sends the phone no RTP
+            # TODO: let it call too once Asterisk keeps a finished DTLS session
+            for secure, profile, caller, callee in [(alice, "RTP/SAVP", alice, carol), (dave, "UDP/TLS/RTP/SAVP", carol, dave)]:
+                mark = len(list(udp_datagrams(pbx)))
+                caller.call(callee.user)
+                wait_hears(secure, [carol.tone])
+                wait_hears(carol, [secure.tone])
+                for sdp in [last_sdp(secure, "TX"), last_sdp(secure, "RX")]:
+                    assert f" {profile} " in sdp and ("a=crypto:" in sdp) == (profile == "RTP/SAVP"), sdp
+                sdp = last_sdp(carol, "RX")
+                assert " RTP/AVP " in sdp and "a=crypto:" not in sdp and "a=fingerprint:" not in sdp, sdp
+                # RTCP comes every 5 s or so
+                deadline = time.time() + 30
+                while True:
+                    encrypted, clear = media(secure, mark), media(carol, mark)
+                    if both_ways(encrypted["rtcp"]) and both_ways(clear["rtcp"]):
+                        break
+                    assert time.time() < deadline, "no RTCP both ways on both legs"
+                    time.sleep(1)
+                assert both_ways(encrypted["rtp"]) and both_ways(clear["rtp"])
+                [length] = {len(d["payload"]) for d in clear["rtp"]}
+                # every packet has the tag of AES_CM_128_HMAC_SHA1_80 or _32
+                sizes = {len(d["payload"]) for d in encrypted["rtp"]}
+                assert sizes <= {length + 10, length + 4}, (length, sizes)
+                audio = {d["payload"][12:length] for d in clear["rtp"]}
+                assert not audio & {d["payload"][12:length] for d in encrypted["rtp"]}, "audio of the plain leg on the encrypted one"
+                assert all(in_clear(d["payload"]) for d in clear["rtcp"])
+                assert not any(in_clear(d["payload"]) for d in encrypted["rtcp"])
+                if profile == "UDP/TLS/RTP/SAVP":
+                    assert both_ways([d for d in encrypted["dtls"] if d["payload"][0] == 22]), "no DTLS handshake both ways"
+                caller.hangup()
+                wait_idle(pbx)
 
         with subtest("each TLS method accepts the versions it names, and a refusal says why"):
             names = {"tls1": "TLSv1", "tls1_1": "TLSv1.1", "tls1_2": "TLSv1.2", "tls1_3": "TLSv1.3"}

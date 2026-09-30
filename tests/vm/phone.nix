@@ -25,14 +25,14 @@
     # pjsua never flushes its log file (upstream comments the call out for
     # speed), so a line a test waits for could stay in the stdio buffer
     # indefinitely. Flush after every message. pjproject also leaves IPv6
-    # out unless config_site.h asks for it.
+    # and DTLS-SRTP out unless config_site.h asks for them.
     postPatch =
       (old.postPatch or "")
       + ''
         substituteInPlace pjsip/src/pjsua-lib/pjsua_core.c --replace-fail \
           'pj_file_write(pjsua_var.log_file, buffer, &size);' \
           'pj_file_write(pjsua_var.log_file, buffer, &size); pj_file_flush(pjsua_var.log_file);'
-        echo '#define PJ_HAS_IPV6 1' > pjlib/include/pj/config_site.h
+        printf '#define PJ_HAS_IPV6 1\n#define PJMEDIA_SRTP_HAS_DTLS 1\n' > pjlib/include/pj/config_site.h
       '';
   });
 

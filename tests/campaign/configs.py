@@ -10,6 +10,7 @@ oracle (routing.py).
                        [--jobs 6]
     configs.py shrink OUT SIGNATURE [--case ID]
     configs.py vm OUT [--seed N] [--count 500] [--per-test 25] [--calls 6]
+                      [--parallel 1] [--max-load 16]
     configs.py sample FILE OUT [--seed 1] [--valid 6] [--mutants 42]
                                [--probes 2] [--calls 8]
     configs.py tollfraud OUT [--seed N] [--count 2000]
@@ -36,14 +37,13 @@ OUT gets the configurations (cases.json), each tier's output, and
 report.json: each failure with its signature, the property and the tier it
 showed at. `shrink` makes the smallest configuration of a signature that
 still fails, with the same tiers, into OUT/shrunk/. `vm` runs P4 in VM tests
-(vm.nix), one at a time, with the phones and provider there. `sample`
-writes the seeded configurations of the gate's campaign-configs check
-(configs-sample.nix) once they pass, and `compare` is that check's
-comparison of a probe with the oracle. `tollfraud` walks valid
-configurations with inbound numbers and calls out from each trunk to every
-trunk's Dial (tollfraud.nix, SEC-03), with the ways out in OUT/paths.json,
-and compares the named ones with those the oracle finds in the model
-(routing.ways_out).
+(vm.nix) with the phones and provider there. `sample` writes the seeded
+configurations of the gate's campaign-configs check (configs-sample.nix)
+once they pass, and `compare` is that check's comparison of a probe with
+the oracle. `tollfraud` walks valid configurations with inbound numbers
+and calls out from each trunk to every trunk's Dial (tollfraud.nix,
+SEC-03), with the ways out in OUT/paths.json, and compares the named ones
+with those the oracle finds in the model (routing.ways_out).
 """
 
 import argparse
@@ -52,6 +52,7 @@ import os
 import pathlib
 import random
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -217,7 +218,8 @@ def verdict(campaign, case, results, built):
         return found
     failed_checks = [d for d in outcome["checks"] if d not in built]
     if case["kind"] == "mutant":
-        if not failed_checks:
+        # without T1, a mutation that evaluates is not decided
+        if not failed_checks and not (campaign and campaign.args.no_t1):
             found.append(failure("P3", "T1", f"{case['mutation']} loads", case["label"], case))
         return found
     for drv in failed_checks:
@@ -383,9 +385,11 @@ def vm_calls(m, plan, limit):
 def vm(args):
     """The VM tier: configurations for vm.nix's phones and provider, the
     valid ones in VM tests of --per-test specialisations each, and every call
-    compared with the oracle."""
+    compared with the oracle. Up to --parallel tests run at once, a new one
+    only while the host's load stays under --max-load; a test that has its
+    verdicts.json already is not run again."""
     seed = args.seed if args.seed is not None else random.randrange(2**31)
-    print(f"seed {seed}", flush=True)
+    print(f"seed {seed}, {load()}", flush=True)
     campaign = options.Campaign(args, "configs.nix")
     began = time.monotonic()
     models = draw(generate.configurations(fast=True, vm=True), args.count, seed)
@@ -398,27 +402,51 @@ def vm(args):
     valid = [c for c, r in zip(cases_, results) if "outcome" in r and not r["outcome"]["failed"]]
     (args.out / "vm-cases.json").write_text(json.dumps(cases_))
     print(f"{len(valid)} of {len(cases_)} configurations evaluate", flush=True)
-    failures = []
-    for k in range(0, len(valid), args.per_test):
-        batch = valid[k : k + args.per_test]
-        out = args.out / f"vm-{k // args.per_test}"
-        out.mkdir(exist_ok=True)
-        plan_file = out / "plan.json"
-        plan_file.write_text(json.dumps([{"modules": [c["module"]], "extensions": sorted(c["model"]["extensions"]), "trunks": c["model"]["trunks"], "calls": [x["vm"] for x in c["calls"]]} for c in batch]))
-        expression = f'import "{campaign.flake}/tests/campaign/vm.nix" {{ pkgs = (builtins.getFlake "{campaign.flake}").inputs.nixpkgs.legacyPackages.x86_64-linux; self = builtins.getFlake "{campaign.flake}"; }} {{ name = "vm-{k // args.per_test}"; plan = {plan_file}; }}'
-        began_test = time.monotonic()
-        # the specialisations build one at a time too
-        code = subprocess.run(
-            [sys.executable, str(pathlib.Path(__file__).parent / "vmtest.py"), f"campaign-vm-{k // args.per_test}", str(out), "--expr", expression],
-            env=os.environ | {"NIX_CONFIG": "max-jobs = 1"},
-        ).returncode
-        if not (out / "driver.log").exists():
-            failures.append(failure("P1", "T3", "the VM test does not build", f"exit {code}", {"id": f"vm-{k // args.per_test}"}))
-            continue
-        found = vm_verdicts(batch, out, k // args.per_test)
-        print(f"VM test {k // args.per_test}: exit {code}, {len(found)} failures ({time.monotonic() - began_test:.0f} s, {load()})", flush=True)
-        failures += found
+    tests = [valid[k : k + args.per_test] for k in range(0, len(valid), args.per_test)]
+    pending = [n for n in range(len(tests)) if not (args.out / f"vm-{n}" / "verdicts.json").exists()]
+    running = {}
+    last_start = 0
+    while pending or running:
+        for n, (process, started) in list(running.items()):
+            if process.poll() is not None:
+                del running[n]
+                vm_finish(tests[n], args.out / f"vm-{n}", n, process.returncode, time.monotonic() - started)
+        # a test raises the load a minute or so after it starts
+        if pending and len(running) < args.parallel and os.getloadavg()[0] < args.max_load and time.monotonic() - last_start > 120:
+            n = pending.pop(0)
+            running[n] = (vm_start(campaign, tests[n], args.out / f"vm-{n}", n), time.monotonic())
+            last_start = time.monotonic()
+            print(f"VM test {n} started ({load()})", flush=True)
+        time.sleep(10)
+    failures = [f for n in range(len(tests)) for f in json.loads((args.out / f"vm-{n}" / "verdicts.json").read_text())]
     report(args, seed, [{"kind": "vm", **c} for c in cases_], {}, failures, time.monotonic() - began)
+
+
+def vm_start(campaign, batch, out, n):
+    """Starts VM test N of BATCH in OUT, afresh."""
+    shutil.rmtree(out, ignore_errors=True)
+    out.mkdir()
+    plan_file = out / "plan.json"
+    plan_file.write_text(json.dumps([{"modules": [c["module"]], "extensions": sorted(c["model"]["extensions"]), "trunks": c["model"]["trunks"], "calls": [x["vm"] for x in c["calls"]]} for c in batch]))
+    expression = f'import "{campaign.flake}/tests/campaign/vm.nix" {{ pkgs = (builtins.getFlake "{campaign.flake}").inputs.nixpkgs.legacyPackages.x86_64-linux; self = builtins.getFlake "{campaign.flake}"; }} {{ name = "vm-{n}"; plan = {plan_file}; }}'
+    # the specialisations build one at a time too
+    with open(out / "vmtest.log", "w") as log:
+        return subprocess.Popen(
+            [sys.executable, str(pathlib.Path(__file__).parent / "vmtest.py"), f"campaign-vm-{n}", str(out), "--expr", expression],
+            env=os.environ | {"NIX_CONFIG": "max-jobs = 1"},
+            stdout=log,
+            stderr=subprocess.STDOUT,
+        )
+
+
+def vm_finish(batch, out, n, code, seconds):
+    """The verdicts of VM test N, kept in OUT/verdicts.json."""
+    if (out / "driver.log").exists():
+        found = vm_verdicts(batch, out, n)
+    else:
+        found = [failure("P1", "T3", "the VM test does not build", f"exit {code}, see {out}/vmtest.log", {"id": f"vm-{n}"})]
+    (out / "verdicts.json").write_text(json.dumps(found))
+    print(f"VM test {n}: exit {code}, {len(found)} failures ({seconds:.0f} s, {load()})", flush=True)
 
 
 def vm_verdicts(batch, out, test):
@@ -603,6 +631,7 @@ def report(args, seed, cases_, evaluated, failures, seconds):
         "mutations rejected at T0": sum(
             "error" in evaluated[c["id"]]["main"] or bool(evaluated[c["id"]]["main"]["outcome"]["failed"]) for c in cases_ if c["kind"] == "mutant"
         ),
+        "T1 run": not args.no_t1,
         "signatures": {s: {"count": len(fs), "cases": [f["case"] for f in fs[:20]], "first": fs[0]} for s, fs in sorted(by.items(), key=lambda x: -len(x[1]))},
     }
     (args.out / "report.json").write_text(json.dumps(summary, indent=1))
@@ -632,6 +661,8 @@ def main():
     v.add_argument("--count", type=int, default=500)
     v.add_argument("--per-test", type=int, default=25, help="configurations per VM test")
     v.add_argument("--calls", type=int, default=6, help="calls per configuration")
+    v.add_argument("--parallel", type=int, default=1, help="VM tests at once")
+    v.add_argument("--max-load", type=float, default=16, help="the load under which another VM test starts")
     g = sub.add_parser("sample")
     g.add_argument("file", type=pathlib.Path)
     g.add_argument("out", type=pathlib.Path, help="where the evaluations and builds of the check go")

@@ -94,7 +94,11 @@ in {
     address = mkOption {
       type = types.str;
       default = "127.0.0.1";
-      description = "Address AMI listens on.";
+      description = ''
+        Address AMI listens on. The service waits for a specific address as
+        for a SIP transport's, see
+        {option}`services.asterisk.pjsip.transports.<name>.address`.
+      '';
     };
 
     port = mkOption {

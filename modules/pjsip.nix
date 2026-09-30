@@ -167,7 +167,12 @@
             Asterisk resolves host names, through their SRV records where they
             have them but not NAPTR, when it loads pjsip.conf, so a changed
             address counts only after `asterisk -rx 'module reload res_pjsip.so'`
-            or a restart.
+            or a restart. A host name that does not resolve then, including
+            the provider host a trunk's `matchProviderHost` adds to this list,
+            keeps Asterisk from creating the whole identify section, its
+            addresses and networks too, until the next reload or restart. To
+            match a trunk by address whatever DNS does when Asterisk loads,
+            list its addresses and turn `matchProviderHost` off.
           '';
         };
         settings = settingsOption "identify";
@@ -418,7 +423,19 @@
           type = types.str;
           default = "0.0.0.0";
           example = "10.0.2.1";
-          description = "Local address to bind; `0.0.0.0` or `::` for all addresses.";
+          description = ''
+            Local address to bind; `0.0.0.0` or `::` for all addresses. The
+            service waits up to 90 s at start for a specific address to be
+            configured and through duplicate address detection, then fails
+            with a message naming the address, and systemd starts it again
+            5 s later. With systemd-networkd, an interface that loses its
+            carrier loses its addresses, so Asterisk restarted while the link
+            is down waits for the link. Setting
+            `networkConfig.IgnoreCarrierLoss = true` in the interface's
+            `systemd.network.networks` entry (`"40-<interface>"` for one from
+            `networking.interfaces`) keeps them, as does
+            `ConfigureWithoutCarrier = true`, which turns it on.
+          '';
         };
         port = mkOption {
           type = types.port;

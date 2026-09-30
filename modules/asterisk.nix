@@ -807,7 +807,15 @@ in {
         Raw text appended to a configuration file, keyed by file name. It is
         not escaped, but secret references interpolated into it are
         substituted like in `settings`. Start it with a section header,
-        otherwise it continues the last generated section.
+        otherwise it continues the last generated section. A PJSIP transport
+        that binds a specific address belongs in `pjsip.transports` or
+        `settings` instead: the service waits only for the addresses of
+        transports it reads there (see
+        {option}`services.asterisk.pjsip.transports.<name>.address`), and
+        such a transport here fails the build check, which has only those
+        addresses. With `reloadOnChange`, a change to a transport here is
+        applied with a reload, which leaves the running transport as it was
+        until Asterisk restarts.
       '';
       example = literalExpression ''
         {
@@ -824,7 +832,11 @@ in {
       default = {};
       description = ''
         `#include` (or, with `optional = true`, `#tryinclude`) directives
-        placed at the top of a configuration file, keyed by file name.
+        placed at the top of a configuration file, keyed by file name. A PJSIP
+        transport that binds a specific address belongs in `pjsip.transports`
+        or `settings` instead: the service waits only for the addresses of
+        transports it reads there (see
+        {option}`services.asterisk.pjsip.transports.<name>.address`).
       '';
       example = literalExpression ''
         { "pjsip.conf" = [ { file = "/var/lib/asterisk/pjsip-local.conf"; optional = true; } ]; }

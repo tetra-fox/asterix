@@ -487,6 +487,17 @@
         context = "internal";
       };
     };
+    # two trunks by host name, and an identify with two host names: names
+    # that resolve to one address make Asterisk warn
+    trunksByHostNames = {config, ...}: {
+      services.asterisk.pjsip.trunks = lib.genAttrs ["primary" "backup"] (name: {
+        host = "${name}.provider.example";
+        username = "5551000";
+        password = config.lib.asterisk.secret "/run/secrets/trunk";
+        context = "internal";
+        identify.match = lib.mkIf (name == "backup") ["media.provider.example"];
+      });
+    };
     # a trunk that matches no address has no identify section, which Asterisk
     # would refuse as matching nothing
     trunkWithoutAddressMatch = {config, ...}: {

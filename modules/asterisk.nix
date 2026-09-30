@@ -161,7 +161,9 @@
     }) (attrNames cfg.credentials)
     ++ optional (checkHostNames != []) {
       name = "hosts";
-      path = pkgs.writeText "asterisk-check-hosts" (lib.concatMapStrings (name: "192.0.2.1 ${name}\n") checkHostNames);
+      path = pkgs.writeText "asterisk-check-hosts" (
+        lib.concatImapStrings (i: name: "198.18.${toString (i / 256)}.${toString (lib.mod i 256)} ${name}\n") checkHostNames
+      );
     }
     # below @root@, with lib for the state directory
     ++ [
@@ -181,7 +183,8 @@
     then hostOf rtpGeneral.stunaddr
     else null;
   # host names Asterisk resolves while it loads the configuration; the build
-  # has no DNS, so for the check they resolve to a documentation address
+  # has no DNS, so each resolves to an address of its own in the benchmarking
+  # range, as Asterisk warns about two names that share one
   checkHostNames = let
     listOf = v:
       if builtins.isList v

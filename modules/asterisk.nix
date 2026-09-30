@@ -183,8 +183,8 @@
     then hostOf rtpGeneral.stunaddr
     else null;
   # host names Asterisk resolves while it loads the configuration; the build
-  # has no DNS, so each resolves to an address of its own in the benchmarking
-  # range, as Asterisk warns about two names that share one
+  # has no DNS, so each gets its own address in the benchmarking range, since
+  # nss_wrapper answers an address that two hosts lines share once per line
   checkHostNames = let
     listOf = v:
       if builtins.isList v

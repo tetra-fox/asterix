@@ -1303,6 +1303,13 @@ in {
       expected = true;
     };
 
+    # a deploy that drops the last queue rule empties queuerules.conf instead
+    # of removing it, which the reload of app_queue would ignore
+    testQueueRulesConfWithoutRules = {
+      expr = (rendered [phone {services.asterisk.queues.queues.support = {};}]) ? "queuerules.conf";
+      expected = true;
+    };
+
     testChanSipAlwaysNoloaded = {
       expr = lib.hasInfix "noload => chan_sip.so" (rendered [phone])."modules.conf";
       expected = true;

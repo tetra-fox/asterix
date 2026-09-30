@@ -185,6 +185,10 @@ in {
     services.asterisk = {
       modules.needed."services.asterisk.queues.queues" = ["app_queue.so"];
 
+      # also there without rules: a reload that finds no queuerules.conf keeps
+      # the old rules (apps/app_queue.c reload_queue_rules)
+      settings."queuerules.conf" = {};
+
       settings."queues.conf" =
         {
           general.persistentmembers = mkDefault qcfg.persistentMembers;

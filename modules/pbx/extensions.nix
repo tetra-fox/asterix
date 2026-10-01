@@ -118,7 +118,11 @@ in {
         a hint for busy lamps and, with `voicemail`, a mailbox. Calls ring
         every device registered as the extension, as many as
         {option}`services.asterisk.pjsip.endpoints.<name>.aor.maxContacts`
-        allows (one by default).
+        allows (one by default). Asterisk hangs up a call of the extension
+        after 60 seconds without RTP from its phone, outside hold
+        ({option}`services.asterisk.pjsip.endpoints.<name>.rtpTimeout`), so
+        the call of a phone that loses power, which sends no BYE, ends
+        instead of running on.
       '';
     };
 
@@ -148,6 +152,7 @@ in {
           # it (main/callerid.c ast_callerid_parse)
           callerId = mkDefault ''"${lib.escape ["\\" "\""] e.name}" <${number}>'';
           auth.password = mkDefault e.password;
+          rtpTimeout = mkDefault 60;
           mailboxes = optional (e.voicemail != null) "${number}@default";
         })
         cfg.extensions;

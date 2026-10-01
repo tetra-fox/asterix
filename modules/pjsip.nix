@@ -179,6 +179,10 @@
       };
     };
 
+  # Asterisk schedules its check of an RTP timeout in milliseconds in an int
+  # (res/res_pjsip_sdp_rtp.c rtp_check_timeout), which larger values overflow
+  rtpTimeoutType = types.ints.between 0 2147483;
+
   commonEndpointOptions = name: {
     context = mkOption {
       type = types.str;
@@ -222,6 +226,31 @@
         does not check that it is reachable: between networks without a route,
         or with a phone behind NAT, the call has no audio and nothing is
         logged. Calls with media encryption are always relayed.
+      '';
+    };
+    rtpTimeout = mkOption {
+      type = rtpTimeoutType;
+      default = 0;
+      example = 60;
+      description = ''
+        Seconds without a packet on the RTP or RTCP port of the device's
+        answered call, while it is not on hold, after which Asterisk hangs
+        up the call (`rtp_timeout`); 0 never does. This ends the call of a
+        phone that lost power, which sends no BYE, and also that of a
+        device that sends nothing while its user is silent. Packets from any
+        address count, those strict RTP drops too, so a call whose RTP
+        strict RTP drops does not end. Asterisk counts the seconds by the
+        system clock, so a step of the clock forward by more than this hangs
+        up every such call in progress. Calls with direct media are not
+        timed.
+      '';
+    };
+    rtpTimeoutHold = mkOption {
+      type = rtpTimeoutType;
+      default = 0;
+      description = ''
+        `rtpTimeout` for a call on hold (`rtp_timeout_hold`), in which a
+        device may send no RTP; 0 never hangs up.
       '';
     };
     callerId = mkOption {
@@ -752,6 +781,15 @@
             inherit (e) context transport allow;
             disallow = "all";
             direct_media = e.directMedia;
+            # 0 is Asterisk's default
+            rtp_timeout =
+              if e.rtpTimeout != 0
+              then e.rtpTimeout
+              else null;
+            rtp_timeout_hold =
+              if e.rtpTimeoutHold != 0
+              then e.rtpTimeoutHold
+              else null;
             callerid = e.callerId;
             dtmf_mode = e.dtmfMode;
             rtp_symmetric =

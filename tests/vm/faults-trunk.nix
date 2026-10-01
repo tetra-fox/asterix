@@ -8,7 +8,8 @@
 # trunk link goes down and up. The provider moves to a new address, and calls
 # go both ways without a restart. A phone that loses power in a call, so no
 # BYE ever comes, has its call ended by the session timer it asked for, on a
-# call to another phone and on a trunk call.
+# call to another phone and on a trunk call, and one that asked for none by
+# the RTP timeout pbx gives an extension.
 #
 #   pbx       lan (VLAN 1) 10.1.0.10, wan (VLAN 2) 203.0.113.10
 #   provider  wan 203.0.113.5 (SIP), 203.0.113.53 (DNS, sip.provider.example)
@@ -80,6 +81,9 @@ in
           settings."asterisk.conf".options.verbose = 3;
           pjsip = {
             transports.udp = {};
+            # 201 and 203 ask for session timers, which alone end their calls
+            # when they lose power
+            endpoints = lib.genAttrs ["201" "203"] (_: {rtpTimeout = 0;});
             trunks.provider = {
               host = "sip.provider.example";
               username = "5551000";
@@ -205,7 +209,8 @@ in
         a = Phone(phones, "201", "201", "pw-201", "10.1.0.10", sip_port=5060, cli_port=2300, options=timers)
         b = Phone(phones, "202", "202", "pw-202", "10.1.0.10", sip_port=5061, cli_port=2301)
         c = Phone(phones, "203", "203", "pw-203", "10.1.0.10", sip_port=5062, cli_port=2302, options=timers)
-        d = Phone(phones, "204", "204", "pw-204", "10.1.0.10", sip_port=5063, cli_port=2303)
+        # a phone without session timers, as some desk phones and adapters are
+        d = Phone(phones, "204", "204", "pw-204", "10.1.0.10", sip_port=5063, cli_port=2303, options="--use-timer=0")
         with subtest("phones register"):
             start_phones([a, b, c, d])
             wait_registrations({a: 200, b: 200, c: 200, d: 200})
@@ -288,5 +293,15 @@ in
             b.wait_request("BYE", after=byes, timeout=100)
             wait_idle(provider, timeout=100)
             wait_idle(pbx)
+
+        with subtest("a phone without session timers that loses power in a trunk call is hung up by its RTP timeout"):
+            d.call("95559009")
+            wait_hears(d, [PROVIDER_TONE])
+            cursor = journal_cursor(pbx)
+            power_off(d)
+            # 60 s without RTP from the phone, then the trunk leg ends with it
+            wait_idle(provider, timeout=100)
+            wait_idle(pbx)
+            wait_journal(pbx, cursor, r"Disconnecting channel 'PJSIP/204-[0-9a-f]+' for lack of audio RTP activity", timeout=10)
       '';
   }

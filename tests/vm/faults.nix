@@ -14,7 +14,9 @@
 # /var/log/asterisk the SQLite CDR is logged with its record and the CSV one
 # is cut short without a word; both recover once space is freed. A clock step
 # leaves opening hours right, but a step back keeps a phone ringing past its
-# ring time and a step forward expires every registration at once. 1,000 TCP
+# ring time and a step forward expires every registration at once and hangs
+# up the call in progress, since Asterisk counts the RTP timeout pbx gives an
+# extension by the wall clock. 1,000 TCP
 # phones take one file each, far below LimitNOFILE; pjproject holds at most
 # 5,000 connections, and past that a new TCP phone is closed on without a log
 # line, while calls go on and it registers once connections are freed.
@@ -359,21 +361,25 @@ in
             anna.hangup()
             wait_idle(pbx)
 
-        with subtest("after a clock step forward opening hours are right, the call goes on, and every registration expires at once"):
+        with subtest("after a clock step forward opening hours are right, the RTP timeout hangs up the call, and every registration expires at once"):
             anna.call("202")
             wait_bridged(pbx, "201", "202")
-            stats = wait_for_media_both_ways(pbx, [anna, ben])
+            wait_for_media_both_ways(pbx, [anna, ben])
             before = refresh_registrations()
+            calls = {p.name: p.disconnects() for p in (anna, ben)}
             cursor = journal_cursor(pbx)
             pbx.succeed("date -u -s '2026-12-02 12:00'")
             assert hours() == "open"
+            # Asterisk checks the RTP timeout once the clock passes the time
+            # it is due, and counts the step as seconds without RTP
+            wait_journal(pbx, cursor, r"Disconnecting channel 'PJSIP/20[12]-[0-9a-f]+' for lack of audio RTP activity", count=2, timeout=10)
+            for p in (anna, ben):
+                p.wait_disconnected(after=calls[p.name], timeout=10)
             # the registrar looks for expired contacts every 30 s, by the wall
             # clock
             wait_journal(pbx, cursor, "Removed contact .* due to expiration", count=3, timeout=40)
             assert registers() == before, (before, registers())
             assert "No objects found." in asterisk(pbx, "pjsip show contacts")
-            wait_calls_continue(pbx, [anna, ben], stats)
-            anna.hangup()
             wait_idle(pbx)
             # until each phone refreshes its registration
             wait_contacts(pbx, 3, timeout=90)

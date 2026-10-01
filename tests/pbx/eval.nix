@@ -312,6 +312,22 @@ in {
       };
     };
 
+    # a phone that loses power in a call sends no BYE, so Asterisk hangs up an
+    # extension's call after a minute without RTP from it; trunks keep 0
+    testRtpTimeouts = {
+      expr = let
+        files = (configOf {}).services.asterisk.renderedFiles;
+        timeouts = type: name: builtins.filter (lib.hasPrefix "rtp_timeout") (lib.splitString "\n" (pjsipSection type name files));
+      in {
+        extension = timeouts "endpoint" "201";
+        trunk = timeouts "endpoint" "provider";
+      };
+      expected = {
+        extension = ["rtp_timeout = 60"];
+        trunk = [];
+      };
+    };
+
     # pbx writes defaults, so plain core definitions win
     testCoreOptionsOverridePbx = {
       expr = let

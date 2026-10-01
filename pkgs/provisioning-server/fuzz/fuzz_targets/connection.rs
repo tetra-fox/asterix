@@ -7,7 +7,6 @@
 
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::sync::LazyLock;
-use std::time::Duration;
 
 use libfuzzer_sys::{Corpus, fuzz_target};
 use provisioning_server::{Files, load, serve_connection};
@@ -74,9 +73,6 @@ fuzz_target!(|data: &[u8]| -> Corpus {
         let send = async {
             // the write fails if the server closed the connection before reading everything
             if to_server.write_all(sent).await.is_ok() {
-                // hyper drops a request whose peer closes its side before the response
-                // is written, so the peer waits until the server has nothing left to do
-                tokio::time::sleep(Duration::from_millis(1)).await;
                 to_server.shutdown().await.unwrap();
             }
             Instant::now()

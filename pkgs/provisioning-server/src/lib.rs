@@ -135,6 +135,9 @@ pub async fn serve_connection(
     });
     let connection = http1::Builder::new()
         .keep_alive(false)
+        // a client may shut down its sending side once the request is out;
+        // hyper otherwise ends such a connection without an answer
+        .half_close(true)
         .max_buf_size(MAX_REQUEST_BUFFER)
         .serve_connection(TokioIo::new(stream), service);
     match tokio::time::timeout(CONNECTION_TIMEOUT, connection).await {
@@ -304,16 +307,21 @@ mod tests {
         stream
     }
 
+    // the status line of what the server sends on stream before it closes it
+    fn status_line(mut stream: std::net::TcpStream) -> String {
+        let mut response = Vec::new();
+        stream.read_to_end(&mut response).unwrap();
+        let response = String::from_utf8_lossy(&response);
+        response.lines().next().unwrap_or_default().to_string()
+    }
+
     // the status line of the answer to request, sent from source
     fn exchange(server: SocketAddr, source: &str, request: &str) -> String {
         let mut stream = connect(server, source);
         stream
             .write_all(format!("{request}\r\nHost: x\r\n\r\n").as_bytes())
             .unwrap();
-        let mut response = Vec::new();
-        stream.read_to_end(&mut response).unwrap();
-        let response = String::from_utf8_lossy(&response);
-        response.lines().next().unwrap_or_default().to_string()
+        status_line(stream)
     }
 
     #[test]
@@ -367,6 +375,17 @@ mod tests {
                 "{source}: {request}"
             );
         }
+    }
+
+    #[test]
+    fn a_client_that_shuts_down_its_sending_side_after_the_request_gets_the_answer() {
+        let server = server("open.xml\n");
+        let mut stream = connect(server, "127.0.0.21");
+        stream
+            .write_all(b"GET /open.xml HTTP/1.1\r\nHost: x\r\n\r\n")
+            .unwrap();
+        stream.shutdown(std::net::Shutdown::Write).unwrap();
+        assert_eq!(status_line(stream), "HTTP/1.1 200 OK");
     }
 
     #[test]

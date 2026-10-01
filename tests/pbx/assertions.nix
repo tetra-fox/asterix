@@ -832,6 +832,50 @@
       assertions = ["pbx.phones.grandstream.ht801: P-values cannot contain control characters: 201 P64, 201 P1362, 202 P36, 202 P64."];
     };
 
+    # P47 and P237 name where the adapter registers and fetches its file; a
+    # socket on 0.0.0.0 or :: listens on every address, which no adapter can
+    # connect to
+    ht801WildcardServers = {
+      module = {
+        imports = [phones];
+        pbx.phones = {
+          listenAddress = lib.mkForce "::";
+          port = 8080;
+          grandstream.ht801 = {
+            enable = true;
+            devices = {
+              "201".mac = "c0:74:ad:00:02:01";
+              "202" = {
+                mac = "c0:74:ad:00:02:02";
+                settings = {
+                  P47 = "0.0.0.0:5060";
+                  P237 = "[fd00:20::10]:8080";
+                };
+              };
+            };
+          };
+        };
+      };
+      assertions = ["pbx.phones.grandstream.ht801: P-values that send adapters to 0.0.0.0 or ::, which no adapter can reach: 201 P47, 201 P237, 202 P47. Set pbx.phones.listenAddress to the PBX's address on the adapters' network, or give that address in sipServer (P47) and settings.P237."];
+    };
+
+    # listening on :: serves adapters that are given the PBX's address
+    ht801WildcardListenWithAddresses = {
+      module = {
+        imports = [phones];
+        pbx.phones = {
+          listenAddress = lib.mkForce "::";
+          grandstream.ht801 = {
+            enable = true;
+            sipServer = "10.0.20.10";
+            settings.P237 = "10.0.20.10";
+            devices."201".mac = "c0:74:ad:00:02:01";
+          };
+        };
+      };
+      assertions = [];
+    };
+
     # two spellings of one address would be one file
     ht801SameMacTwice = {
       module = {

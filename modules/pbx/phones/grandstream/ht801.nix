@@ -147,6 +147,25 @@
     ))
   (filterAttrs (_: registers) cfg.devices));
 
+  # the P-values that send an adapter to 0.0.0.0 or ::, where a socket listens
+  # on every address of the host but no adapter can connect
+  wildcardServers = lib.concatLists (mapAttrsToList (name: device: let
+    values = deviceSettings device;
+    # in brackets, before a port, or the whole value
+    hostOf = value: let
+      bracketed = builtins.match "[[]([^]]*)[]].*" value;
+      withPort = builtins.match "([^:]*):[0-9]*" value;
+    in
+      if bracketed != null
+      then builtins.head bracketed
+      else if withPort != null
+      then builtins.head withPort
+      else value;
+    wildcard = host: host == "0.0.0.0" || (lib.hasInfix ":" host && builtins.match "[0:.]*" host != null);
+  in
+    map (p: "${name} ${p}") (builtins.filter (p: builtins.isString (values.${p} or null) && wildcard (hostOf values.${p})) ["P47" "P237"]))
+  (filterAttrs (_: registers) cfg.devices));
+
   escapeXml = lib.replaceStrings ["&" "<" ">" "\"" "'"] ["&amp;" "&lt;" "&gt;" "&quot;" "&apos;"];
 
   # secrets become placeholders, which the provisioning service XML-escapes
@@ -252,6 +271,10 @@ in {
         {
           assertion = controlCharacters == [];
           message = "pbx.phones.grandstream.ht801: P-values cannot contain control characters: ${lib.concatStringsSep ", " controlCharacters}.";
+        }
+        {
+          assertion = wildcardServers == [];
+          message = "pbx.phones.grandstream.ht801: P-values that send adapters to 0.0.0.0 or ::, which no adapter can reach: ${lib.concatStringsSep ", " wildcardServers}. Set pbx.phones.listenAddress to the PBX's address on the adapters' network, or give that address in sipServer (P47) and settings.P237.";
         }
         {
           assertion = builtins.all (p: builtins.match "P[0-9]+" p != null) (

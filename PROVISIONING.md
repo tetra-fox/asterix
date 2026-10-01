@@ -104,6 +104,9 @@ Caveats and known issues:
 - P1414 is left alone. The HT80x templates only call it "Auto Provision", and
   turning it off might stop the adapter from fetching its file.
 - The web interface password of V2 hardware must be 4 to 30 characters.
+- An adapter cannot connect to 0.0.0.0 or ::. With a `listenAddress` like
+  that, evaluation fails until `sipServer` and `settings.P237` name the PBX's
+  address on the adapters' network.
 - A call to the analog phone rings it. It cannot be answered automatically.
 
 ## Adding a device

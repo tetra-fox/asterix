@@ -10,8 +10,8 @@
 # registrations, and the adapter registers again with the password of its
 # new file. A rotated secret is served after a restart, a missing one fails
 # the unit; the socket is bound before its address exists. On :: and port
-# 8080, IPv6 and IPv4-mapped peers are told apart and the firewall is open on
-# the phones' interface only.
+# 8080, the adapters are sent to the PBX's address, IPv6 and IPv4-mapped peers
+# are told apart and the firewall is open on the phones' interface only.
 {
   pkgs,
   self,
@@ -133,10 +133,15 @@ in
             '');
 
         # :: takes IPv4 clients too, which the server sees as ::ffff:a.b.c.d;
-        # the LAN may connect, so only the firewall keeps it out
+        # the LAN may connect, so only the firewall keeps it out. The adapters
+        # are sent to the PBX's address, since they cannot connect to ::
         specialisation.dualstack.configuration.pbx.phones = {
           listenAddress = lib.mkForce "::";
           port = 8080;
+          grandstream.ht801 = {
+            sipServer = "10.0.20.10";
+            settings.P237 = "10.0.20.10:8080";
+          };
           allowedNetworks = lib.mkForce [
             "10.0.20.0/24"
             "10.0.10.0/24"
@@ -406,11 +411,13 @@ in
             pbx.succeed("ip address add 10.0.20.10/24 dev voip")
             assert fetch("cfgc074ad000101.xml") == "200"
 
-        with subtest("on :: and port 8080, IPv6 and IPv4-mapped peers are told apart"):
+        with subtest("on :: and port 8080, adapters get the PBX's address and IPv6 and IPv4-mapped peers are told apart"):
             pbx.wait_until_succeeds("ip -o address show to fd00:20::10 -tentative | grep -q .")
             pbx.succeed(f"{base}/specialisation/dualstack/bin/switch-to-configuration test")
             pbx.wait_for_unit("asterisk-provisioning.service")
             assert fetch("cfgc074ad000101.xml", server="10.0.20.10:8080") == "200"
+            xml = adapters.succeed("cat /tmp/cfgc074ad000101.xml")
+            assert "<P47>10.0.20.10</P47>" in xml and "<P237>10.0.20.10:8080</P237>" in xml, xml
             assert fetch("cfgc074ad000101.xml", source="10.0.20.22", server="10.0.20.10:8080") == "403"
             assert fetch("v6.txt", source="fd00:20::21", server="[fd00:20::10]:8080") == "200"
             assert fetch("v6.txt", source="fd00:20::22", server="[fd00:20::10]:8080") == "403"

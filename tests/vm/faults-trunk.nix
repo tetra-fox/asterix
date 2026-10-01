@@ -51,7 +51,8 @@ in
           lan.vlan = 1;
           wan.vlan = 2;
         };
-        # Asterisk resolves SIP hosts with DNS only (D28)
+        # Asterisk resolves SIP hosts with DNS only
+        # (res/res_pjsip/pjsip_resolver.c:698, main/dns.c:296)
         networking.nameservers = ["203.0.113.53"];
 
         pbx = {

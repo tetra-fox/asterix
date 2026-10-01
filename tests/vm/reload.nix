@@ -28,7 +28,7 @@
 }: let
   inherit (pkgs) lib;
 
-  # a change to each file that has a reload of its own (D17), the command
+  # a change to each file that has a reload of its own, the command
   # that applies it, and a CLI command whose output then holds `shows`;
   # Asterisk shows nothing of the custom and SQLite CDR and CEL files
   changes = {

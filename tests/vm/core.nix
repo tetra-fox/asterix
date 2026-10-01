@@ -92,7 +92,7 @@ pkgs.testers.runNixOSTest {
             "pin"
           ];
         })
-        # codecs of endpoint 101 from further modules (D22)
+        # codecs of endpoint 101 from further modules, which extend its list
         {services.asterisk.settings."pjsip.conf"."101".allow = pkgs.lib.mkAfter ["gsm"];}
         {services.asterisk.settings."pjsip.conf"."101".allow = pkgs.lib.mkBefore ["alaw"];}
       ];
@@ -289,7 +289,7 @@ pkgs.testers.runNixOSTest {
     pbx.wait_for_unit("asterisk.service")
 
     with subtest("configuration is loaded"):
-        # the codecs other modules added, in the order they asked for (D22)
+        # the codecs other modules added, in the order they asked for
         codecs = ast("pjsip show endpoint 101")
         assert re.search(r"^ allow +: \(alaw\|g722\|ulaw\|gsm\)$", codecs, re.M), codecs
         endpoints = ast("pjsip show endpoints")
@@ -320,7 +320,7 @@ pkgs.testers.runNixOSTest {
 
     def loaded(value):
         """What Asterisk gets of a secret file holding `value` and a line end:
-        the value without its line ends and a CR before them (D11)."""
+        the value without its line ends and a CR before them."""
         return value.rstrip("\n").removesuffix("\r")
 
     with subtest("secrets of every kind reach Asterisk as written, from files and credentials, alone and inside longer strings"):
@@ -372,8 +372,8 @@ pkgs.testers.runNixOSTest {
             pbx.succeed(f"grep -q '^{field}:\\s*0*$' /proc/{pid}/status")
         pbx.succeed(f"grep -q '^NoNewPrivs:\\s*1$' /proc/{pid}/status")
         pbx.succeed(f"grep -q '^Seccomp:\\s*2$' /proc/{pid}/status")
-        # with AMI and HTTP on, none of the relaxations of D16: no capability
-        # and no realtime scheduling
+        # with AMI and HTTP on, none of the relaxations of the sandbox: no
+        # capability, since no port is below 1024, and no realtime scheduling
         properties = dict(
             line.split("=", 1)
             for line in pbx.succeed("systemctl show -p CapabilityBoundingSet -p AmbientCapabilities -p RestrictRealtime -p CPUSchedulingPolicy -p LimitRTPRIO asterisk.service").splitlines()

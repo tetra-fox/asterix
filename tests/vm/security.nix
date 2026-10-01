@@ -3,10 +3,10 @@
 # answers, every wrong password is logged in a form fail2ban's asterisk
 # filter matches, malformed SIP and SDP leave Asterisk running without its
 # memory growing, the principals that can read secrets are the ones the
-# README names, programs the dialplan starts write only to Asterisk's
-# directories and read nothing of /home or other units' secrets (D16), and
-# calls over the trunk, from its address or with its line, reach none of the
-# numbers that go out when a phone dials them (SEC-03).
+# README names, programs the dialplan starts, which run in Asterisk's sandbox,
+# write only to Asterisk's directories and read nothing of /home or other
+# units' secrets, and calls over the trunk, from its address or with its line,
+# reach none of the numbers that go out when a phone dials them (SEC-03).
 #
 #   pbx       10.3.0.10
 #   intruder  10.3.0.66, and 10.3.0.67, which the pbx's SIP ACL denies, and

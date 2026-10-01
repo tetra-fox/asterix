@@ -224,7 +224,7 @@ in
             assert "pw-203" in asterisk(pbx, "pjsip show auth 203")
             pbx.succeed("rmdir /run/test-secrets/sip-203 && mv /run/test-secrets/sip-203.away /run/test-secrets/sip-203")
 
-        with subtest("a bad secret fails the start with the D11 message, systemd retries, and the fixed file brings Asterisk up"):
+        with subtest("a bad secret fails the start with a message saying it contains a line break, systemd retries, and the fixed file brings Asterisk up"):
             pbx.succeed("printf 'a\\nb' > /run/test-secrets/sip-203")
             cursor = journal_cursor(pbx)
             pbx.fail("systemctl restart asterisk.service")
@@ -282,7 +282,7 @@ in
             # the INVITE's transaction times out after 32 s
             cara.wait_disconnected(after=calls, timeout=60)
             assert disconnect_reason(cara) == "408", cara.log_text()[-2000:]
-            # D14: Asterisk sends systemd no watchdog notifications
+            # Asterisk sends systemd no watchdog notifications
             assert pbx.succeed("systemctl show -P ActiveState,SubState asterisk.service").split() == ["active", "running"]
             assert "-- No entries --" in journal_since(pbx, cursor)
             pbx.succeed(f"kill -CONT {pid}")

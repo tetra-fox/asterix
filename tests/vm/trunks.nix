@@ -108,7 +108,8 @@ in
           })
           (onlyAddresses ["203.0.113.1"])
         ];
-        # Asterisk resolves SIP hosts with DNS only (D28)
+        # Asterisk resolves SIP hosts with DNS only
+        # (res/res_pjsip/pjsip_resolver.c:698, main/dns.c:296)
         networking.nameservers = ["203.0.113.5"];
 
         services.asterisk = {

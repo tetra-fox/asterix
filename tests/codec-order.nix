@@ -1,4 +1,4 @@
-# D22 on Asterisk: codecs an endpoint allows, defined in several modules,
+# codecs an endpoint allows, defined in several modules,
 # come in module order, and lib.mkBefore and lib.mkAfter move theirs to the
 # front and the end, for a typed endpoint, for the section it writes and for
 # a layer-1 endpoint. `pjsip show endpoint` lists them in that order.

@@ -10,7 +10,7 @@
 # (answering or refusing) and every other port dropped: every port of each
 # PBX's first address, over TCP and UDP, and the ports of either PBX and
 # their neighbours on the other addresses. Each PBX also relaxes the sandbox
-# in one way (D16): the port below 1024 gives the first CAP_NET_BIND_SERVICE,
+# in one way: the port below 1024 gives the first CAP_NET_BIND_SERVICE,
 # the second runs with realtime scheduling, and each relaxation adds only its
 # own items to what systemd-analyze counts against the unit.
 #
@@ -141,7 +141,7 @@ in
         imports = [pbx];
         networking.nftables.enable = true;
         services.asterisk = {
-          # the other relaxation of the sandbox (D16)
+          # the other relaxation of the sandbox
           realtime = true;
           pjsip.transports.udp = {};
           settings."pjsip.conf".tcp6 = {

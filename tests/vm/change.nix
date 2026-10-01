@@ -5,7 +5,7 @@
 # its runtime member until the next start. The same deploy turns
 # on the HTTP server and adds a queue rule, which switching back turns off and
 # removes again. After a reboot, in which Asterisk waits for the address its
-# transport binds (D38), the phones' registrations come back from astdb
+# transport binds, the phones' registrations come back from astdb
 # without the phones registering again, the trunk registers, the hours are
 # still closed, the runtime queue member is back, and a call from the
 # provider reaches the phone of the closed destination.
@@ -181,7 +181,7 @@ in
         start_all()
 
         def address_comes_late():
-            """Asterisk waits for the address its transport binds (D38), which
+            """Asterisk waits for the address its transport binds, which
             the test adds only then, and listens on it once it is there."""
             pbx.wait_until_succeeds("journalctl -b -u asterisk.service | grep -q 'asterisk-config: waiting for address 10.1.0.10'")
             pbx.succeed("ip address add 10.1.0.10/24 dev eth1")

@@ -212,62 +212,68 @@ in {
     };
   };
 
-  config = mkIf (cfg.enable && acfg.enable) {
-    services.asterisk = {
-      settings."manager.conf" =
+  config = mkIf cfg.enable (mkMerge [
+    # settings can write users and turn AMI on without ami.enable
+    {
+      services.asterisk.secretMaxLengths = secretMaxLengths userSecrets;
+      assertions = [
         {
-          general = mkMerge [
-            {
-              enabled = mkDefault true;
-              bindaddr = mkDefault acfg.address;
-              port = mkDefault acfg.port;
-            }
-            acfg.settings
-          ];
+          assertion = longSecrets == [];
+          message = "services.asterisk: AMI secrets longer than the ${toString secretBytes} bytes a Login can send, since AMI reads a line into 1024 bytes with `Secret: ` and the line end; use shorter ones: ${concatStringsSep ", " (map (secret: secret.what) longSecrets)}.";
         }
-        // mapAttrs' (
-          name: u:
-            nameValuePair "user:${name}" (mkMerge [
+        {
+          assertion = misreadClasses == [];
+          message = ''
+            services.asterisk: manager.conf read and write values must be one string of classes joined by commas. Asterisk takes an item before the last as the start of a class name, so an empty one grants every class, ignores a last item that is no class, and of several lines keeps the last:
+              ${concatStringsSep "\n  " misreadClasses}
+          '';
+        }
+      ];
+    }
+    (mkIf acfg.enable {
+      services.asterisk = {
+        settings."manager.conf" =
+          {
+            general = mkMerge [
               {
-                inherit name;
-                secret = mkDefault u.secret;
-                read = mkIf (u.read != []) (mkDefault (concatStringsSep "," u.read));
-                write = mkIf (u.write != []) (mkDefault (concatStringsSep "," u.write));
-                deny = [
-                  "0.0.0.0/0.0.0.0"
-                  "::/0"
-                ];
-                inherit (u) permit;
+                enabled = mkDefault true;
+                bindaddr = mkDefault acfg.address;
+                port = mkDefault acfg.port;
               }
-              u.settings
-            ])
-        )
-        acfg.users;
+              acfg.settings
+            ];
+          }
+          // mapAttrs' (
+            name: u:
+              nameValuePair "user:${name}" (mkMerge [
+                {
+                  inherit name;
+                  secret = mkDefault u.secret;
+                  read = mkIf (u.read != []) (mkDefault (concatStringsSep "," u.read));
+                  write = mkIf (u.write != []) (mkDefault (concatStringsSep "," u.write));
+                  deny = [
+                    "0.0.0.0/0.0.0.0"
+                    "::/0"
+                  ];
+                  inherit (u) permit;
+                }
+                u.settings
+              ])
+          )
+          acfg.users;
 
-      firewall.ami = acfg.openFirewall;
+        firewall.ami = acfg.openFirewall;
+      };
 
-      secretMaxLengths = secretMaxLengths userSecrets;
-    };
+      # the flag comes first, so its type is checked when openFirewall is off
+      warnings = lib.optional (acfg.openFirewall && !cfg.openFirewall) "services.asterisk.ami.openFirewall opens the AMI port only together with services.asterisk.openFirewall, which is off.";
 
-    # the flag comes first, so its type is checked when openFirewall is off
-    warnings = lib.optional (acfg.openFirewall && !cfg.openFirewall) "services.asterisk.ami.openFirewall opens the AMI port only together with services.asterisk.openFirewall, which is off.";
-
-    assertions = [
-      {
-        assertion = reserved == [];
-        message = "services.asterisk.ami.users: `general` is reserved, in any case: ${concatStringsSep ", " reserved}.";
-      }
-      {
-        assertion = longSecrets == [];
-        message = "services.asterisk: AMI secrets longer than the ${toString secretBytes} bytes a Login can send, since AMI reads a line into 1024 bytes with `Secret: ` and the line end; use shorter ones: ${concatStringsSep ", " (map (secret: secret.what) longSecrets)}.";
-      }
-      {
-        assertion = misreadClasses == [];
-        message = ''
-          services.asterisk: manager.conf read and write values must be one string of classes joined by commas. Asterisk takes an item before the last as the start of a class name, so an empty one grants every class, ignores a last item that is no class, and of several lines keeps the last:
-            ${concatStringsSep "\n  " misreadClasses}
-        '';
-      }
-    ];
-  };
+      assertions = [
+        {
+          assertion = reserved == [];
+          message = "services.asterisk.ami.users: `general` is reserved, in any case: ${concatStringsSep ", " reserved}.";
+        }
+      ];
+    })
+  ]);
 }

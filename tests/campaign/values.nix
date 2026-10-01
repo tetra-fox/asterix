@@ -494,6 +494,11 @@ in
       default = "reject";
       invalid = [null];
     };
+    # against the system's CA bundle, any certificate a public CA signed passes
+    "services.asterisk.pjsip.transports.<name>.tls.verifyClient" = {
+      valid = [(with' {services.asterisk.pjsip.transports.lan.tls.caListFile = "/var/lib/acme/pbx/chain.pem";} true)];
+      invalid = [true];
+    };
     "services.asterisk.pjsip.trunks.<name>.aorSettings" = freeform {int.default_expiration = 1800;};
     "services.asterisk.pjsip.trunks.<name>.allow" = {
       valid = [["alaw"]];

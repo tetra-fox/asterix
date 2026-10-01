@@ -503,6 +503,42 @@
       assertion = "TLS transport(s) tls need a certificate and a private key";
     };
 
+    # against the system's CA bundle, any client certificate a public CA
+    # signed passes
+    verifyClientWithoutCaList = {
+      module.services.asterisk.pjsip.transports.tls = {
+        protocol = "tls";
+        tls = {
+          certFile = "/var/lib/acme/pbx/cert.pem";
+          keyFile = "/var/lib/acme/pbx/key.pem";
+          verifyClient = true;
+        };
+      };
+      assertions = ["services.asterisk: TLS transport(s) tls verify clients against the system's CA bundle, which admits any client whose certificate a public CA signed. Set pjsip.transports.<name>.tls.caListFile to the CA that signs the phones' certificates."];
+    };
+
+    verifyClientWithCaList = let
+      tls = {
+        certFile = "/var/lib/acme/pbx/cert.pem";
+        keyFile = "/var/lib/acme/pbx/key.pem";
+        verifyClient = true;
+      };
+    in {
+      module.services.asterisk.pjsip.transports = {
+        tls = {
+          protocol = "tls";
+          tls = tls // {caListFile = "/var/lib/pbx/phones-ca.pem";};
+        };
+        tls-settings = {
+          protocol = "tls";
+          port = 5062;
+          inherit tls;
+          settings.ca_list_file = "/var/lib/pbx/phones-ca.pem";
+        };
+      };
+      assertions = [];
+    };
+
     # Asterisk takes every request of an endpoint without auth as
     # authenticated: 102, and 103 through an aor of settings, let anyone
     # register; the others take no registrations, have a password or an

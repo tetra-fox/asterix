@@ -524,7 +524,8 @@
               CA certificates used to verify peers, loaded as a systemd
               credential. By default TLS transports use the system's CA bundle
               ({option}`security.pki.caBundle`), so `verifyServer` works with
-              publicly signed certificates.
+              publicly signed certificates; `verifyClient` needs a list of its
+              own.
             '';
           };
           method = mkOption {
@@ -552,7 +553,9 @@
             default = false;
             description = ''
               Admit only clients that present a certificate the CA list
-              verifies (`verify_client` and `require_client_cert`).
+              verifies (`verify_client` and `require_client_cert`). Needs
+              `caListFile`, since the system's CA bundle would admit any client
+              whose certificate a public CA signed.
             '';
           };
           verifyServer = mkOption {
@@ -998,6 +1001,20 @@
     objects
   );
 
+  # TLS transports that verify clients against the system's CA bundle, which
+  # any certificate a public CA signed passes
+  verifyAgainstPublicCas = map (s: s.name) (
+    filter (
+      s:
+        (s.type or null)
+        == "transport"
+        && lib.toLower (toString (s.protocol or "udp")) == "tls"
+        && format.isTrue (s.verify_client or false)
+        && toString (s.ca_list_file or "") == toString config.security.pki.caBundle
+    )
+    objects
+  );
+
   # typed endpoints anyone who reaches the SIP port can register as: Asterisk
   # takes every request of an endpoint without auth as authenticated
   # (res_pjsip_authenticator_digest.c:53-58)
@@ -1288,6 +1305,10 @@ in {
       {
         assertion = tlsWithoutKeys == [];
         message = "services.asterisk: TLS transport(s) ${concatStringsSep ", " tlsWithoutKeys} need a certificate and a private key (pjsip.transports.<name>.tls.certFile and tls.keyFile, or cert_file and priv_key_file).";
+      }
+      {
+        assertion = verifyAgainstPublicCas == [];
+        message = "services.asterisk: TLS transport(s) ${concatStringsSep ", " verifyAgainstPublicCas} verify clients against the system's CA bundle, which admits any client whose certificate a public CA signed. Set pjsip.transports.<name>.tls.caListFile to the CA that signs the phones' certificates.";
       }
       {
         assertion = openEndpoints == [];

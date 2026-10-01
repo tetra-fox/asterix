@@ -2,10 +2,11 @@
 #
 # Starts ASTERISK with the configuration in CONFIG, followed by the ARGUMENTs
 # as the service passes its extra arguments, and fails if Asterisk logs an
-# error or warning while loading it, or if the dialplan uses an application,
-# function or switch that no loaded module provides, plays a sound that a
-# language calls use lacks, or sends calls to a Goto() or Gosub() target that
-# does not exist (dialplan.awk). CONFIG is prepared by
+# error or warning while loading it, if it cannot start the program of a
+# custom music class, or if the dialplan uses an application, function or
+# switch that no loaded module provides, plays a sound that a language calls
+# use lacks, or sends calls to a Goto() or Gosub() target that does not exist
+# (dialplan.awk). CONFIG is prepared by
 # modules/asterisk.nix: `config/` with `@root@` where the files will be and a
 # log channel `check`, `credentials/`, `directories`, which lists the
 # directories to create below `@root@`, `hosts` for the names Asterisk
@@ -183,6 +184,14 @@ in
       if gawk "''${named[@]}" -f ${./problems.awk} "$root/log/check" > "$root/problems"; then
         echo "Asterisk logged these while loading the configuration:" >&2
         cat "$root/problems" >&2
+        failed=1
+      fi
+      # a custom music class's program that cannot start says so on the
+      # standard error it shares with Asterisk, not in Asterisk's log
+      # (res/res_musiconhold.c:779)
+      if grep -F 'MOH: exec failed' "$root/console" > "$root/unstarted"; then
+        echo "Asterisk could not start the program of a custom music class, which it runs without searching PATH:" >&2
+        sort -u "$root/unstarted" >&2
         failed=1
       fi
       if ! gawk -v applications="$root/applications" -v functions="$root/functions" \

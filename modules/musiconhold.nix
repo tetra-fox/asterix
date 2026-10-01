@@ -111,7 +111,7 @@
       application = mkOption {
         type = types.nullOr types.str;
         default = null;
-        description = "Command producing signed linear audio in `custom` mode.";
+        description = "Command producing signed linear audio in `custom` mode. Asterisk runs the program without searching `PATH`, so give its full path, such as `\${pkgs.mpg123}/bin/mpg123`.";
       };
       settings = mkOption {
         type = types.attrsOf format.types.value;

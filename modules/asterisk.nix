@@ -967,10 +967,11 @@ in {
       description = ''
         Start Asterisk with the generated configuration when the system is
         built, and fail the build if Asterisk logs an error or a warning
-        while loading it, or if the dialplan uses an application, function or
-        switch that no loaded module provides, plays a sound Asterisk cannot
-        find, or sends calls to a context, extension, priority or label that
-        does not exist. Secrets are replaced by zeros, credentials by a
+        while loading it or cannot start the program of a custom music
+        class, or if the dialplan uses an application, function or switch
+        that no loaded module provides, plays a sound Asterisk cannot find,
+        or sends calls to a context, extension, priority or label that does
+        not exist. Secrets are replaced by zeros, credentials by a
         throwaway certificate and IPv4 listen addresses by loopback ones, so
         a sandboxed build needs no privileges, and Asterisk gets a fixed
         entity ID unless asterisk.conf sets one, as the build has no network

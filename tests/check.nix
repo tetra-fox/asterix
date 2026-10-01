@@ -88,6 +88,14 @@
         "(services.asterisk.checkConfig = false turns this check off)"
       ];
     };
+    # Asterisk runs a custom class's program without searching PATH
+    customMusicProgramNotFound = {
+      module.services.asterisk.musicOnHold.classes.radio = {
+        mode = "custom";
+        application = "mpg123 -q -s --mono -r 8000 -f 8192 http://radio.example.org/stream.mp3";
+      };
+      expect = ["MOH: exec failed: No such file or directory"];
+    };
     # what Asterisk logged while loading counts, however late its logger
     # thread writes it
     misspelledKeyWithSlowLogger = {
@@ -680,6 +688,16 @@
         directory = "moh-sln";
         application = "${pkgs.coreutils}/bin/cat /dev/zero";
       };
+    };
+    # custom classes whose program ends while Asterisk loads, as a stream the
+    # build cannot reach does, or a clip: res_musiconhold starts it again
+    customMusicStream.services.asterisk.musicOnHold.classes.radio = {
+      mode = "custom";
+      application = "${pkgs.mpg123}/bin/mpg123 -q -s --mono -r 8000 -f 8192 http://radio.example.org/stream.mp3";
+    };
+    customMusicClip.services.asterisk.musicOnHold.classes.clip = {
+      mode = "custom";
+      application = "${pkgs.coreutils}/bin/head -c 16000 /dev/zero";
     };
     # the examples of the module lists load as they are
     moduleListExamples.services.asterisk.modules = let

@@ -7,6 +7,8 @@ cat > log << 'EOF'
 [Sep 29 11:41:28] WARNING[44] res_pjsip_outbound_registration.c: No response received from 'sip:203.0.113.5' on registration attempt to 'sip:5551000@203.0.113.5', retrying in '60'
 [Sep 29 11:41:28] ERROR[44] res_pjsip.c: Error 120101 'Network is unreachable' sending OPTIONS request to endpoint provider
 [Sep 29 11:41:28] ERROR[44] res_pjsip.c: Error 171039 'Unsupported transport (PJSIP_EUNSUPTRANSPORT)' sending OPTIONS request to endpoint gate
+[Sep 29 11:41:28] WARNING[58] res_musiconhold.c: poll() failed: Interrupted system call
+[Sep 29 11:41:28] WARNING[58] res_musiconhold.c: poll() failed: Bad file descriptor
 [Sep 29 11:41:28] WARNING[18] pbx_config.c: No closing parenthesis found? 'Dial(PJSIP/101' at line 9 of extensions.conf
 [Sep 29 11:41:28] NOTICE[18] cdr.c: CDR simple logging enabled.
 EOF
@@ -30,6 +32,7 @@ long() {
 gawk -f "$1" log > actual || true
 cat > expected << 'EOF'
 ERROR[44] res_pjsip.c: Error 171039 'Unsupported transport (PJSIP_EUNSUPTRANSPORT)' sending OPTIONS request to endpoint gate
+WARNING[58] res_musiconhold.c: poll() failed: Bad file descriptor
 WARNING[18] pbx_config.c: No closing parenthesis found? 'Dial(PJSIP/101' at line 9 of extensions.conf
 EOF
 {

@@ -6,6 +6,16 @@ file needs the keys each example lists.
 
 The examples are tested as written, in NixOS VM tests (`tests/vm/`).
 
+A deploy that changes a secret reloads Asterisk, or restarts the provisioning
+server, through sops-nix's `reloadUnits` and `restartUnits`. By default
+sops-nix installs secrets from the activation script, which leaves the reload
+or restart to switch-to-configuration, and NixOS 26.05 warns that this is
+removed in NixOS 26.11, so the examples need revisiting before then. With
+`sops.useSystemdActivation = true`, the default with systemd-sysusers or
+userborn, sops-nix installs secrets from a systemd unit that reloads and
+restarts the units through systemctl itself; the VM tests run the examples
+without it.
+
 ## minimal.nix
 
 Two SIP phones that call each other by dialing 101 and 102.

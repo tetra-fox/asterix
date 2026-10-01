@@ -898,7 +898,7 @@ in
 
         with subtest("a deploy with a column master.db cannot take fails and applies nothing, and a reload applies it once master.db takes it"):
             pid, cursor = main_pid(), journal_cursor(pbx)
-            pbx.succeed(f"{SQLITE} 'ALTER TABLE cdr DROP COLUMN linkedid' && chmod 0440 /var/log/asterisk/master.db")
+            pbx.succeed(f"{SQLITE} 'ALTER TABLE cdr DROP COLUMN linkedid' && chattr +i /var/log/asterisk/master.db")
             status, output = pbx.execute(f"{base}/specialisation/columns/bin/switch-to-configuration test 2>&1")
             assert status == 4 and "Failed to reload asterisk.service" in output, output
             assert main_pid() == pid, "asterisk was restarted"
@@ -906,7 +906,7 @@ in
             assert "sqlite-tables: cannot add the columns that cdr_sqlite3_custom.conf names to cdr in /var/log/asterisk/master.db" in journal, journal
             assert reloads(cursor) == [], journal
             pbx.fail("grep -q linkedid /run/asterisk/config/cdr_sqlite3_custom.conf")
-            pbx.succeed("chmod 0640 /var/log/asterisk/master.db")
+            pbx.succeed("chattr -i /var/log/asterisk/master.db")
             cursor = journal_cursor(pbx)
             pbx.succeed("systemctl reload asterisk.service")
             assert reloads(cursor) == sqlite_reloads, reloads(cursor)
@@ -916,13 +916,13 @@ in
 
         with subtest("Asterisk starts when master.db cannot take a column it lacks, and the next start adds it"):
             pid, cursor = main_pid(), journal_cursor(pbx)
-            pbx.succeed(f"{SQLITE} 'ALTER TABLE cel DROP COLUMN peer' && chmod 0440 /var/log/asterisk/master.db")
+            pbx.succeed(f"{SQLITE} 'ALTER TABLE cel DROP COLUMN peer' && chattr +i /var/log/asterisk/master.db")
             pbx.succeed("systemctl restart asterisk.service")
             assert main_pid() != pid, "asterisk was not restarted"
             journal = journal_since(pbx, cursor)
             assert "sqlite-tables: cannot add the columns that cel_sqlite3_custom.conf names to cel in /var/log/asterisk/master.db" in journal, journal
             assert "asterisk-config: starting Asterisk with master.db as it is" in journal, journal
-            pbx.succeed("chmod 0640 /var/log/asterisk/master.db")
+            pbx.succeed("chattr -i /var/log/asterisk/master.db")
             pbx.succeed("systemctl restart asterisk.service")
             assert "peer" in columns("cel"), columns("cel")
             channel_events_recorded()

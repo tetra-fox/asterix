@@ -149,13 +149,19 @@
         Asterisk starts and before each reload, the table is created as the
         module would create it and the columns it lacks are added; none is
         ever removed, so the records of an older configuration still fit.
-        Nothing rotates or prunes the database.${notes}
+        Nothing rotates or prunes the database. The CDR and CEL modules write
+        it in turns, and drop a record that waits for the other longer than
+        `busy_timeout`, 10 s unless set.${notes}
       '';
     };
     table = mkOption {
       type = types.str;
       default = defaultTable;
-      description = "Table name, of up to 79 bytes. The database is {file}`/var/log/asterisk/master.db`.";
+      description = ''
+        Table name, of up to 79 bytes. The database is
+        {file}`/var/log/asterisk/master.db`, in WAL mode, so a copy of it while
+        Asterisk runs needs {file}`master.db-wal` too, or sqlite3's `.backup`.
+      '';
     };
   };
 in {

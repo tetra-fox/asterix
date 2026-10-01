@@ -23,12 +23,13 @@ columns() {
 }
 
 # a new database gets each table as the module creates it, the default name
-# without a table, and nothing of a comment
+# without a table, and nothing of a comment, in WAL mode
 conf cdr $'; Generated\n\n[master]\ncolumns => calldate, src , dst\ntable => cdr\nvalues => \'${CDR(start)}\', \'${CDR(src)}\', \'${CDR(dst)}\''
 conf cel $'[master]\ncolumns => eventtype, eventtime ; uniqueid\nvalues => \'${eventtype}\', \'${eventtime}\''
 "$tables" master.db config
 check "select sql from sqlite_master where name = 'cdr'" "CREATE TABLE cdr (AcctId INTEGER PRIMARY KEY, calldate,src,dst)"
 check "select sql from sqlite_master where name = 'cel'" "CREATE TABLE cel (AcctId INTEGER PRIMARY KEY, eventtype,eventtime)"
+check "pragma journal_mode" "wal"
 
 # more columns are added and the rows kept; a name is the same in any case
 "$sqlite3" master.db "insert into cdr (calldate, src, dst) values ('2026-09-30', '101', '102')"

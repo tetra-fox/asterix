@@ -1,7 +1,8 @@
 # sqlite-tables DATABASE DIRECTORY
 #
 # Adds to DATABASE the table that cdr_sqlite3_custom.conf and
-# cel_sqlite3_custom.conf in DIRECTORY each name, and the columns it lacks.
+# cel_sqlite3_custom.conf in DIRECTORY each name, and the columns it lacks,
+# and puts it in WAL mode.
 # Asterisk creates a missing table only when the module loads, never on a
 # reload, and never adds a column (cdr/cdr_sqlite3_custom.c load_module), so
 # without this every record after a change of the table or the columns fails
@@ -25,11 +26,13 @@ writeShellApplication {
     sql() {
       sqlite3 -bail -cmd '.timeout 10000' "$database" "$@"
     }
+    written=
     for module in cdr cel; do
       file=''${module}_sqlite3_custom.conf
       [ -f "$directory/$file" ] || continue
       master=$(LC_ALL=C gawk -v table="$module" -f ${./master.awk} "$directory/$file")
       [ -n "$master" ] || continue
+      written=1
       table=''${master%%$'\n'*} columns=''${master#*$'\n'}
       # create the table with the module's own statement, then list the
       # columns it lacks, by name as SQLite reads them and in any case
@@ -53,6 +56,13 @@ writeShellApplication {
         exit 1
       fi
     done
+    # in WAL mode a writer waits for no reader and a commit syncs one file
+    # instead of the journal and the database, so fewer records of the modules
+    # wait past busy_timeout; the mode stays with the file
+    if [ -n "$written" ] && [ "$(sql 'PRAGMA journal_mode = WAL')" != wal ]; then
+      echo "sqlite-tables: cannot switch $database to WAL mode" >&2
+      exit 1
+    fi
   '';
   derivationArgs.postCheck = ''
     bash ${./test.sh} "$target" ${lib.getExe sqlite}

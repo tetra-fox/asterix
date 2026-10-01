@@ -1,7 +1,4 @@
 {
- "generator": "tests/campaign/matrix.py generate",
- "seed": 1,
- "strength": 2,
  "levels": {
   "package": [
    "asterisk_20",

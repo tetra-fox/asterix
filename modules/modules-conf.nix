@@ -184,7 +184,11 @@ in {
         Load every module Asterisk finds, except the ones in
         {option}`services.asterisk.modules.noload`. Off by default:
         only the modules in {option}`services.asterisk.modules.load`
-        are loaded.
+        are loaded. With autoload, the build-time check
+        ({option}`services.asterisk.checkConfig`) leaves out the problems of
+        the modules that neither `load` nor `preload` names: what they log
+        while they load, such as a missing file, and that they decline. Name
+        a module in `load` to have it checked.
       '';
     };
 

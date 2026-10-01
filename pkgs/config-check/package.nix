@@ -9,8 +9,10 @@
 # modules/asterisk.nix: `config/` with `@root@` where the files will be and a
 # log channel `check`, `credentials/`, `directories`, which lists the
 # directories to create below `@root@`, `hosts` for the names Asterisk
-# resolves while loading, since a build has no DNS, and `languages`, the
-# languages endpoints set. Secrets become zeros.
+# resolves while loading, since a build has no DNS, `languages`, the
+# languages endpoints set, and with autoload `modules`, the modules
+# modules.conf names, whose problems count where those of the rest do not.
+# Secrets become zeros.
 #
 # ADDRESS are the addresses Asterisk listens on. IPv4 ones become loopback
 # addresses, which a build can bind without privileges. Asterisk only runs in
@@ -174,7 +176,11 @@ in
       rx "core show file formats" > "$root/formats"
 
       failed=0
-      if gawk -f ${./problems.awk} "$root/log/check" > "$root/problems"; then
+      named=()
+      if [ -f "$root/modules" ]; then
+        named=(-v named="$root/modules")
+      fi
+      if gawk "''${named[@]}" -f ${./problems.awk} "$root/log/check" > "$root/problems"; then
         echo "Asterisk logged these while loading the configuration:" >&2
         cat "$root/problems" >&2
         failed=1

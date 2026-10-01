@@ -314,6 +314,22 @@
         "invalid option -- 'Z'"
       ];
     };
+    # with autoload, what the configuration loads by name still counts: the
+    # endpoint of a misspelled key, and a module that declines without its
+    # file
+    autoloadAndLoadedByName = {
+      module.services.asterisk = {
+        modules = {
+          autoload = true;
+          load = ["res_xmpp.so"];
+        };
+        pjsip.endpoints."101".settings.direct_mdia = false;
+      };
+      expect = [
+        "Could not find option suitable for category '101' named 'direct_mdia'"
+        "res_xmpp declined to load"
+      ];
+    };
     # the options load the modules they need, but not what those need
     pjsipWithoutDefaultModules = {
       module.services.asterisk.modules.defaultModules = false;
@@ -627,6 +643,12 @@
     };
     # res_crypto reads the keys directory, which the service creates
     keyDirectory.services.asterisk.modules.load = ["res_crypto.so"];
+    # with autoload, the modules nothing loads by name, which decline without
+    # files of their own and log why
+    autoload.services.asterisk.modules.autoload = true;
+    # Asterisk takes its entity ID from a network card, which the build has
+    # none of, and this module declines without one
+    entityId.services.asterisk.modules.load = ["res_pjsip_publish_asterisk.so"];
     # a switch's module is loaded with it
     realtimeSwitch.services.asterisk.dialplan.contexts.internal.switches = ["Realtime/default@extensions"];
     # res_rtp_asterisk resolves the STUN server with Asterisk's own DNS client

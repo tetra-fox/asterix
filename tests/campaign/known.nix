@@ -76,7 +76,6 @@
   "services.asterisk.http.tls.address = \"pbx\"" = "rejected by asterisk-config-check";
   "services.asterisk.includes.<name>.*.optional = default" = "limitation (the included file is not in the build)";
   "services.asterisk.includes.<name>.*.optional = false" = "limitation (the included file is not in the build)";
-  "services.asterisk.modules.autoload = true" = "P2: does not load";
   "services.asterisk.modules.defaultModules = false" = "rejected by asterisk-config-check";
   "services.asterisk.modules.load = [\"q7_no_such_module.so\"]" = "rejected by asterisk-modules-check";
   "services.asterisk.modules.noload = [\"res_pjsip.so\"]" = "rejected by asterisk-config-check";

@@ -127,8 +127,26 @@
             astagidir = "lib/agi-bin";
             astlogdir = "log";
           };
+        # Asterisk takes its entity ID from the address of a network card
+        # (main/utils.c ast_set_default_eid), which the build has none of, and
+        # res_pjsip_publish_asterisk declines without one
+        options =
+          lib.optionalAttrs (!builtins.any (key: lib.toLower key == "entityid") (attrNames conf.options)) {
+            entityid = "02:00:00:00:00:01";
+          }
+          // conf.options;
       }
     );
+  modulesConf = cfg.settings."modules.conf".modules;
+  # with autoload, the modules modules.conf names, whose problems count while
+  # those of the modules autoload adds do not
+  autoload = format.isTrue (modulesConf.autoload or false);
+  namedModules = concatMap (key: lib.toList (modulesConf.${key} or [])) [
+    "load"
+    "preload"
+    "require"
+    "preload-require"
+  ];
   # a certificate and its key in one file, so it works for any TLS file:
   # OpenSSL reads the part it needs
   checkCertificate = pkgs.runCommand "asterisk-check-certificate" {nativeBuildInputs = [pkgs.openssl];} ''
@@ -148,23 +166,28 @@
         "rtp.conf" = lib.replaceStrings ["stunaddr = ${stunName}"] ["stunaddr = 192.0.2.1"] cfg.renderedFiles."rtp.conf";
       }
       // lib.optionalAttrs (cfg.modules.checkPreload != []) {
-        "modules.conf" = let
-          conf = cfg.settings."modules.conf";
-        in
-          renderWith "modules.conf" (conf
-            // {
-              modules = conf.modules // {preload = unique (conf.modules.preload ++ cfg.modules.checkPreload);};
-            });
+        "modules.conf" = renderWith "modules.conf" (cfg.settings."modules.conf"
+          // {
+            modules = modulesConf // {preload = unique (modulesConf.preload ++ cfg.modules.checkPreload);};
+          });
       }
       // {
         "asterisk.conf" = checkAsteriskConf;
-        "logger.conf" = format.render {syntax = syntaxFor "logger.conf";} {sections.logfiles.check = "error,warning,verbose";};
+        # with autoload, also the verbose messages of the loader, which say
+        # what each module logs while it loads (main/loader.c start_resource)
+        "logger.conf" = format.render {syntax = syntaxFor "logger.conf";} {
+          sections.logfiles.check = "error,warning,verbose${lib.optionalString autoload "(5)"}";
+        };
       }
     )
     ++ map (name: {
       name = "credentials/${name}";
       path = checkCertificate;
     }) (attrNames cfg.credentials)
+    ++ optional autoload {
+      name = "modules";
+      path = pkgs.writeText "asterisk-check-modules" (lib.concatMapStrings (module: "${module}\n") namedModules);
+    }
     ++ optional (checkHostNames != []) {
       name = "hosts";
       path = pkgs.writeText "asterisk-check-hosts" (
@@ -949,11 +972,14 @@ in {
         find, or sends calls to a context, extension, priority or label that
         does not exist. Secrets are replaced by zeros, credentials by a
         throwaway certificate and IPv4 listen addresses by loopback ones, so
-        a sandboxed build needs no privileges. Listening on IPv6 addresses or
-        ports below 1024, or building without the sandbox, needs unprivileged
-        user namespaces on the build machine, which some systems (Ubuntu
-        24.04) forbid. Files outside the Nix store that the configuration
-        names do not exist there.
+        a sandboxed build needs no privileges, and Asterisk gets a fixed
+        entity ID unless asterisk.conf sets one, as the build has no network
+        card to take one from. Listening on IPv6 addresses or ports below
+        1024, or building without the sandbox, needs unprivileged user
+        namespaces on the build machine, which some systems (Ubuntu 24.04)
+        forbid. Files outside the Nix store that the configuration names do
+        not exist there. With {option}`services.asterisk.modules.autoload`,
+        the check leaves out the problems of modules only autoload loads.
 
         A sound has to exist in every language calls use: the default
         language and those of the PJSIP endpoints in `settings`, where the

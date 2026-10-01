@@ -45,3 +45,48 @@ if gawk -f "$1" quiet; then
   echo "problems.awk reported problems in a log without any" >&2
   exit 1
 fi
+
+# with autoload, what the modules modules.conf does not name log while they
+# load, and their declines, are left out, and what the named ones, other
+# threads and the core log after loading stays
+printf '%s\n' res_sorcery_config.so res_pjsip.so res_xmpp.so > named
+cat > autoload << 'EOF'
+[Sep 29 11:41:28] VERBOSE[21] loader.c: Loading res_sorcery_config.so.
+[Sep 29 11:41:28] VERBOSE[21] loader.c: res_sorcery_config.so => (Sorcery Configuration File Object Wizard)
+[Sep 29 11:41:28] VERBOSE[21] loader.c: Loading res_geolocation.so.
+[Sep 29 11:41:28] ERROR[21] res_sorcery_config.c: Unable to load config file 'geolocation.conf'
+[Sep 29 11:41:28] VERBOSE[21] loader.c: res_geolocation.so => (res_geolocation Module for Asterisk)
+[Sep 29 11:41:28] VERBOSE[21] loader.c: Loading res_pjsip_config_wizard.so.
+[Sep 29 11:41:28] VERBOSE[21] loader.c: res_pjsip_config_wizard.so => (PJSIP Config Wizard)
+[Sep 29 11:41:28] VERBOSE[21] loader.c: Loading res_adsi.so.
+[Sep 29 11:41:28] VERBOSE[21] loader.c: res_adsi.so => (ADSI Resource)
+[Sep 29 11:41:28] VERBOSE[21] loader.c: Loading res_pjsip.so.
+[Sep 29 11:41:28] ERROR[21] res_pjsip_config_wizard.c: Unable to load config file 'pjsip_wizard.conf'
+[Sep 29 11:41:28] ERROR[21] config_options.c: Could not find option suitable for category '101' named 'direct_mdia' at line 32 of
+[Sep 29 11:41:28] VERBOSE[21] loader.c: res_pjsip.so => (Basic SIP resource)
+[Sep 29 11:41:28] VERBOSE[21] loader.c: Loading res_xmpp.so.
+[Sep 29 11:41:28] ERROR[21] config_options.c: Unable to load config file 'xmpp.conf'
+[Sep 29 11:41:28] VERBOSE[21] loader.c: Loading res_phoneprov.so.
+[Sep 29 11:41:28] ERROR[21] res_phoneprov.c: Unable to load config phoneprov.conf
+[Sep 29 11:41:28] WARNING[44] res_pjsip.c: another thread during the load of res_phoneprov
+[Sep 29 11:41:28] VERBOSE[21] loader.c: Loading app_queue.so.
+[Sep 29 11:41:28] WARNING[21] loader.c: Some non-required modules failed to load.
+[Sep 29 11:41:28] WARNING[21] loader.c: Module 'res_adsi' has been loaded but may be removed in a future release.
+[Sep 29 11:41:28] ERROR[21] loader.c: res_xmpp declined to load.
+[Sep 29 11:41:28] ERROR[21] loader.c: Declined modules which depend on res_xmpp: chan_motif
+[Sep 29 11:41:28] ERROR[21] loader.c: res_phoneprov declined to load.
+[Sep 29 11:41:28] ERROR[21] loader.c: Declined modules which depend on res_phoneprov: res_pjsip_phoneprov_provider
+[Sep 29 11:41:28] ERROR[21] loader.c: app_queue declined to load.
+[Sep 29 11:41:28] WARNING[21] pbx.c: the core after loading
+[Sep 29 11:41:28] VERBOSE[21] asterisk.c: Asterisk Ready.
+EOF
+gawk -v named=named -f "$1" autoload > actual || true
+cat > expected << 'EOF'
+ERROR[21] config_options.c: Could not find option suitable for category '101' named 'direct_mdia' at line 32 of
+ERROR[21] config_options.c: Unable to load config file 'xmpp.conf'
+WARNING[44] res_pjsip.c: another thread during the load of res_phoneprov
+ERROR[21] loader.c: res_xmpp declined to load.
+ERROR[21] loader.c: Declined modules which depend on res_xmpp: chan_motif
+WARNING[21] pbx.c: the core after loading
+EOF
+diff -u expected actual

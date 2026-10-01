@@ -1361,6 +1361,22 @@
       assertion = ''menu names may only contain letters, digits, _ and -: pbx.ivrs."main menu".'';
     };
 
+    # flite's English voice skips what is not ASCII, and speaks a text with no
+    # ASCII letter or digit as 0.185 s of silence; one with some is spoken
+    ivrPromptTextsFliteCannotSpeak = {
+      module.pbx.ivrs = lib.mapAttrs (_: text: {prompt.text = text;}) {
+        blank = "";
+        dots = "...";
+        umlaut = builtins.fromJSON ''"\u00fc"'';
+        kanji = builtins.fromJSON ''"\u65e5\u672c\u8a9e"'';
+        greeting = builtins.fromJSON ''"Gr\u00fc\u00dfe"'';
+        number = "2";
+      };
+      assertions = [
+        ''pbx.ivrs: flite speaks these prompt texts as silence, since they hold no ASCII letter or digit: pbx.ivrs.blank.prompt.text, pbx.ivrs.dots.prompt.text, pbx.ivrs.kanji.prompt.text, pbx.ivrs.umlaut.prompt.text. Write the text in English, or for a menu without a prompt use prompt.sound = "silence/1".''
+      ];
+    };
+
     # Goto and Gosub end a context at the first comma, and Dial splits its
     # channels at &, one of which is the Local channel of an external number
     ringGroupNames = {

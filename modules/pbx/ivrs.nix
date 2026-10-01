@@ -46,7 +46,11 @@
           text = mkOption {
             type = types.str;
             example = "For sales, press 1. For support, press 2.";
-            description = "Text spoken by flite (voice slt) when the system is built.";
+            description = ''
+              Text spoken by flite (voice slt) when the system is built. The
+              English voice skips characters outside ASCII, so a text needs an
+              ASCII letter or digit, or it plays as silence.
+            '';
           };
         };
         description = "What the caller hears before choosing.";
@@ -133,6 +137,8 @@
 
   directDial = builtins.any (ivr: ivr.directDial) (builtins.attrValues cfg.ivrs);
 
+  # flite speaks a text with no ASCII letter or digit as 0.185 s of silence
+  silent = builtins.filter (name: !(builtins.any (c: builtins.match "[A-Za-z0-9]" c != null) (lib.stringToCharacters spoken.${name}.prompt.text))) (builtins.attrNames spoken);
   badNames = builtins.filter (name: builtins.match "[A-Za-z0-9_-]+" name == null) (builtins.attrNames cfg.ivrs);
   badKeys = concatMap (name: map (key: "pbx.ivrs.${name}.options.${key}") (builtins.filter (key: builtins.match "[0-9*#]" key == null) (builtins.attrNames cfg.ivrs.${name}.options))) (builtins.attrNames cfg.ivrs);
   # a key that is also an extension number would hide that number from
@@ -191,6 +197,10 @@ in {
       {
         assertion = shadowed == [];
         message = "pbx.ivrs: these keys are also extension numbers, which directDial makes dialable: ${concatStringsSep ", " shadowed}.";
+      }
+      {
+        assertion = silent == [];
+        message = ''pbx.ivrs: flite speaks these prompt texts as silence, since they hold no ASCII letter or digit: ${concatMapStringsSep ", " (name: lib.showOption ["pbx" "ivrs" name "prompt" "text"]) silent}. Write the text in English, or for a menu without a prompt use prompt.sound = "silence/1".'';
       }
     ];
   };

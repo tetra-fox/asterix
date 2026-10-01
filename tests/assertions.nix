@@ -1730,6 +1730,32 @@
       warnings = [];
     };
 
+    # with ICE on, Asterisk gathers candidates for every call leg, from the
+    # STUN and TURN servers too, whether the endpoint offers them or not
+    stunAndTurnWithoutIceEndpointsWarn = {
+      module = {config, ...}: {
+        services.asterisk.rtp = {
+          stunServer = "stun.example.org:3478";
+          turn = {
+            server = "turn.example.org:3478";
+            username = "pbx";
+            password = config.lib.asterisk.secret "/run/secrets/turn";
+          };
+        };
+      };
+      assertions = [];
+      warnings = ["services.asterisk: no PJSIP endpoint uses ICE (ice_support), which is all a STUN or TURN server (rtp.stunServer, rtp.turn.server) serves. With rtp.ice on, as Asterisk has it by default, every call leg still asks the STUN server for its address and allocates a relay on the TURN server, and the call waits for their answers. Remove them, or set ice_support in the settings of the endpoints that use ICE."];
+    };
+
+    stunWithIceEndpointDoesNotWarn = {
+      module.services.asterisk = {
+        rtp.stunServer = "stun.example.org:3478";
+        pjsip.endpoints."101".settings.ice_support = true;
+      };
+      assertions = [];
+      warnings = [];
+    };
+
     newlineInValueThrows = {
       module.services.asterisk.pjsip.endpoints."101".callerId = "a\nb";
       throws = true;

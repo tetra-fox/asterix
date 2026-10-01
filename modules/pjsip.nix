@@ -1037,6 +1037,15 @@
     objects
   );
 
+  # with icesupport, every call leg gathers ICE candidates, from the STUN and TURN
+  # servers too (res_rtp_asterisk.c:4102); only ice_support offers them (res_pjsip_sdp_rtp.c:278)
+  rtpGeneral = cfg.settings."rtp.conf".general or {};
+  unusedIceServers =
+    rawSections
+    == []
+    && builtins.any (key: toString (rtpGeneral.${key} or "") != "") ["stunaddr" "turnaddr"]
+    && !(builtins.any (s: format.isTrue (s.ice_support or false)) endpointObjects);
+
   # typed endpoints anyone who reaches the SIP port can register as: Asterisk
   # takes every request of an endpoint without auth as authenticated
   # (res_pjsip_authenticator_digest.c:53-58)
@@ -1362,10 +1371,12 @@ in {
       }
     ];
 
-    warnings = optional (inbandCodecs != []) ''
-      services.asterisk: Asterisk hears keys sent as tones only in ulaw and alaw calls, so endpoints with dtmf_mode = inband lose the keys of calls in the other codecs they allow:
-        ${concatStringsSep "\n  " inbandCodecs}
-      Allow only ulaw and alaw there, or use another dtmfMode.
-    '';
+    warnings =
+      optional (inbandCodecs != []) ''
+        services.asterisk: Asterisk hears keys sent as tones only in ulaw and alaw calls, so endpoints with dtmf_mode = inband lose the keys of calls in the other codecs they allow:
+          ${concatStringsSep "\n  " inbandCodecs}
+        Allow only ulaw and alaw there, or use another dtmfMode.
+      ''
+      ++ optional unusedIceServers "services.asterisk: no PJSIP endpoint uses ICE (ice_support), which is all a STUN or TURN server (rtp.stunServer, rtp.turn.server) serves. With rtp.ice on, as Asterisk has it by default, every call leg still asks the STUN server for its address and allocates a relay on the TURN server, and the call waits for their answers. Remove them, or set ice_support in the settings of the endpoints that use ICE.";
   };
 }

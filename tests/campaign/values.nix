@@ -14,6 +14,7 @@
   # the modules that read these files are only loaded with their options
   voicemail = with' {services.asterisk.voicemail.enable = true;};
   queues = with' {services.asterisk.modules.load = ["app_queue.so"];};
+  iceEndpoint = with' {services.asterisk.pjsip.endpoints."101".settings.ice_support = true;};
   password = secret "/run/secrets/campaign";
 
   # keys each freeform section reads, one per value kind, one no Asterisk
@@ -598,15 +599,21 @@ in
       int.rtcpinterval = 5000;
       bool.rtpchecksums = true;
     };
+    # a STUN or TURN server serves ICE alone, which no endpoint uses without
+    # ice_support
     "services.asterisk.rtp.stunServer" = {
-      valid = ["stun.example.org:3478" "203.0.113.9"];
+      valid = [(iceEndpoint "stun.example.org:3478")];
+      warn = ["stun.example.org:3478" "203.0.113.9"];
       invalid = ["q7 host"];
     };
     "services.asterisk.rtp.turn.password" = {
       valid = [password];
       warn = ["hunter2"];
     };
-    "services.asterisk.rtp.turn.server".valid = ["turn.example.org:3478"];
+    "services.asterisk.rtp.turn.server" = {
+      valid = [(iceEndpoint "turn.example.org:3478")];
+      warn = ["turn.example.org:3478"];
+    };
     "services.asterisk.rtp.turn.username".valid = ["pbx"];
     # CORE-01: each kind of value in each file, under a key of that file that
     # takes it; a float where Asterisk reads an integer, and keys no module

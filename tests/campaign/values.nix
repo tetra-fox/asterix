@@ -808,6 +808,10 @@ in
     };
     "pbx.emergency.trunk".invalid = ["nope"];
     "pbx.extensions.<name>.name".valid = ["Reception"];
+    "pbx.extensions.<name>.pickupGroups" = {
+      valid = [["front" "sales team"]];
+      invalid = [["front,back"] ["front "]];
+    };
     "pbx.extensions.<name>.password" = {
       valid = [(credential "sip-203")];
       warn = ["hunter2"];

@@ -13,9 +13,9 @@
 # characters, some not ASCII, plays. Paging: twenty members hear the pager,
 # who hears nobody unless the page is duplex, the pager's own extension is
 # left out, a member that does not answer rings until the page ends, and
-# headers the configuration sets reach the phones. Call pickup, with groups
-# set on the endpoints: a phone outside a ring group takes its call with *8
-# and every member stops ringing, and of two calls ringing in one pickup
+# headers the configuration sets reach the phones. Call pickup, with the
+# extensions' pickup groups: a phone outside a ring group takes its call with
+# *8 and every member stops ringing, and of two calls ringing in one pickup
 # group *8 takes the one that rang first, then the other.
 #
 #   pbx     the trunks provider (pbx.outbound's) and second lead to carrier-a
@@ -96,7 +96,15 @@ in
 
         pbx = {
           enable = true;
-          extensions = lib.genAttrs numbers (number: {password = secret "sip-${number}";});
+          # pickup groups: 209 picks up calls to the ring group everyone, 213
+          # and 214 those to 211 and 212
+          extensions = lib.genAttrs numbers (number: {
+            password = secret "sip-${number}";
+            pickupGroups =
+              if builtins.elem number (range 201 209)
+              then ["floor"]
+              else lib.optional (builtins.elem number (range 211 214)) "desk";
+          });
 
           ringGroups = {
             everyone = {
@@ -227,17 +235,6 @@ in
                 qualifyFrequency = 5;
               })
               carrierPorts;
-            # pickup groups, set on the endpoints as pbx.extensions has none: 209
-            # picks up calls to the ring group everyone, 213 and 214 to 211 and 212
-            endpoints =
-              lib.genAttrs (range 201 208) (_: {settings.named_call_group = "floor";})
-              // {
-                "209".settings.named_pickup_group = "floor";
-                "211".settings.named_call_group = "desk";
-                "212".settings.named_call_group = "desk";
-                "213".settings.named_pickup_group = "desk";
-                "214".settings.named_pickup_group = "desk";
-              };
           };
 
           # where the destinations of the groups and menus lead

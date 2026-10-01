@@ -64,6 +64,19 @@
         default = 20;
         description = "Seconds the phone rings before the call goes to `noAnswer`.";
       };
+      pickupGroups = mkOption {
+        # Asterisk splits the groups at commas and strips the ends of each
+        # (main/channel.c ast_get_namedgroups)
+        type = types.listOf (types.strMatching "[^,[:space:]]([^,]*[^,[:space:]])?");
+        default = [];
+        example = ["front"];
+        description = ''
+          Call pickup groups. A phone takes a call ringing at an extension
+          that shares a group with it by dialling the pickup code, `*8`
+          unless `pickupexten` of {file}`features.conf` says otherwise. They
+          set the endpoint's `named_call_group` and `named_pickup_group`.
+        '';
+      };
       noAnswer = mkOption {
         type = types.nullOr pbxLib.destination;
         default = null;
@@ -162,6 +175,12 @@ in {
           auth.password = mkDefault e.password;
           rtpTimeout = mkDefault 60;
           mailboxes = optional (e.voicemail != null) "${number}@default";
+          settings = mkIf (e.pickupGroups != []) (let
+            groups = mkDefault (lib.concatStringsSep "," e.pickupGroups);
+          in {
+            named_call_group = groups;
+            named_pickup_group = groups;
+          });
         })
         cfg.extensions;
 

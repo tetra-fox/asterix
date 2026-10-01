@@ -429,6 +429,17 @@
       assertion = ''"201" (81 bytes)'';
     };
 
+    # Asterisk splits the groups at commas and strips the ends of each
+    pickupGroupWithCommaThrows = {
+      module.pbx.extensions."201".pickupGroups = ["front,back"];
+      throws = true;
+    };
+
+    pickupGroupWithSpaceAtTheEndThrows = {
+      module.pbx.extensions."201".pickupGroups = ["front "];
+      throws = true;
+    };
+
     memberIsNoExtension = {
       module.pbx.ringGroups.front.members = lib.mkForce [
         "201"

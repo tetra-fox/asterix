@@ -332,6 +332,35 @@ in {
       };
     };
 
+    # an extension's pickup groups are both the groups its calls ring in and
+    # those it picks up from, and a plain endpoint setting replaces either
+    testPickupGroups = {
+      expr = let
+        files =
+          (configOf {
+            pbx.extensions = {
+              "201".pickupGroups = [
+                "front"
+                "sales team"
+              ];
+              "202".pickupGroups = ["front"];
+            };
+            services.asterisk.pjsip.endpoints."202".settings.named_pickup_group = "front,back";
+          }).services.asterisk.renderedFiles;
+      in
+        lib.genAttrs ["201" "202"] (number: builtins.filter (lib.hasPrefix "named_") (lib.splitString "\n" (pjsipSection "endpoint" number files)));
+      expected = {
+        "201" = [
+          "named_call_group = front,sales team"
+          "named_pickup_group = front,sales team"
+        ];
+        "202" = [
+          "named_call_group = front"
+          "named_pickup_group = front,back"
+        ];
+      };
+    };
+
     # pbx writes defaults, so plain core definitions win
     testCoreOptionsOverridePbx = {
       expr = let

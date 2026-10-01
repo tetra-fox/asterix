@@ -312,7 +312,8 @@ Each object becomes a context of its own, `pbx-<kind>-<name>`, with a comment
 saying which option it came from, and phones dial from `pbx-internal`. The
 layer only writes core options, as defaults, so anything it generates can be
 changed with the core options or `settings`. Evaluation fails when a number
-has two owners, or a trunk, member or destination does not exist. Of a
+has two owners, a trunk, member or destination does not exist, or
+destinations lead a call round in a loop that no key press breaks. Of a
 `context` destination, which leads into dialplan of your own, evaluation
 checks at most the context; building the system checks the context,
 extension and priority.

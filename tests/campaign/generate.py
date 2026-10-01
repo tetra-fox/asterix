@@ -327,6 +327,10 @@ def configurations(draw, fast=False, wide=False, vm=False):
 
     if m["emergency"] and m["emergency"]["numbers"] and draw(st.booleans()):
         m["emergency"]["notify"] = draw(st.lists(st.sampled_from(extensions), max_size=2, unique=True))
+    # what would go round without a key press hangs up instead
+    while loops := loop_slots(m):
+        _, o, key = loops[0]
+        o[key] = {"hangup": True}
     return m
 
 
@@ -394,6 +398,37 @@ def destinations(m):
             if s in r:
                 slot(f'pbx.inbound."{did}".{s}', r, s, False)
     return slots
+
+
+# the slots a call leaves an object through without a key press
+NO_KEY_SLOTS = {"extensions": ["noAnswer", "busy"], "ringGroups": ["noAnswer"], "queues": ["noAnswer"], "ivrs": ["noInput"]}
+OPTION_KIND = {option: kind for kind, option in KIND_OPTION.items()}
+
+
+def loop_slots(m):
+    """The slots whose destination leads back to their own object without a
+    key press, which evaluation refuses, as (where, the object holding the
+    slot, its key)."""
+    onward, slots = {}, []
+    for option, keys in NO_KEY_SLOTS.items():
+        for name, o in m[option].items():
+            for key in keys:
+                (tag, value), = o.get(key, {"hangup": True}).items()
+                if tag in KIND_OPTION:
+                    node = (OPTION_KIND[option], name)
+                    onward.setdefault(node, []).append((tag, value))
+                    slots.append((f"pbx.{option}.{name}.{key}", node, (tag, value), o, key))
+
+    def reached(node):
+        seen, todo = set(), [node]
+        while todo:
+            n = todo.pop()
+            if n not in seen:
+                seen.add(n)
+                todo += onward.get(n, [])
+        return seen
+
+    return [(where, o, key) for where, node, dest, o, key in slots if node in reached(dest)]
 
 
 def mailbox_key(box):
@@ -836,9 +871,19 @@ def m_conference_case(m, rng):
     return f"pbx.conferences {name} and {other}"
 
 
+def m_loop(m, rng):
+    """An extension, ring group, queue or voice menu that sends a call back
+    to itself without a key press."""
+    slots = [(option, name, key) for option, keys in NO_KEY_SLOTS.items() for name in sorted(m[option]) for key in keys]
+    option, name, key = rng.choice(slots)
+    m[option][name][key] = {OPTION_KIND[option]: name}
+    return f"pbx.{option}.{name}.{key} leads back"
+
+
 MUTATIONS = [
     m_dangling, m_mailbox, m_context, m_member, m_clash, m_pickup, m_malformed, m_inbound_half, m_hours,
     m_trunk, m_key, m_queue, m_profile, m_empty_group, m_no_trunk, m_timezone, m_name, m_mailbox_number, m_bad_name, m_conference_case,
+    m_loop,
 ]
 
 

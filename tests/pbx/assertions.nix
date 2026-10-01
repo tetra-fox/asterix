@@ -325,6 +325,53 @@
       ];
     };
 
+    # each comes back to where it started without a key press, so the call
+    # rings or plays on until the caller hangs up: an extension that is busy
+    # and a group that rings it, two groups, a queue and a menu on their own
+    destinationLoops = {
+      module.pbx = {
+        extensions."202".busy.ringGroup = "front";
+        ringGroups = {
+          front.noAnswer.extension = "202";
+          side = {
+            members = ["201"];
+            noAnswer.ringGroup = "back";
+          };
+          back = {
+            members = ["202"];
+            noAnswer.ringGroup = "side";
+          };
+        };
+        queues.support.noAnswer.queue = "support";
+        ivrs.main.noInput.ivr = "main";
+      };
+      assertions = [
+        ''
+          pbx: destinations that lead back to their own object without a key press, so a call goes round until the caller hangs up:
+            pbx.extensions."202".busy: ringGroup front
+            pbx.ringGroups.back.noAnswer: ringGroup side
+            pbx.ringGroups.front.noAnswer: extension 202
+            pbx.ringGroups.side.noAnswer: ringGroup back
+            pbx.queues.support.noAnswer: queue support
+            pbx.ivrs.main.noInput: ivr main
+          Send one of them elsewhere, such as to voicemail; a voice menu's options and invalid key may lead back, since the caller presses a key for those.
+        ''
+      ];
+    };
+
+    # a key press breaks the round: a menu that comes back to itself on a key
+    # or an invalid one, and a group that sends callers back to its menu
+    loopsThroughKeys = {
+      module.pbx = {
+        ringGroups.front.noAnswer.ivr = "main";
+        ivrs.main = {
+          options."9".ivr = "main";
+          invalid.ivr = "main";
+        };
+      };
+      assertions = [];
+    };
+
     contextDestinationFromCore = {
       module = {
         pbx.extensions."202".busy.context.context = "custom";

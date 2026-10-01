@@ -140,7 +140,7 @@ def entries(case, rng, split):
     if case["kind"] == "valid":
         main["overrides"] = True
     if case["kind"] == "probe":
-        main["probe"] = {"commands": [], "calls": [c["call"] for c in case["plan"] if "call" in c]}
+        main["probe"] = {"commands": [], "calls": calls_of(case["plan"])}
     result = [("main", main)]
     if split:
         parts, merged = generate.split(module, rng.randint(2, 4), rng)
@@ -269,9 +269,8 @@ def probe_verdicts(case, drv, built):
         return [failure("P4", "T1", "probe failed", drv, case)]
     out = subprocess.run(["nix-store", "--query", "--outputs", drv], check=True, capture_output=True, text=True).stdout.strip()
     observed = json.loads((pathlib.Path(out) / "probe.json").read_text())["calls"]
-    planned = [c for c in case["plan"] if "call" in c]
     found = []
-    for plan, call in zip(planned, observed):
+    for plan, call in zip(case["plan"], observed):
         for signature, text in routing.compare(case["model"], plan["expect"], call):
             found.append(failure("P4", "T1 probe", signature, f"{plan['why']}: {text}", case) | {"call": plan["why"]})
     return found
@@ -322,7 +321,7 @@ def load():
 
 
 def calls_of(plan):
-    return [p["call"] for p in plan if "call" in p]
+    return [p["call"] for p in plan]
 
 
 def run(args):
@@ -368,8 +367,8 @@ def vm_calls(m, plan, limit):
     of closing early, whose state would outlast the configuration."""
     calls = []
     for p in plan:
-        call = p.get("call")
-        if call is None or "time" in call or p.get("state"):
+        call = p["call"]
+        if "time" in call or p.get("state"):
             continue
         # the phones there ring, as the probe's do not
         spec = {"extension": call["extension"], "limit": call["limit"] + p["expect"].get("ringing", 0) + 5}
@@ -558,7 +557,7 @@ def sample_cases(seed, valid_count, mutants, probes, calls):
     for i, m in enumerate(draw(generate.configurations(fast=True), probes, seed + 1)):
         case = probed(f"p{i}", m, seed + i)
         # in their order, and none of closing early, whose state one call leaves to the next
-        quick = [p for p in case["plan"] if "call" in p and not p["expect"].get("long") and not p.get("state")]
+        quick = [p for p in case["plan"] if not p["expect"].get("long") and not p.get("state")]
         case["plan"] = [quick[k] for k in sorted(rng.sample(range(len(quick)), min(calls, len(quick))))]
         cases_.append(case)
     return cases_
@@ -660,8 +659,7 @@ def report(args, seed, cases_, evaluated, failures, seconds):
         "seed": seed,
         "seconds": round(seconds),
         "configurations": {kind: sum(c["kind"] == kind for c in cases_) for kind in kinds},
-        "calls": sum(sum("call" in p for p in c.get("plan", [])) + len(c.get("calls", [])) for c in cases_),
-        "skipped calls": sum(sum("skipped" in p for p in c.get("plan", [])) for c in cases_),
+        "calls": sum(len(c.get("plan", [])) + len(c.get("calls", [])) for c in cases_),
         "mutations rejected at T0": sum(
             "error" in evaluated[c["id"]]["main"] or bool(evaluated[c["id"]]["main"]["outcome"]["failed"]) for c in cases_ if c["kind"] == "mutant"
         ),

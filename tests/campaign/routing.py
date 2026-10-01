@@ -43,6 +43,8 @@ The facts it uses, each from a description or the README:
   again; closed hours send calls to `closed`, like the time outside `open`
   and holidays
 - `voicemailMenu` lets a phone listen to its own mailbox, `<number>@default`
+- no destinations lead a call round in a loop that no key press breaks
+  (README)
 """
 
 import datetime
@@ -67,7 +69,8 @@ def mailbox(box):
 
 
 class Loop(Exception):
-    """The call goes around without a key press (open finding F1)."""
+    """The call goes round without a key press, which evaluation refuses
+    (README), so no model of generate.py does."""
 
 
 class Path:
@@ -407,23 +410,13 @@ def plan(m, seed):
         if keys:
             call["keys"] = keys
         why = why or f"dial {number}" + (f" then {keys}" if keys else "")
-        try:
-            path = oracle.internal(number, keys, callerid)
-        except Loop as loop:
-            calls.append({"skipped": f"loop through {loop} (F1)", "why": why})
-            return
-        add(call, path, why, state)
+        add(call, oracle.internal(number, keys, callerid), why, state)
 
     def inbound(trunk, did, when, why, state=False):
         call = {"extension": did, "context": f"pbx-inbound-{trunk}"}
         if when is not None:
             call["time"] = when.isoformat()
-        try:
-            path = oracle.inbound(trunk, did, when)
-        except Loop as loop:
-            calls.append({"skipped": f"loop through {loop} (F1)", "why": why})
-            return
-        add(call, path, why, state)
+        add(call, oracle.inbound(trunk, did, when), why, state)
 
     owned = oracle.numbers()
     for number, (kind, name) in sorted(owned.items()):

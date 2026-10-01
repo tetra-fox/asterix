@@ -1496,7 +1496,10 @@ in {
       description = ''
         Keys of the `[global]` section (`type = global`). The module sets
         `max_initial_qualify_time = 5`, so phones and trunks are qualified
-        within 5 seconds of a start; any definition replaces it.
+        within 5 seconds of a start, and `taskprocessor_overload_trigger =
+        pjsip_only`, so a backlog of call records or AMI or ARI events does
+        not stop PJSIP from taking new requests, only a backlog of its own;
+        any definition replaces them.
       '';
     };
 
@@ -1617,6 +1620,10 @@ in {
       # after a start, queues skip a phone and calls to a trunk fail until its
       # first qualify, which Asterisk otherwise schedules within qualify_frequency
       pjsip.global.max_initial_qualify_time = mkOptionDefault 5;
+      # by default a backlog in any task queue, such as CEL's while it writes
+      # master.db, makes PJSIP turn away requests outside a dialog until it
+      # clears (res/res_pjsip/pjsip_distributor.c:535-562)
+      pjsip.global.taskprocessor_overload_trigger = mkOptionDefault "pjsip_only";
     };
 
     assertions = [

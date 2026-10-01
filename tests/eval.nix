@@ -41,6 +41,7 @@ in {
           [global]
           type = global
           max_initial_qualify_time = 5
+          taskprocessor_overload_trigger = pjsip_only
 
           [udp]
           type = transport
@@ -152,6 +153,7 @@ in {
           [global]
           type = global
           max_initial_qualify_time = 5
+          taskprocessor_overload_trigger = pjsip_only
 
           [provider]
           type = aor

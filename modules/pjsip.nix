@@ -190,7 +190,8 @@
 
   # Asterisk schedules its check of an RTP timeout in milliseconds in an int
   # (res/res_pjsip_sdp_rtp.c rtp_check_timeout), which larger values overflow
-  rtpTimeoutType = types.ints.between 0 2147483;
+  maxRtpTimeout = 2147483;
+  rtpTimeoutType = types.ints.between 0 maxRtpTimeout;
 
   # `endpoint` is the submodule's own config
   commonEndpointOptions = name: endpoint: {
@@ -1443,6 +1444,22 @@
       lib.concatMap (part: lib.optional (builtins.stringLength parts.${part} > 79) "[${s.name}] ${part} of ${toString (builtins.stringLength parts.${part})} bytes") ["name" "number"]
   ) (filter (s: isString (s.callerid or null) && asteriskLib.secrets.fromText s.callerid == []) endpointObjects);
 
+  # endpoints with an RTP timeout beyond maxRtpTimeout, which settings can give.
+  # Values are read as decimal, so hex after 0x and octal after 0, which
+  # Asterisk also takes (main/config.c ast_parse_arg), are refused
+  rtpTimeoutFits = value: let
+    digits = builtins.match "0*([0-9]{1,7})" (toString value);
+  in
+    (builtins.isInt value || isString value) && digits != null && lib.toIntBase10 (builtins.head digits) <= maxRtpTimeout;
+  badRtpTimeouts =
+    lib.concatMap (
+      s:
+        map (key: "[${s.name}] ${key} = ${builtins.toJSON s.${key}}") (
+          filter (key: s ? ${key} && !(builtins.all rtpTimeoutFits (lib.toList s.${key}))) ["rtp_timeout" "rtp_timeout_hold"]
+        )
+    )
+    endpointObjects;
+
   # Asterisk's DSP reads tones in 8 kHz signed linear, ulaw and alaw only
   # (main/dsp.c ast_dsp_process), and drops the keys of a call in any other codec
   inbandCodecs =
@@ -1654,6 +1671,13 @@ in {
         message = ''
           services.asterisk: PJSIP endpoints with a caller ID longer than the 79 bytes of name and of number Asterisk keeps:
             ${concatStringsSep "\n  " longCallerIds}
+        '';
+      }
+      {
+        assertion = badRtpTimeouts == [];
+        message = ''
+          services.asterisk: PJSIP endpoints whose rtp_timeout or rtp_timeout_hold is not a whole number of seconds from 0 to ${toString maxRtpTimeout}, the most Asterisk can count in milliseconds in an int:
+            ${concatStringsSep "\n  " badRtpTimeouts}
         '';
       }
       {

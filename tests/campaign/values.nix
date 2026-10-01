@@ -855,7 +855,10 @@ in
       invalid = [null];
       default = "reject";
     };
-    "pbx.inbound.<name>.trunk".invalid = ["nope"];
+    "pbx.inbound.<name>.trunk" = {
+      valid = [["provider"]];
+      invalid = ["nope" ["provider" "nope"]];
+    };
     "pbx.ivrs.<name>.number" = {
       valid = ["701"];
       invalid = ["70a" "620"];

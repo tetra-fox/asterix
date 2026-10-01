@@ -464,6 +464,25 @@
       '';
     };
 
+    # each trunk of a number's list
+    unknownTrunkInList = {
+      module.pbx.inbound."5551000".trunk = lib.mkForce [
+        "provider"
+        "provder"
+      ];
+      assertions = [
+        ''
+          pbx: trunks that are not defined in services.asterisk.pjsip.trunks:
+            pbx.inbound."5551000".trunk: provder
+        ''
+      ];
+    };
+
+    inboundWithoutTrunkThrows = {
+      module.pbx.inbound."5551000".trunk = lib.mkForce [];
+      throws = true;
+    };
+
     unknownRingGroupTrunk = {
       module.pbx.ringGroups.front = {
         external = ["5559000"];

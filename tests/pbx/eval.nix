@@ -642,6 +642,33 @@ in {
       };
     };
 
+    # a number that arrives through two trunks routes from both
+    testInboundOnTwoTrunks = let
+      module = {config, ...}: {
+        services.asterisk.pjsip.trunks.second = {
+          host = "sip.second.example";
+          username = "5552000";
+          password = config.lib.asterisk.secret "/run/secrets/second";
+        };
+        pbx.inbound."5551000".trunk = lib.mkForce [
+          "provider"
+          "second"
+        ];
+      };
+    in {
+      expr = map (trunk: context "pbx-inbound-${trunk}" module) ["provider" "second"];
+      expected = [
+        ''
+          ; from pbx.inbound: calls from trunk provider
+          [pbx-inbound-provider]
+          exten => 5551000,1,Goto(pbx-extension-201,s,1)''
+        ''
+          ; from pbx.inbound: calls from trunk second
+          [pbx-inbound-second]
+          exten => 5551000,1,Goto(pbx-extension-201,s,1)''
+      ];
+    };
+
     # the prefix comes off however long it is
     testOutboundPrefixes = {
       expr =

@@ -8,6 +8,8 @@
 }: let
   inherit
     (lib)
+    concatLists
+    concatMap
     concatMapStringsSep
     concatStringsSep
     filterAttrs
@@ -31,9 +33,13 @@
   inboundType = types.submodule {
     options = {
       trunk = mkOption {
-        type = types.str;
+        type = types.coercedTo types.str lib.toList (types.nonEmptyListOf types.str);
         example = "provider";
-        description = "Trunk of {option}`services.asterisk.pjsip.trunks` the number's calls arrive on.";
+        description = ''
+          Trunk of {option}`services.asterisk.pjsip.trunks` the number's calls
+          arrive on, or a list of them for a number that arrives through more
+          than one provider or account.
+        '';
       };
       destination = mkOption {
         type = types.nullOr pbxLib.destination;
@@ -139,7 +145,7 @@
     else route.hours != null && route.open != null && route.closed != null;
 
   trunks = config.services.asterisk.pjsip.trunks;
-  inboundTrunks = unique (map (route: route.trunk) (builtins.attrValues cfg.inbound));
+  inboundTrunks = unique (concatMap (route: route.trunk) (builtins.attrValues cfg.inbound));
   # trunks whose calls start in pbx-inbound-<trunk>
   pbxTrunks = builtins.attrNames (filterAttrs (name: trunk: trunk.context == pbxLib.objectContext "inbound" name) trunks);
 
@@ -200,11 +206,13 @@
       inherit (cfg.emergency) trunk;
     };
   trunkUses =
-    mapAttrsToList (number: route: {
-      where = ''pbx.inbound."${number}".trunk'';
-      inherit (route) trunk;
-    })
-    cfg.inbound
+    concatLists (mapAttrsToList (number: route:
+      map (trunk: {
+        where = ''pbx.inbound."${number}".trunk'';
+        inherit trunk;
+      })
+      route.trunk)
+    cfg.inbound)
     ++ outboundTrunkUses;
   unknownTrunks = builtins.filter (use: !(trunks ? ${use.trunk})) trunkUses;
   # trunks pbx dials as PJSIP/<number>@<trunk>; a ring group without a trunk
@@ -291,7 +299,7 @@ in {
         lib.nameValuePair (pbxLib.objectContext "inbound" trunk) {
           comment = mkDefault "from pbx.inbound: calls from trunk ${trunk}";
           # an incomplete number has no steps, the assertion below names it
-          extensions = mapAttrs (_: inboundSteps) (filterAttrs (_: route: route.trunk == trunk && complete route) cfg.inbound);
+          extensions = mapAttrs (_: inboundSteps) (filterAttrs (_: route: builtins.elem trunk route.trunk && complete route) cfg.inbound);
         })
       pbxTrunks);
 

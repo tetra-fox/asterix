@@ -1,7 +1,8 @@
 # reports what the dialplan names that Asterisk does not have, see
 # package.nix: an application, function or switch no loaded module provides,
-# a sound no language has, or one that a language calls use lacks, and a
-# Goto() or Gosub() target that does not exist
+# a sound no language has, or one that a language calls use lacks, a Goto()
+# or Gosub() target that does not exist, and an include of a context that does
+# not exist
 #
 #   gawk -v applications=FILE -v functions=FILE -v switches=FILE \
 #     -v settings=FILE -v formats=FILE -v languages=FILE \
@@ -452,5 +453,17 @@ END {
         check_sound(i)
     for (i = 1; i <= target_count; i++)
         check_target(i)
+    # an include names its context before the first |, or else the first ,
+    # (main/pbx_include.c include_alloc)
+    for (c in include_count)
+        for (k = 1; k <= include_count[c]; k++) {
+            name = included[c, k]
+            if (index(name, "|"))
+                sub(/\|.*/, "", name)
+            else
+                sub(/,.*/, "", name)
+            if (!(name in has_context))
+                print_once("(" c "): includes " name ", which is no context")
+        }
     exit (missing > 0)
 }

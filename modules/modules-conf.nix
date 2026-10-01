@@ -245,16 +245,6 @@ in {
       '';
     };
 
-    checkPreload = mkOption {
-      type = moduleListType;
-      default = [];
-      internal = true;
-      description = ''
-        Modules the build-time check loads before all others, which the
-        service loads in their usual order.
-      '';
-    };
-
     preload = mkOption {
       type = moduleListType;
       default = [];

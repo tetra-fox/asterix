@@ -1,7 +1,8 @@
 # prints the errors and warnings Asterisk logged while it loaded the
 # configuration, up to "Asterisk Ready.", without the ones that come from the
 # build having no network, see package.nix, from the program of a music class
-# that ended, or from a busy machine; exits 1 when there are none
+# that ended, from a busy machine, or from includes and gotos checked before
+# the whole dialplan has loaded; exits 1 when there are none
 #
 #   gawk [-v named=FILE] -f problems.awk LOG
 #
@@ -51,6 +52,15 @@ function interrupted(entry) {
 # fast the machine worked through what loading queued, not what the configuration lacks
 function backlog(entry) {
     return entry ~ /^\[[^]]*\] WARNING\[[0-9]+\] taskprocessor\.c: Taskprocessor '[^']+' queue reached [0-9]+ scheduled tasks/
+}
+
+# pbx_config and pbx_ael check includes when they load, before every dialplan
+# module has added its contexts (main/pbx.c ast_context_verify_includes), and
+# AEL warns about an include or a goto whose context is outside the AEL file
+# (res/ael/pval.c:821, 1357); dialplan.awk checks both once all have loaded
+function early_reference(entry) {
+    return entry ~ /^\[[^]]*\] WARNING\[[0-9]+\] pbx\.c: Context '.*' tries to include nonexistent context '.*'$/ ||
+        entry ~ /^\[[^]]*\] WARNING\[[0-9]+\] ael\/pval\.c: Warning: file .*: (The included context '.*' cannot be found\.|goto:  Couldn't find goto target .* in the AEL code!)$/
 }
 
 # a module that autoload brought in: one the loader started, which
@@ -105,7 +115,7 @@ function unwanted(thread, source, message,    module, m, n, k, others) {
             } else
                 loading = ""
         }
-        if (list[i] ~ /^\[[^]]*\] (ERROR|WARNING)\[/ && !unreachable(list[i]) && !interrupted(list[i]) && !backlog(list[i]) &&
+        if (list[i] ~ /^\[[^]]*\] (ERROR|WARNING)\[/ && !unreachable(list[i]) && !interrupted(list[i]) && !backlog(list[i]) && !early_reference(list[i]) &&
             !(named != "" && parsed && unwanted(e[2], e[3], e[4]))) {
             sub(/^\[[^]]*\] /, "", list[i])
             print list[i]

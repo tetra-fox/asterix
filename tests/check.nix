@@ -120,15 +120,20 @@
       ];
       expect = ["Could not find option suitable for category '102' named 'direct_mdia'"];
     };
-    aelApplicationNotLoaded = {
+    # an include of a context that no dialplan defines, which the check judges
+    # once every dialplan module has loaded
+    aelApplicationAndIncludeMissing = {
       module.services.asterisk = {
         modules.load = [
           "res_ael_share"
           "pbx_ael"
         ];
-        extraConfig."extensions.ael" = "context from-ael { 411 => Directory(default); };";
+        extraConfig."extensions.ael" = "context from-ael { includes { nowhere; }; 411 => Directory(default); };";
       };
-      expect = ["pbx_ael (from-ael, 411): no loaded module provides the application Directory"];
+      expect = [
+        "pbx_ael (from-ael, 411): no loaded module provides the application Directory"
+        "(from-ael): includes nowhere, which is no context"
+      ];
     };
     functionsNotLoaded = {
       module.services.asterisk.dialplan.contexts.internal.extensions."412" = [
@@ -493,9 +498,10 @@
         voicemailMenu = "*97";
       };
     };
-    # an endpoint in a context only the AEL dialplan defines, a Lua one, and
-    # a context of extensions.conf that includes both, which pbx_config
-    # checks when it loads
+    # an endpoint in a context only the AEL dialplan defines, a Lua one, a
+    # context of extensions.conf that includes both, and an AEL context that
+    # includes and goes to one of extensions.conf, which pbx_config and
+    # pbx_ael check before all have loaded
     aelAndLuaDialplans.services.asterisk = {
       pjsip.endpoints."101".context = lib.mkForce "from-ael";
       dialplan.contexts.lobby.includes = [
@@ -508,7 +514,7 @@
         "pbx_lua"
       ];
       extraConfig = {
-        "extensions.ael" = "context from-ael { _1XX => Dial(PJSIP/\${EXTEN}); };";
+        "extensions.ael" = "context from-ael { includes { internal; }; _1XX => Dial(PJSIP/\${EXTEN}); 500 => goto internal,101,1; };";
         "extensions.lua" = ''
           extensions = {
             ["from-lua"] = {
@@ -755,7 +761,8 @@
     # targets that exist through a pattern, an include or a label, relative
     # ones, both branches of the conditional applications, one in a context
     # whose switch can have any extension, a missing extension that the i
-    # extension takes, and a context whose name the channel cuts to 79 bytes
+    # extension takes, a context whose name the channel cuts to 79 bytes, and
+    # an include with a time
     gotoTargets.services.asterisk.dialplan.contexts = {
       internal.extensions = {
         "414" = ["Goto(internal,105,1)"];
@@ -785,7 +792,10 @@
         "1" = ["Goto(s,again)"];
         i = ["Hangup()"];
       };
-      remote.switches = ["Realtime/default@extensions"];
+      remote = {
+        switches = ["Realtime/default@extensions"];
+        includes = ["menu,09:00-17:00,mon-fri,*,*"];
+      };
     };
   };
 in {

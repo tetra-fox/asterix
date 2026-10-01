@@ -166,12 +166,6 @@
       // lib.optionalAttrs (stunName != null) {
         "rtp.conf" = lib.replaceStrings ["stunaddr = ${stunName}"] ["stunaddr = 192.0.2.1"] cfg.renderedFiles."rtp.conf";
       }
-      // lib.optionalAttrs (cfg.modules.checkPreload != []) {
-        "modules.conf" = renderWith "modules.conf" (cfg.settings."modules.conf"
-          // {
-            modules = modulesConf // {preload = unique (modulesConf.preload ++ cfg.modules.checkPreload);};
-          });
-      }
       // {
         "asterisk.conf" = checkAsteriskConf;
         # with autoload, also the verbose messages of the loader, which say
@@ -963,8 +957,9 @@ in {
         while loading it or cannot start the program of a custom music
         class, or if the dialplan uses an application, function or switch
         that no loaded module provides, plays a sound Asterisk cannot find,
-        or sends calls to a context, extension, priority or label that does
-        not exist. Secrets are replaced by zeros, credentials by a
+        sends calls to a context, extension, priority or label that does
+        not exist, or includes a context that does not exist once every
+        dialplan module has loaded. Secrets are replaced by zeros, credentials by a
         throwaway certificate and IPv4 listen addresses by loopback ones, so
         a sandboxed build needs no privileges, and Asterisk gets a fixed
         entity ID unless asterisk.conf sets one, as the build has no network

@@ -5,8 +5,8 @@
 # error or warning while loading it, if it cannot start the program of a
 # custom music class, or if the dialplan uses an application, function or
 # switch that no loaded module provides, plays a sound that a language calls
-# use lacks, or sends calls to a Goto() or Gosub() target that does not exist
-# (dialplan.awk). CONFIG is prepared by
+# use lacks, sends calls to a Goto() or Gosub() target that does not exist, or
+# includes a context that does not exist (dialplan.awk). CONFIG is prepared by
 # modules/asterisk.nix: `config/` with `@root@` where the files will be and a
 # log channel `check`, `credentials/`, `directories`, which lists the
 # directories to create below `@root@`, `hosts` for the names Asterisk

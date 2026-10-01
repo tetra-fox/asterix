@@ -44,15 +44,17 @@
         ];
         description = "Extensions of {option}`pbx.extensions` that ring. Their own busy and no-answer destinations do not apply.";
       };
+      # each number is an extension of the group's own context, next to its
+      # `s`, and part of the Local channel Dial calls it through
       external = mkOption {
-        type = types.listOf types.str;
+        type = types.listOf (types.strMatching "[+]?[0-9*#]+" // {description = "phone number: digits, * and #, with an optional leading +";});
         default = [];
         example = ["5551234"];
         description = ''
-          Numbers outside, called through `trunk`. Whoever answers hears
-          "press 1 to accept this call, or 2 to reject it", so a mobile
-          phone's voicemail cannot take the call. `ringTime` includes the
-          time to answer and press 1.
+          Numbers outside, called through `trunk`: digits, `*` and `#`, with
+          an optional leading `+`. Whoever answers hears "press 1 to accept
+          this call, or 2 to reject it", so a mobile phone's voicemail cannot
+          take the call. `ringTime` includes the time to answer and press 1.
         '';
       };
       trunk = mkOption {

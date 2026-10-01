@@ -461,6 +461,23 @@
       assertion = "front call external numbers, but name no trunk and pbx.outbound is not set";
     };
 
+    # an outside number is an extension of the group's own context, where s
+    # would replace the steps that ring the members and h run at every
+    # hangup, and part of a Local channel, which & and / would break
+    externalNumberThatIsNoNumberThrows = {
+      module.pbx.ringGroups.front.external = ["s"];
+      throws = true;
+    };
+
+    externalNumbersWithPlusStarAndHash = {
+      module.pbx.ringGroups.front.external = [
+        "+15559000"
+        "*675559000"
+        "5559000#"
+      ];
+      assertions = [];
+    };
+
     unknownTrunks = {
       module.pbx = {
         inbound."5551000".trunk = lib.mkForce "provder";

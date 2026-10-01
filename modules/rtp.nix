@@ -50,7 +50,8 @@ in {
         5 seconds of a call's media (`strictrtp`; `seqno` learns from sequence
         numbers alone). Asterisk's default is `yes`. A phone whose address or
         port changes after that, as behind a NAT that rebinds, is not heard
-        for the rest of the call, and Asterisk logs it only at debug level.
+        for the rest of the call, and Asterisk logs it only at debug level,
+        so set `false` where phones sit behind NATs that rebind during calls.
         With `false`, Asterisk takes RTP from any source, and for endpoints
         with `behindNat` sends its own to where it comes from.
       '';

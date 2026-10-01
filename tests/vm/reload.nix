@@ -155,8 +155,9 @@
       change.services.asterisk.settings."cdr_custom.conf".mappings."/var/log/asterisk/cdr-reload-check.csv" = "\${CDR(src)}";
       reload = "module reload cdr_custom.so";
     };
+    # a changed busy_timeout restarts Asterisk, as the reload keeps the old one
     "cdr_sqlite3_custom.conf" = {
-      change.services.asterisk.settings."cdr_sqlite3_custom.conf".master.busy_timeout = 2000;
+      change.services.asterisk.cdr.sqlite.table = "reload_check";
       reload = "module reload cdr_sqlite3_custom.so";
     };
     "cel.conf" = {

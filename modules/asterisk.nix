@@ -401,6 +401,10 @@
         ]
       )
       ++ [(format.render {} {sections = lib.listToAttrs (map (t: lib.nameValuePair t.name t) pjsipTransports);})]
+      # cdr_sqlite3_custom gives master.db its busy timeout when it loads, and
+      # a reload leaves it (cdr/cdr_sqlite3_custom.c:318, 346-355); a refresh
+      # fails while a call is up (main/cdr.c:3105-3110)
+      ++ [(toString (cfg.settings."cdr_sqlite3_custom.conf".master.busy_timeout or ""))]
     )
   );
 
@@ -942,8 +946,9 @@ in {
         Apply configuration changes on `nixos-rebuild switch` with a reload
         (targeted `module reload` commands, falling back to `core reload`)
         instead of a restart. Changes to the package,
-        {file}`asterisk.conf`, {file}`modules.conf`, PJSIP transports or the
-        set of secrets always restart the service.
+        {file}`asterisk.conf`, {file}`modules.conf`, PJSIP transports, the
+        `busy_timeout` of {file}`cdr_sqlite3_custom.conf` or the set of
+        secrets always restart the service.
       '';
     };
 

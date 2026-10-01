@@ -790,7 +790,8 @@ in {
       };
     };
 
-    # ...while transports and modules.conf restart the service.
+    # ...while transports, modules.conf and the SQLite CDR busy timeout restart
+    # the service.
     testTransportAndModuleChangesRestart = {
       expr = let
         base = unitOf [phone];
@@ -802,11 +803,19 @@ in {
           phone
           {services.asterisk.modules.load = ["app_system.so"];}
         ];
+        sqlite = {services.asterisk.cdr.sqlite.enable = true;};
+        busyTimeout = unitOf [
+          phone
+          sqlite
+          {services.asterisk.settings."cdr_sqlite3_custom.conf".master.busy_timeout = 20000;}
+        ];
       in [
         (base.restartTriggers == transport.restartTriggers)
         (base.restartTriggers == modules.restartTriggers)
+        ((unitOf [phone sqlite]).restartTriggers == busyTimeout.restartTriggers)
       ];
       expected = [
+        false
         false
         false
       ];

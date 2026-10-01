@@ -1133,6 +1133,38 @@
       assertion = "WebSocket transports (ws, wss) require services.asterisk.http.enable";
     };
 
+    # Asterisk finds no transport of its own for a WebSocket connection, so
+    # it applies none of these to what it sends there; udp-public is fine
+    externalAddressesOfWebsockets = {
+      module.services.asterisk = {
+        http = {
+          enable = true;
+          tls = {
+            enable = true;
+            certFile = "/var/lib/acme/pbx/cert.pem";
+            keyFile = "/var/lib/acme/pbx/key.pem";
+          };
+        };
+        pjsip.transports = {
+          ws = {
+            protocol = "ws";
+            externalSignalingAddress = "203.0.113.1";
+            externalMediaAddress = "203.0.113.1";
+          };
+          wss = {
+            protocol = "wss";
+            settings.external_signaling_port = 8443;
+          };
+          udp-public = {
+            port = 5070;
+            externalSignalingAddress = "203.0.113.1";
+            externalMediaAddress = "203.0.113.1";
+          };
+        };
+      };
+      assertions = ["services.asterisk: Asterisk applies the external addresses of a ws or wss transport to nothing it sends, and always sends the PBX's own address there: ws (external_signaling_address, external_media_address), wss (external_signaling_port). Remove them; WebSocket phones have to reach the PBX's own address."];
+    };
+
     httpTlsWithoutKey = {
       module.services.asterisk.http = {
         enable = true;

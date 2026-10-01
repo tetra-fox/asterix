@@ -482,9 +482,10 @@
             (NAT). Asterisk applies it, `externalSignalingPort` and
             `externalMediaAddress` to what it sends over udp, and over tcp
             and tls on IPv4. Over tcp and tls on IPv6 it applies them only to
-            endpoints whose `transport` names this transport, and over ws and
-            wss to none. Otherwise a PBX behind NAT sends its private address
-            in SIP headers and SDP.
+            endpoints whose `transport` names this transport; to the others a
+            PBX behind NAT sends its private address in SIP headers and SDP.
+            On a ws or wss transport the three fail evaluation, as Asterisk
+            applies them to nothing it sends over WebSocket.
           '';
         };
         externalSignalingPort = mkOption {
@@ -1001,6 +1002,27 @@
     objects
   );
 
+  # ws and wss make no pjsip transport (res_pjsip/config_transport.c:978), so
+  # nothing sent over a WebSocket gets their external addresses (res_pjsip_nat.c:335)
+  # TODO: allow them once Asterisk applies them there
+  websocketExternals =
+    lib.concatMap (
+      s: let
+        keys = filter (key: s ? ${key}) [
+          "external_signaling_address"
+          "external_signaling_port"
+          "external_media_address"
+        ];
+      in
+        optional (
+          (s.type or null)
+          == "transport"
+          && builtins.elem (lib.toLower (toString (s.protocol or "udp"))) ["ws" "wss"]
+          && keys != []
+        ) "${s.name} (${concatStringsSep ", " keys})"
+    )
+    objects;
+
   # TLS transports that verify clients against the system's CA bundle, which
   # any certificate a public CA signed passes
   verifyAgainstPublicCas = map (s: s.name) (
@@ -1305,6 +1327,10 @@ in {
       {
         assertion = tlsWithoutKeys == [];
         message = "services.asterisk: TLS transport(s) ${concatStringsSep ", " tlsWithoutKeys} need a certificate and a private key (pjsip.transports.<name>.tls.certFile and tls.keyFile, or cert_file and priv_key_file).";
+      }
+      {
+        assertion = websocketExternals == [];
+        message = "services.asterisk: Asterisk applies the external addresses of a ws or wss transport to nothing it sends, and always sends the PBX's own address there: ${concatStringsSep ", " websocketExternals}. Remove them; WebSocket phones have to reach the PBX's own address.";
       }
       {
         assertion = verifyAgainstPublicCas == [];

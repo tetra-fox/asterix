@@ -10,7 +10,7 @@ oracle (routing.py).
                        [--jobs 6]
     configs.py shrink OUT SIGNATURE [--case ID]
     configs.py vm OUT [--seed N] [--count 500] [--per-test 25] [--calls 6]
-                      [--parallel 1] [--max-load 16]
+                      [--parallel 1] [--max-load 16] [--wait COMMAND]
     configs.py sample FILE OUT [--seed 1] [--valid 6] [--mutants 42]
                                [--probes 2] [--calls 8]
     configs.py sample FILE --check
@@ -390,8 +390,8 @@ def vm(args):
     """The VM tier: configurations for vm.nix's phones and provider, the
     valid ones in VM tests of --per-test specialisations each, and every call
     compared with the oracle. Up to --parallel tests run at once, a new one
-    only while the host's load stays under --max-load; a test that has its
-    verdicts.json already is not run again."""
+    only while the host's load stays under --max-load and once --wait
+    returns; a test that has its verdicts.json already is not run again."""
     seed = args.seed if args.seed is not None else random.randrange(2**31)
     print(f"seed {seed}, {load()}", flush=True)
     campaign = options.Campaign(args, "configs.nix")
@@ -417,6 +417,8 @@ def vm(args):
                 vm_finish(tests[n], args.out / f"vm-{n}", n, process.returncode, time.monotonic() - started)
         # a test raises the load a minute or so after it starts
         if pending and len(running) < args.parallel and os.getloadavg()[0] < args.max_load and time.monotonic() - last_start > 120:
+            if args.wait:
+                subprocess.run(args.wait, shell=True, check=True)
             n = pending.pop(0)
             running[n] = (vm_start(campaign, tests[n], args.out / f"vm-{n}", n), time.monotonic())
             last_start = time.monotonic()
@@ -695,6 +697,7 @@ def main():
     v.add_argument("--calls", type=int, default=6, help="calls per configuration")
     v.add_argument("--parallel", type=int, default=1, help="VM tests at once")
     v.add_argument("--max-load", type=float, default=16, help="the load under which another VM test starts")
+    v.add_argument("--wait", metavar="COMMAND", help="a command that returns once another VM test may start, such as a host's own check")
     g = sub.add_parser("sample")
     g.add_argument("file", type=pathlib.Path)
     g.add_argument("out", type=pathlib.Path, nargs="?", help="where the evaluations and builds of the check go")

@@ -430,8 +430,9 @@ def queue_members(output):
             queues[name] = []
         elif name is not None and re.match(r" {6}\S", line):
             member = line.strip()
-            # a member with a name shows its device in parentheses after it
-            m = re.match(r"(.*?) \(([A-Za-z0-9_]+/[^)]*)\)", member)
+            # a member with a name shows its device in parentheses after it,
+            # and its state interface after `from` there
+            m = re.match(r"(.*?) \(([A-Za-z0-9_]+/[^) ]*)(?: from [^)]*)?\)", member)
             queues[name].append(m.group(2) if m and "/" not in m.group(1) else member.split(" (")[0])
     return queues
 

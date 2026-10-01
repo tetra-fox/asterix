@@ -537,7 +537,8 @@ ATOMIC = {"noAnswer", "busy", "destination", "closed", "noInput", "invalid", "pr
 def split(module, parts, rng):
     """MODULE spread over PARTS modules at random, and the one module that
     the parts should evaluate like: the items of a list, spread over the
-    parts, follow the order of the parts (D22). Attribute sets spread their
+    parts, follow the order of the parts, as the module system concatenates
+    the definitions of a list in module order. Attribute sets spread their
     keys, lists their items."""
     out = [dict() for _ in range(parts)]
 

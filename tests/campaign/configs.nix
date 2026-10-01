@@ -61,9 +61,10 @@
       checks = map (d: d.drvPath) (bootChecks c);
     };
 
-  # every scalar of settings as file, section, key and value; lists extend
-  # rather than replace (D22), the attributes of D9 are not Asterisk keys, a
-  # pjsip.conf section's id names its type, and the directories of
+  # every scalar of settings as file, section, key and value; a definition
+  # in settings extends a list rather than replacing it, name, order,
+  # template and inherits are options of a section rather than Asterisk
+  # keys, a pjsip.conf section's id names its type, and the directories of
   # asterisk.conf are the service's, which a sound package of the layer
   # changes
   scalars = settings:

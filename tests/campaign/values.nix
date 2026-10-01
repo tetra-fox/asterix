@@ -516,11 +516,12 @@ in
       valid = ["203.0.113.5" (with' {services.asterisk.pjsip.transports.udp.address = "::";} "2001:db8::5") "sip.provider.example"];
       invalid = ["" "q7 host"];
     };
-    # the trunk's host unless matchProviderHost is off
+    # empty unless set, and an identify that matches nothing is refused: the
+    # trunk's host has an identify section of its own
     "services.asterisk.pjsip.trunks.<name>.identify.match" = {
-      default = "accept";
+      default = "reject";
       valid = [["198.51.100.0/24"]];
-      invalid = [["q7 host"]];
+      invalid = [[] ["q7 host"]];
     };
     "services.asterisk.pjsip.trunks.<name>.identify.settings" = freeform {bool.srv_lookups = false;};
     "services.asterisk.pjsip.trunks.<name>.outboundAuth.settings" = freeform {str.auth_type = "digest";};

@@ -83,6 +83,28 @@
       assertion = "endpoint = office: no endpoint named `office`";
     };
 
+    # Asterisk refuses an identify with nothing to match; a trunk's identify
+    # no longer holds its host, which has a section of its own
+    identifyMatchingNothing = {
+      module = {config, ...}: {
+        services.asterisk.pjsip = {
+          endpoints."101".identify.match = [];
+          trunks.provider = {
+            host = "sip.provider.example";
+            username = "5551000";
+            password = config.lib.asterisk.secret "/run/secrets/trunk";
+            context = "internal";
+            identify.settings.srv_lookups = false;
+          };
+        };
+      };
+      assertion = ''
+        services.asterisk: pjsip.conf identify sections that match nothing, which Asterisk would not load:
+          [101]
+          [provider]
+      '';
+    };
+
     danglingRegistrationAuth = {
       module.services.asterisk.settings."pjsip.conf".reg = {
         type = "registration";

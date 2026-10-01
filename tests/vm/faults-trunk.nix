@@ -1,7 +1,8 @@
 # Faults between the office and its provider, and phones that lose power.
 # The provider's name does not resolve when the office starts, for longer than
 # Asterisk's default of ten registration attempts: the trunk keeps trying and
-# registers once the name resolves. The provider stops answering in a call: a
+# registers once the name resolves, and the provider's address it lists
+# identifies the provider all along. The provider stops answering in a call: a
 # new call fails after the INVITE's timeout, and immediately once qualify marks
 # the provider unreachable; when it is back, the call goes on and calls go out
 # again within the qualify interval. The same holds when the office's own
@@ -93,6 +94,8 @@ in
                 "ulaw"
               ];
               registration.contactUser = "5551000";
+              # beside the provider's name, which does not resolve at first
+              identify.match = ["203.0.113.5"];
               # short intervals keep the outages short; the test measures
               # recovery against them
               registration.retryInterval = 5;
@@ -193,11 +196,16 @@ in
         start_all()
         pbx.wait_for_unit("asterisk.service")
 
-        with subtest("the provider's name does not resolve for more than ten registration attempts: the trunk keeps trying, and registers once it resolves"):
+        with subtest("the provider's name does not resolve for more than ten registration attempts: the trunk keeps trying, its listed address identifies the provider, and it registers once the name resolves"):
             # the attempts since boot; each fails as soon as the name does not resolve
             pbx.wait_until_succeeds(
                 "test $(journalctl -u asterisk.service | grep -cE 'on registration attempt to|Maximum retries reached') -ge 11", timeout=120
             )
+            # Asterisk left out the identify section of the name, which did not
+            # resolve when it loaded, and only that one
+            identifies = asterisk(pbx, "pjsip show identifies")
+            assert re.search(r"^ *Identify: +provider/provider", identifies, re.M), identifies
+            assert not re.search(r"^ *Identify: +provider-host/provider", identifies, re.M), identifies
             provider.succeed("echo '203.0.113.5 sip.provider.example' > /run/provider-hosts", "systemctl kill --signal=HUP dnsmasq.service")
             # the next attempt comes retryInterval (5 s) later
             pbx.wait_until_succeeds(registration("Registered"), timeout=15)

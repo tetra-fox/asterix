@@ -135,11 +135,15 @@ in {
           identify_by = ip
           outbound_auth = provider-outbound
 
+          [provider-host]
+          type = identify
+          endpoint = provider
+          match = sip.provider.example
+
           [provider]
           type = identify
           endpoint = provider
           match = 203.0.113.0/24
-          match = sip.provider.example
 
           [provider-outbound]
           type = auth
@@ -158,6 +162,30 @@ in {
           retry_interval = 60
           server_uri = sip:sip.provider.example:5070
         '';
+    };
+
+    # a trunk's identify can be null, its default, since the host has an
+    # identify section of its own
+    testTrunkIdentifyNull = {
+      expr = builtins.filter (lib.hasInfix "\ntype = identify\n") (lib.splitString "\n\n"
+        (rendered [
+          (
+            {config, ...}: {
+              services.asterisk = {
+                enable = true;
+                pjsip.trunks.provider = {
+                  host = "sip.provider.example";
+                  username = "5551000";
+                  password = config.lib.asterisk.secret "/run/secrets/trunk";
+                  context = "from-provider";
+                  identify = null;
+                };
+                dialplan.contexts.from-provider.extensions."5551000" = ["Answer()"];
+              };
+            }
+          )
+        ])."pjsip.conf");
+      expected = ["[provider-host]\ntype = identify\nendpoint = provider\nmatch = sip.provider.example"];
     };
 
     testTypedDialplan = {

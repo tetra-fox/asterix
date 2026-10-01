@@ -507,7 +507,12 @@
         username = "5551000";
         password = config.lib.asterisk.secret "/run/secrets/trunk";
         context = "internal";
-        identify.match = lib.mkIf (name == "backup") ["media.provider.example"];
+        identify = lib.mkIf (name == "backup") {
+          match = [
+            "media.provider.example"
+            "signalling.provider.example"
+          ];
+        };
       });
     };
     # a trunk that matches no address has no identify section, which Asterisk
@@ -528,8 +533,8 @@
     realtimeSwitch.services.asterisk.dialplan.contexts.internal.switches = ["Realtime/default@extensions"];
     # res_rtp_asterisk resolves the STUN server with Asterisk's own DNS client
     stunServerByName.services.asterisk.rtp.stunServer = "stun.example.org:3478";
-    # a trunk whose host is in identify.match too: Asterisk warns about a
-    # host it matches already
+    # a trunk whose host is in identify.match too, so in both of its identify
+    # sections: Asterisk warns only about a host a section matches already
     trunkHostMatchedTwice = {config, ...}: {
       services.asterisk.pjsip.trunks.provider = {
         host = "sip.provider.example";

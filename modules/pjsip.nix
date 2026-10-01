@@ -10,6 +10,7 @@
 #                      "aor:<n>"           (aor)           [<n>]  type=aor
 #                      "identify:<n>"      (identify)      [<n>]  type=identify
 #   trunks.<n>      -> the same ids as an endpoint, plus
+#                      "host-identify:<n>" (matchProviderHost) [<n>-host] type=identify
 #                      "registration:<n>"                  [<n>]  type=registration
 #
 # Single values generated here are defaults (mkDefault), so a value in
@@ -147,7 +148,10 @@
       };
     };
 
-  identifyType = name:
+  identifyType = {
+    name,
+    trunk,
+  }:
     types.submodule {
       options = {
         name = mkOption {
@@ -155,26 +159,30 @@
           default = name;
           description = "Name of the identify section.";
         };
-        match = mkOption {
-          type = types.listOf types.str;
-          example = [
-            "203.0.113.10"
-            "198.51.100.0/24"
-            "sip.provider.example"
-          ];
-          description = ''
-            Source addresses, networks or host names identifying this endpoint.
-            Asterisk resolves host names, through their SRV records where they
-            have them but not NAPTR, when it loads pjsip.conf, so a changed
-            address counts only after `asterisk -rx 'module reload res_pjsip.so'`
-            or a restart. A host name that does not resolve then, including
-            the provider host a trunk's `matchProviderHost` adds to this list,
-            keeps Asterisk from creating the whole identify section, its
-            addresses and networks too, until the next reload or restart. To
-            match a trunk by address whatever DNS does when Asterisk loads,
-            list its addresses and turn `matchProviderHost` off.
-          '';
-        };
+        match = mkOption (
+          {
+            type = types.listOf types.str;
+            example = [
+              "203.0.113.10"
+              "198.51.100.0/24"
+              "sip.provider.example"
+            ];
+            description = ''
+              Source addresses, networks or host names identifying this
+              endpoint. Asterisk resolves host names, through their SRV
+              records where they have them but not NAPTR, when it loads
+              pjsip.conf, so a changed address counts only after
+              `asterisk -rx 'module reload res_pjsip.so'` or a restart. A host
+              name that does not resolve then keeps Asterisk from creating the
+              whole identify section, its addresses and networks too, until
+              the next reload or restart. A trunk's `host` is not in this
+              list: `matchProviderHost` matches it in an identify section of
+              its own, so the addresses here count whether it resolves or not.
+            '';
+          }
+          # a trunk's host has an identify section of its own
+          // optionalAttrs trunk {default = [];}
+        );
         settings = settingsOption "identify";
       };
     };
@@ -294,11 +302,6 @@
         `fromDomain`.
       '';
     };
-    identify = mkOption {
-      type = types.nullOr (identifyType name);
-      default = null;
-      description = "Identify requests from these addresses as this endpoint (an identify section).";
-    };
     outboundAuth = mkOption {
       type = types.nullOr (outboundAuthType name);
       default = null;
@@ -331,6 +334,14 @@
               address. An endpoint with neither `auth` nor `identify` whose
               aor takes registrations does not evaluate unless this is set.
             '';
+          };
+          identify = mkOption {
+            type = types.nullOr (identifyType {
+              inherit name;
+              trunk = false;
+            });
+            default = null;
+            description = "Identify requests from these addresses as this endpoint (an identify section).";
           };
           aor = mkOption {
             type = types.nullOr (aorType name);
@@ -389,6 +400,18 @@
           password = mkOption {
             type = secretOrString;
             description = "Account password, normally a secret reference.";
+          };
+          identify = mkOption {
+            type = types.nullOr (identifyType {
+              inherit name;
+              trunk = true;
+            });
+            default = null;
+            description = ''
+              Identify requests from these addresses as this trunk (an
+              identify section). The trunk's `host` has an identify section of
+              its own, see `matchProviderHost`.
+            '';
           };
           fromDomain = mkOption {
             type = types.nullOr types.str;
@@ -451,18 +474,15 @@
             default = true;
             description = ''
               Identify inbound requests coming from `host` as this trunk, in
-              addition to `identify.match`, whose description says when a host
-              name is resolved. When a network in `identify.match` already
-              contains the host's address, Asterisk skips it and logs a
-              misleading "did not resolve to any address" warning; turn this
-              off then.
+              an identify section of its own named `<name>-host`, which
+              `settings."pjsip.conf"."host-identify:<name>"` extends. Asterisk
+              resolves a host name when it loads pjsip.conf; one that does not
+              resolve then leaves out this section until the next reload or
+              restart, while the addresses of `identify.match` still count.
             '';
           };
           aorSettings = settingsOption "aor";
         };
-      # the whole identify is conditional: an identify section that matches
-      # nothing is an error in Asterisk
-      config.identify = mkIf config.matchProviderHost {match = [config.host];};
     }
   );
 
@@ -864,8 +884,8 @@
         type = "identify";
         values = {
           endpoint = name;
-          # Asterisk warns about a host it matches already, such as a trunk's
-          # host that is in identify.match too
+          # Asterisk warns about a host it matches already, as one that two
+          # definitions list
           match = unique e.identify.match;
         };
         extra = e.identify.settings;
@@ -920,6 +940,18 @@
         # only identify and the registration's line pick the trunk: anyone
         # can put its name in From, and a trunk takes calls unauthenticated
         identify_by = "ip";
+      };
+    }
+    # apart from identify, since a host name that does not resolve when
+    # Asterisk loads drops the whole section it is in
+    // optionalAttrs t.matchProviderHost {
+      "host-identify:${name}" = section {
+        name = "${name}-host";
+        type = "identify";
+        values = {
+          endpoint = name;
+          match = [t.host];
+        };
       };
     }
     // optionalAttrs t.register {
@@ -1068,6 +1100,19 @@
         == "registration"
         && (s.endpoint or null) != null
         && !(format.isTrue (s.line or false))
+    )
+    objects
+  );
+
+  # Asterisk refuses an identify with nothing to match
+  # (res/res_pjsip_endpoint_identifier_ip.c ip_identify_apply)
+  identifiesMatchingNothing = map (s: s.name) (
+    filter (
+      s:
+        (s.type or null)
+        == "identify"
+        && refList (s.match or null) == []
+        && builtins.all (key: toString (s.${key} or "") == "") ["match_header" "match_request_uri"]
     )
     objects
   );
@@ -1393,8 +1438,9 @@ in {
       '';
       description = ''
         SIP provider accounts: an endpoint with outbound authentication, an
-        aor pointing at the provider, an identify section for the provider's
-        addresses and, unless `register = false`, an outbound registration.
+        aor pointing at the provider, identify sections for the provider's
+        host and for the addresses of `identify` and, unless
+        `register = false`, an outbound registration.
         A request counts as the trunk's when it comes from an address of its
         identify or carries its registration's `line`; the user in its From
         header plays no part, as anyone can send any.
@@ -1450,6 +1496,14 @@ in {
       {
         assertion = registrationsWithoutLine == [];
         message = "services.asterisk: pjsip.conf registration(s) ${concatStringsSep ", " registrationsWithoutLine} set `endpoint` without `line = yes`; Asterisk would not load them.";
+      }
+      {
+        assertion = identifiesMatchingNothing == [];
+        message = ''
+          services.asterisk: pjsip.conf identify sections that match nothing, which Asterisk would not load:
+            ${concatStringsSep "\n  " (map (name: "[${name}]") identifiesMatchingNothing)}
+          List addresses or host names in their `match` (identify.match of a typed endpoint or trunk), or remove them (identify = null); a trunk's host has an identify section of its own while matchProviderHost is on.
+        '';
       }
       {
         assertion = tlsWithoutKeys == [];

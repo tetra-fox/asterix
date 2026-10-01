@@ -62,8 +62,6 @@
   "services.asterisk.pjsip.endpoints.<name>.aor.settings = {\"q7unknown\":\"x\"}" = "rejected by asterisk-config-check";
   "services.asterisk.pjsip.endpoints.<name>.auth.settings = {\"q7unknown\":\"x\"}" = "rejected by asterisk-config-check";
   "services.asterisk.pjsip.endpoints.<name>.identify.match = [\"q7 host\"]" = "rejected by asterisk-config-check";
-  "services.asterisk.pjsip.endpoints.<name>.identify.match = []" = "rejected by asterisk-config-check";
-  "services.asterisk.pjsip.endpoints.<name>.identify.match = default" = "rejected by asterisk-config-check";
   "services.asterisk.pjsip.endpoints.<name>.identify.settings = {\"q7unknown\":\"x\"}" = "rejected by asterisk-config-check";
   "services.asterisk.pjsip.endpoints.<name>.mailboxes = [\"102@default\"]" = "P3: loads";
   "services.asterisk.pjsip.endpoints.<name>.outboundAuth.settings = {\"q7unknown\":\"x\"}" = "rejected by asterisk-config-check";
@@ -82,7 +80,6 @@
   "services.asterisk.pjsip.trunks.<name>.aorSettings = {\"q7unknown\":\"x\"}" = "rejected by asterisk-config-check";
   "services.asterisk.pjsip.trunks.<name>.host = \"\"" = "rejected by asterisk-config-check";
   "services.asterisk.pjsip.trunks.<name>.host = \"q7 host\"" = "rejected by asterisk-config-check";
-  "services.asterisk.pjsip.trunks.<name>.identify = null" = "P2: rejected at T0";
   "services.asterisk.pjsip.trunks.<name>.identify.match = [\"q7 host\"]" = "rejected by asterisk-config-check";
   "services.asterisk.pjsip.trunks.<name>.identify.settings = {\"q7unknown\":\"x\"}" = "rejected by asterisk-config-check";
   "services.asterisk.pjsip.trunks.<name>.outboundAuth.settings = {\"q7unknown\":\"x\"}" = "rejected by asterisk-config-check";

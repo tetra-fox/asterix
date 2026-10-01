@@ -13,7 +13,9 @@
 # and attended transfers, a conference, a queue, a ring group, a call nobody
 # answered and a call that ends while another writer holds master.db, with a
 # transfer's target and a hangup's cause and dial status in eventextra;
-# ConfBridge profiles, queues and music on hold from a Nix-built directory.
+# ConfBridge profiles, queues and music on hold from a Nix-built directory;
+# logrotate rotates a log file, queue_log and the CSV CDRs, and Asterisk goes
+# on writing new ones.
 {
   pkgs,
   self,
@@ -109,6 +111,9 @@ in
           "error"
           "verbose"
         ];
+        # rotated with the CSV CDRs
+        logger.channels.full = ["verbose"];
+        logger.queueLog = true;
         settings."asterisk.conf".options.verbose = 3;
         sounds.packages = [prompts];
 
@@ -338,6 +343,14 @@ in
           sqlite.enable = true;
         };
       };
+
+      # logrotate runs only when the test starts it, and then rotates every
+      # file; NixOS turns it off in tests (testing/test-instrumentation.nix)
+      services.logrotate = {
+        enable = true;
+        extraArgs = ["--force"];
+      };
+      systemd.services.logrotate.startAt = lib.mkForce [];
     };
 
     extraPythonPackages = p: [p.numpy];
@@ -811,5 +824,19 @@ in
             classes = asterisk(pbx, "moh show classes")
             assert "Class: office" in classes and "office-moh" in classes, classes
             assert "hold" in asterisk(pbx, "moh show files")
+
+        with subtest("logrotate rotates the log file, queue_log and the CSV CDRs, and Asterisk goes on in new files"):
+            files = ["full", "queue_log", "cdr-csv/Master.csv"]
+            pbx.succeed("systemctl start logrotate.service")
+            rotated = {file: pbx.succeed(f"stat -c '%U %s' /var/log/asterisk/{file}.1").split() for file in files}
+            assert all(owner == "asterisk" and int(size) > 0 for owner, size in rotated.values()), rotated
+            # what logger reload writes first
+            pbx.succeed("grep -q CONFIGRELOAD /var/log/asterisk/queue_log")
+            ended = caller.disconnects()
+            caller.call("mark")
+            caller.wait_disconnected(after=ended)
+            pbx.wait_until_succeeds("grep -q '\"mark\"' /var/log/asterisk/cdr-csv/Master.csv")
+            pbx.wait_until_succeeds("grep -q 'Executing \\[mark@internal:1\\]' /var/log/asterisk/full")
+            assert {file: pbx.succeed(f"stat -c '%U %s' /var/log/asterisk/{file}.1").split() for file in files} == rotated
       '';
   }

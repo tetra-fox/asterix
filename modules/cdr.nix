@@ -137,7 +137,8 @@
         Whether to write ${what} records to an SQLite database. Before
         Asterisk starts and before each reload, the table is created as the
         module would create it and the columns it lacks are added; none is
-        ever removed, so the records of an older configuration still fit.${notes}
+        ever removed, so the records of an older configuration still fit.
+        Nothing rotates or prunes the database.${notes}
       '';
     };
     table = mkOption {
@@ -167,7 +168,19 @@ in {
       };
 
       csv = {
-        enable = lib.mkEnableOption "CDRs as CSV in {file}`/var/log/asterisk/cdr-csv/Master.csv`";
+        enable = mkOption {
+          type = types.bool;
+          default = false;
+          example = true;
+          description = ''
+            Whether to write CDRs as CSV to
+            {file}`/var/log/asterisk/cdr-csv/Master.csv`. logrotate rotates
+            the CSV files of that directory weekly and keeps four old ones,
+            as it does the file log channels (see
+            {option}`services.asterisk.logger.channels`), unless
+            `services.logrotate.settings.asterisk` says otherwise.
+          '';
+        };
         settings = mkOption {
           type = types.attrsOf format.types.value;
           default = {};

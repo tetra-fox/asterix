@@ -3,6 +3,7 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }: let
   inherit
@@ -32,15 +33,37 @@
     // {
       description = "log level (${concatStringsSep ", " levels}, verbose(<level>) or *, in any case)";
     };
+  logfiles = removeAttrs (cfg.settings."logger.conf".logfiles or {}) format.metaAttrs;
+  general = cfg.settings."logger.conf".general or {};
 
   # the `security` level only exists once res_security_log registers it
   logsSecurity =
     builtins.any (
       levels: builtins.elem "security" (map (level: lib.toLower (lib.trim level)) (lib.splitString "," levels))
     )
-    (builtins.filter builtins.isString (builtins.attrValues (
-      removeAttrs (cfg.settings."logger.conf".logfiles or {}) format.metaAttrs
-    )));
+    (builtins.filter builtins.isString (builtins.attrValues logfiles));
+
+  # a channel other than the console and syslog is a file, below the log
+  # directory unless its name starts with /, and with appendhostname the
+  # host's name after a dot (main/logger.c make_filename)
+  fileChannels =
+    map (
+      name:
+        (
+          if lib.hasPrefix "/" name
+          then name
+          else "${cfg.paths.log}/${name}"
+        )
+        + lib.optionalString (format.isTrue (general.appendhostname or false)) ".${config.networking.hostName}"
+    ) (
+      builtins.filter (name: lib.toLower name != "console" && !lib.hasPrefix "syslog" (lib.toLower name)) (builtins.attrNames logfiles)
+    );
+  # the files that grow with every call; Asterisk itself only rotates a log
+  # past 1 GB on a logger reload (main/logger.c reload_logger)
+  rotatedFiles =
+    fileChannels
+    ++ lib.optional (format.isTrue (general.queue_log or false)) "${cfg.paths.log}/${general.queue_log_name or "queue_log"}"
+    ++ lib.optional cfg.cdr.csv.enable "${cfg.paths.log}/cdr-csv/*.csv";
 in {
   options.services.asterisk.logger = {
     channels = mkOption {
@@ -74,6 +97,11 @@ in {
         the journal. `syslog.<facility>` logs to syslog; any other name is a
         file in {file}`/var/log/asterisk`. `console` defaults to
         `notice,warning,error`; set a channel to `[ ]` to remove it.
+
+        logrotate rotates the files weekly and keeps four old ones,
+        compressed but for the newest, as it does with {file}`queue_log` and
+        the CSV CDRs; the settings are defaults in
+        `services.logrotate.settings.asterisk`.
       '';
     };
 
@@ -86,7 +114,11 @@ in {
     queueLog = mkOption {
       type = types.bool;
       default = false;
-      description = "Write queue events to {file}`/var/log/asterisk/queue_log`.";
+      description = ''
+        Write queue events to {file}`/var/log/asterisk/queue_log`, which
+        logrotate rotates like the file log channels (see
+        {option}`services.asterisk.logger.channels`).
+      '';
     };
   };
 
@@ -111,5 +143,21 @@ in {
         );
       };
     };
+
+    # as nixpkgs' nginx module rotates its logs; Asterisk keeps a log file open
+    # until a logger reload, and cdr_csv opens its files for every record
+    services.logrotate.settings.asterisk = mkIf (rotatedFiles != []) (mapAttrs (_: mkDefault) {
+      files = rotatedFiles;
+      frequency = "weekly";
+      rotate = 4;
+      compress = true;
+      delaycompress = true;
+      # the service's user and group
+      su = "asterisk asterisk";
+      sharedscripts = true;
+      # as root the client sets its scheduling policy (main/asterisk.c:3964),
+      # which logrotate's system call filter forbids, as it does setpriv's capset
+      postrotate = "[ ! -S ${cfg.paths.runtime}/asterisk.ctl ] || ${lib.getExe pkgs.su-exec} asterisk:asterisk ${cfg.package}/bin/asterisk -C ${cfg.paths.template}/asterisk.conf -rx 'logger reload'";
+    });
   };
 }

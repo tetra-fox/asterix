@@ -78,6 +78,14 @@
             default = {};
           };
         };
+      networking.hostName = mkOption {
+        type = types.str;
+        default = "nixos";
+      };
+      services.logrotate.settings = mkOption {
+        type = types.attrsOf (types.attrsOf types.anything);
+        default = {};
+      };
       environment = {
         etc = mkOption {
           type = types.attrsOf (types.attrsOf types.anything);

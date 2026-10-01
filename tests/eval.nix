@@ -1265,6 +1265,46 @@ in {
       expected = true;
     };
 
+    # file channels, queue_log and the CSV CDRs are rotated, the console and
+    # syslog are not
+    testLogrotateFiles = {
+      expr =
+        map (
+          module: (evalConfig [phone module]).services.logrotate.settings.asterisk.files or null
+        ) [
+          {services.asterisk.logger.channels."syslog.local0" = ["error"];}
+          {
+            services.asterisk = {
+              logger = {
+                channels = {
+                  full = ["verbose"];
+                  "/srv/asterisk/security" = ["security"];
+                };
+                queueLog = true;
+              };
+              cdr.csv.enable = true;
+            };
+          }
+          {
+            networking.hostName = "pbx";
+            services.asterisk = {
+              logger.channels.full = ["verbose"];
+              settings."logger.conf".general.appendhostname = true;
+            };
+          }
+        ];
+      expected = [
+        null
+        [
+          "/srv/asterisk/security"
+          "/var/log/asterisk/full"
+          "/var/log/asterisk/queue_log"
+          "/var/log/asterisk/cdr-csv/*.csv"
+        ]
+        ["/var/log/asterisk/full.pbx"]
+      ];
+    };
+
     testCdrSqliteUsesArrows = {
       expr = builtins.head (
         builtins.filter (lib.hasPrefix "table") (

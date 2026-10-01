@@ -208,15 +208,16 @@ in
             )
 
         def leg(mark, address):
-            """The messages of the first dialog between the pbx and `address`
-            (host:port) after the first `mark` messages of the pbx's capture.
-            The phones' machine has to have captured the same; a frame on its
-            way between the two captures is in one of them for a moment."""
+            """The messages of the first call between the pbx and `address`
+            (host:port) after the first `mark` messages of the pbx's capture,
+            which an OPTIONS that qualifies a phone can come before. The
+            phones' machine has to have captured the same; a frame on its way
+            between the two captures is in one of them for a moment."""
             deadline = time.time() + 5
             while True:
                 at_pbx = sip_messages(pbx)
-                first = next((m for m in at_pbx[mark:] if address in (m["source"], m["destination"])), None)
-                assert first, f"no dialog with {address} after message {mark}"
+                first = next((m for m in at_pbx[mark:] if address in (m["source"], m["destination"]) and m["text"].startswith("INVITE ")), None)
+                assert first, f"no call with {address} after message {mark}"
                 messages = [m for m in at_pbx if call_id(m) == call_id(first)]
                 at_phones = [m for m in sip_messages(phones) if call_id(m) == call_id(first)]
                 if same_dialog(messages, at_phones):

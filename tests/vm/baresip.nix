@@ -15,8 +15,8 @@
 # /tmp/baresip-phone-NAME.wav. SIP traces go to /tmp/baresip-phone-NAME.log.
 # `command` prints the netstrings ctrl_tcp answers with, events included.
 {pkgs, ...}: let
-  # libre opens SIP WebSocket connections at the path / (fixed in
-  # src/sip/transp.c), and Asterisk serves them at /ws
+  # libre opens SIP WebSocket connections at the path / with no setting for it
+  # (src/sip/transp.c:1066-1080), and Asterisk serves them at /ws
   # TODO: remove once libre lets an application choose the path
   libre = pkgs.libre.overrideAttrs (old: {
     postPatch =

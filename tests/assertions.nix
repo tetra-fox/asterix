@@ -24,14 +24,19 @@
   };
 
   # a problem for each reference check (an object, a parent, an endpoint
-  # context, an include) and one that no included file or dialplan hides
+  # context, an include) and one that no included file or dialplan hides; the
+  # endpoints are open, since the duplicate of 101 and 102 have no auth
   everyReference = {
     services.asterisk = {
       pjsip.endpoints = {
-        "101".settings.outbound_auth = "elsewhere";
+        "101" = {
+          open = true;
+          settings.outbound_auth = "elsewhere";
+        };
         "102" = {
           context = "from-elsewhere";
           aor = null;
+          open = true;
         };
       };
       settings."pjsip.conf" = {
@@ -562,10 +567,11 @@
     };
 
     # Asterisk takes every request of an endpoint without auth as
-    # authenticated: 102, and 103 through an aor of settings, let anyone
-    # register; the others take no registrations, have a password or an
-    # identify, or are open on purpose
-    endpointsAnyoneCanRegisterAs = {
+    # authenticated, and finds one without identify by the user in From:
+    # 102 to 106 let anyone register or call, also without an aor that takes
+    # registrations; the others have a password or an identify, or are open on
+    # purpose
+    endpointsAnyoneCanUse = {
       module = {config, ...}: {
         services.asterisk = {
           pjsip.endpoints = {
@@ -615,7 +621,7 @@
           };
         };
       };
-      assertions = ["services.asterisk: PJSIP endpoint(s) 102, 103 have neither auth nor identify and their aor takes registrations, so anyone who reaches the SIP port can register as them. Give each a password (pjsip.endpoints.<name>.auth.password), an identify for a device known by its address, or aor.maxContacts = 0 if it never registers, or set open = true where anyone may register on purpose."];
+      assertions = ["services.asterisk: PJSIP endpoint(s) 102, 103, 104, 105, 106 have neither auth nor identify, so anyone who reaches the SIP port can register as them, and call from their context by naming them in From. Give each a password (pjsip.endpoints.<name>.auth.password) or an identify for a device known by its address, or set open = true where anyone may use them on purpose."];
     };
 
     # an identify keeps others out of an endpoint without auth only through an

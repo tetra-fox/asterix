@@ -1,0 +1,55 @@
+--- a/pjsip/src/pjsua-lib/pjsua_core.c
++++ b/pjsip/src/pjsua-lib/pjsua_core.c
+@@ -777,9 +777,15 @@
+ PJ_DEF(pj_status_t) pjsua_reconfigure_logging(const pjsua_logging_config *cfg)
+ {
+     pj_status_t status;
++    pj_bool_t same_file;
+ 
+     PJ_ASSERT_RETURN(cfg, PJ_EINVAL);
+ 
++    same_file = pjsua_var.log_file != NULL &&
++                pj_strcmp(&pjsua_var.log_cfg.log_filename,
++                          &cfg->log_filename) == 0 &&
++                pjsua_var.log_cfg.log_file_flags == cfg->log_file_flags;
++
+     /* Save config. */
+     pjsua_logging_config_dup(pjsua_var.pool, &pjsua_var.log_cfg, cfg);
+ 
+@@ -792,14 +798,14 @@
+     /* Set log level */
+     pj_log_set_level(pjsua_var.log_cfg.level);
+ 
+-    /* Close existing file, if any */
+-    if (pjsua_var.log_file) {
++    /* Close existing file, if any, unless it stays the same */
++    if (pjsua_var.log_file && !same_file) {
+         pj_file_close(pjsua_var.log_file);
+         pjsua_var.log_file = NULL;
+     }
+ 
+     /* If output log file is desired, create the file: */
+-    if (pjsua_var.log_cfg.log_filename.slen) {
++    if (pjsua_var.log_cfg.log_filename.slen && !same_file) {
+         unsigned flags = PJ_O_WRONLY | PJ_O_CLOEXEC;
+         flags |= pjsua_var.log_cfg.log_file_flags;
+         status = pj_file_open(pjsua_var.pool, 
+@@ -813,14 +819,14 @@
+         }
+     }
+ 
+-    /* Unregister msg logging if it's previously registered */
+-    if (pjsua_msg_logger.id >= 0) {
++    /* Unregister msg logging if it's registered and no longer wanted */
++    if (pjsua_msg_logger.id >= 0 && !pjsua_var.log_cfg.msg_logging) {
+         pjsip_endpt_unregister_module(pjsua_var.endpt, &pjsua_msg_logger);
+         pjsua_msg_logger.id = -1;
+     }
+ 
+-    /* Enable SIP message logging */
+-    if (pjsua_var.log_cfg.msg_logging) {
++    /* Enable SIP message logging, unless it's already registered */
++    if (pjsua_var.log_cfg.msg_logging && pjsua_msg_logger.id < 0) {
+         status = pjsip_endpt_register_module(pjsua_var.endpt,
+                                              &pjsua_msg_logger);
+         if (status != PJ_SUCCESS)

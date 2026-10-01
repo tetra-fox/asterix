@@ -332,12 +332,7 @@ def start_phones(phones):
 
 def wait_registrations(expected, timeout=60):
     """Wait until the first registration of each phone in `expected` ({phone:
-    SIP status}) ended with that status, as pjsua holds it: its CLI reopens the
-    log right after the first REGISTER went out, and loses what pjsua logs
-    meanwhile. Anything pjsua logs after this returns reaches its log."""
-    for phone in expected:
-        # the CLI logs this into the reopened log
-        phone.machine.wait_until_succeeds(f"grep -q 'Module \"mod-pjsua-log\" unregistered' {phone.log}", timeout=timeout)
+    SIP status}) ended with that status, as pjsua holds it."""
     deadline = time.time() + timeout
     while True:
         answers = cli_parallel([(phone, "acc show") for phone in expected])

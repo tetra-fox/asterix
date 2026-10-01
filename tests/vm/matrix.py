@@ -233,16 +233,12 @@ with subtest("every phone registers with its pbx"):
             for phone in row.phones.values():
                 phone.start()
 
-    # as wait_registrations: pjsua's CLI reopens its log right after the first
-    # REGISTER, and what it logs from then on reaches the log
-    def reopened(row):
+    def registered(row):
         for phone in row.phones.values():
-            if isinstance(phone, Phone):
-                phone.machine.wait_until_succeeds(f"grep -q 'Module \"mod-pjsua-log\" unregistered' {phone.log}", timeout=60)
-            else:
-                phone.wait_registered(timeout=60)
+            phone.wait_registered(timeout=60)
 
-    each("registration", reopened, rows)
+    # the baresip phones of the websocket rows; pjsua's CLI shows the others below
+    each("registration", registered, [row for row in rows if row.websocket])
     pjsua = {phone.name: (row, phone) for row in rows if row.failure is None and not row.websocket for phone in row.phones.values()}
     deadline = time.time() + 60
     status = {}

@@ -16,12 +16,22 @@
 # wherever RTP comes from.
 {pkgs, ...}: let
   pjsip = pkgs.pjsip.overrideAttrs (old: {
-    # fixes for pjsua's CLI (pjsua_app_cli.c, unfixed in pjproject master):
-    # `call transfer_replaces` only accepts call ids when built with video and
-    # stops listing them at the current call, and `im add_b` zeroes the buddy
-    # config, so it subscribes from account 0 instead of the buddy's account
-    # TODO: remove once pjproject fixes them
-    patches = (old.patches or []) ++ [./pjsua-cli.patch];
+    patches =
+      (old.patches or [])
+      ++ [
+        # fixes for pjsua's CLI (pjsua_app_cli.c, unfixed in pjproject master):
+        # `call transfer_replaces` only accepts call ids when built with video and
+        # stops listing them at the current call, and `im add_b` zeroes the buddy
+        # config, so it subscribes from account 0 instead of the buddy's account
+        # TODO: remove once pjproject fixes them
+        ./pjsua-cli.patch
+        # pjsua's CLI closes and reopens the log file and the SIP message logger
+        # once pjsua has started (pjsua_app_cli.c:253, pjsua_core.c:795-828),
+        # which loses what other threads log meanwhile, such as a registration's
+        # result; this patch keeps both open while their settings stay the same
+        # TODO: remove once pjproject keeps them open
+        ./pjsua-log.patch
+      ];
     # pjsua never flushes its log file (upstream comments the call out for
     # speed), so a line a test waits for could stay in the stdio buffer
     # indefinitely. Flush after every message. pjproject also leaves IPv6
@@ -98,8 +108,6 @@
               ip_addr=(--ip-addr="$source")
               ;;
           esac
-          # --log-append: pjsua reopens its log file when the CLI starts,
-          # which would truncate a registration logged before that
           systemd-run --unit="sip-phone-$name" --collect \
             "$pjsua" \
               --id="sip:$user@$server" \
@@ -109,7 +117,7 @@
               --play-file="/run/sip-phone/$name-tone.wav" --auto-play \
               --rec-file="/tmp/sip-phone-$name.wav" --auto-rec \
               --use-cli --cli-telnet-port="$cli_port" --no-cli-console \
-              --log-file="/tmp/sip-phone-$name.log" --log-append --log-level=5 --app-log-level=3 \
+              --log-file="/tmp/sip-phone-$name.log" --log-level=5 --app-log-level=3 \
               "$@"
           ;;
         cli)

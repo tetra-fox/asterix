@@ -461,6 +461,11 @@
             port 5060, so a phone Asterisk calls cannot send its BYE or
             re-INVITE, and the 200 OK to an IPv6 phone's registration gives
             its contact cut at the first colon.
+
+            Over `tcp` and `tls`, Asterisk takes about 5,000 connections in
+            all and keeps an idle one for 600 seconds, so one host that opens
+            that many locks out the phones that connect after it until
+            connections close: they get 503, and nothing is logged.
           '';
         };
         address = mkOption {

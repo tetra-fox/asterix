@@ -1234,6 +1234,25 @@ in {
               settings."logger.conf".general.appendhostname = true;
             };
           }
+          # the kernel's name, from the sysctl, or from the network
+          {
+            networking.hostName = "pbx";
+            boot.kernel.sysctl."kernel.hostname" = "pbx.example.org";
+            services.asterisk = {
+              logger.channels.full = ["verbose"];
+              settings."logger.conf".general.appendhostname = true;
+            };
+          }
+          {
+            networking.hostName = "";
+            services.asterisk = {
+              logger = {
+                channels.full = ["verbose"];
+                queueLog = true;
+              };
+              settings."logger.conf".general.appendhostname = true;
+            };
+          }
         ];
       expected = [
         null
@@ -1244,6 +1263,8 @@ in {
           "/var/log/asterisk/cdr-csv/*.csv"
         ]
         ["/var/log/asterisk/full.pbx"]
+        ["/var/log/asterisk/full.pbx.example.org"]
+        ["/var/log/asterisk/queue_log"]
       ];
     };
 

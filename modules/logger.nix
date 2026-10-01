@@ -46,22 +46,34 @@
   # a channel other than the console and syslog is a file, below the log
   # directory unless its name starts with /, and with appendhostname the
   # host's name after a dot (main/logger.c make_filename)
-  fileChannels =
+  channelFiles =
     map (
       name:
-        (
-          if lib.hasPrefix "/" name
-          then name
-          else "${cfg.paths.log}/${name}"
-        )
-        + lib.optionalString (format.isTrue (general.appendhostname or false)) ".${config.networking.hostName}"
+        if lib.hasPrefix "/" name
+        then name
+        else "${cfg.paths.log}/${name}"
     ) (
       builtins.filter (name: lib.toLower name != "console" && !lib.hasPrefix "syslog" (lib.toLower name)) (builtins.attrNames logfiles)
     );
+  appendHostName = format.isTrue (general.appendhostname or false);
+  # the kernel's name, which Asterisk reads with gethostname(): the sysctl's if
+  # set, or else networking.hostName, which leaves it to the network when empty
+  hostName = let
+    sysctl = config.boot.kernel.sysctl."kernel.hostname" or null;
+  in
+    if sysctl != null
+    then toString sysctl
+    else config.networking.hostName;
   # the files that grow with every call; Asterisk itself only rotates a log
   # past 1 GB on a logger reload (main/logger.c reload_logger)
   rotatedFiles =
-    fileChannels
+    (
+      if !appendHostName
+      then channelFiles
+      else if hostName == ""
+      then []
+      else map (file: "${file}.${hostName}") channelFiles
+    )
     ++ lib.optional (format.isTrue (general.queue_log or false)) "${cfg.paths.log}/${general.queue_log_name or "queue_log"}"
     ++ lib.optional cfg.cdr.csv.enable "${cfg.paths.log}/cdr-csv/*.csv";
 in {
@@ -143,6 +155,8 @@ in {
         );
       };
     };
+
+    warnings = lib.optional (appendHostName && hostName == "" && channelFiles != []) "services.asterisk: logger.conf's appendhostname adds the host's name to the log files ${concatStringsSep ", " channelFiles}, and with networking.hostName empty that name comes from the network when Asterisk starts, so logrotate does not rotate them. Set networking.hostName, or remove appendhostname.";
 
     # as nixpkgs' nginx module rotates its logs; Asterisk keeps a log file open
     # until a logger reload, and cdr_csv opens its files for every record

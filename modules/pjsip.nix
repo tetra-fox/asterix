@@ -348,9 +348,10 @@
               Let anyone who reaches the SIP port register as this endpoint
               and call from its context, without a password or a known
               address; with `identify`, it still takes requests that name it
-              from any address. An endpoint with neither `auth` nor `identify`
-              whose aor takes registrations does not evaluate unless this is
-              set.
+              from any address. An endpoint without `auth` does not evaluate
+              unless this is set when it has no identify and its aor takes
+              registrations, or when it has an identify the module writes no
+              ACL for (see `identify`).
             '';
           };
           identify = mkOption {
@@ -364,8 +365,11 @@
               identify section). Asterisk also takes a request whose From
               names the endpoint as its, from any address, unless the endpoint
               has neither `auth` nor `open`: then it takes requests from these
-              addresses alone, through its own ACL (`deny` and `permit`), as
-              long as none is a host name, which an ACL cannot hold.
+              addresses alone, through its own ACL (`deny` and `permit`). An
+              ACL cannot hold a host name, so such an endpoint does not
+              evaluate with one here, nor with an identify section of
+              `settings."pjsip.conf"`, which gets no ACL, unless its settings
+              set `deny` and `permit` or `identify_by = ip`.
             '';
           };
           aor = mkOption {
@@ -1311,27 +1315,37 @@
     directMediaObjects
   );
 
-  # typed endpoints anyone who reaches the SIP port can register as: Asterisk
-  # takes every request of an endpoint without auth as authenticated
-  # (res_pjsip_authenticator_digest.c:53-58)
-  openEndpoints = let
-    byName = type: lib.listToAttrs (map (s: nameValuePair s.name s) (ofType type));
-    endpoints = byName "endpoint";
-    aors = byName "aor";
-    identified = lib.genAttrs (map (s: toString s.endpoint) (filter (s: s ? endpoint) (ofType "identify"))) (_: true);
+  # the final sections of typed endpoints that are not open and have no auth,
+  # whose every request Asterisk takes as authenticated
+  # (res_pjsip_authenticator_digest.c:53-58); none when objects can also come
+  # from included files or other sorcery backends
+  unchallenged = let
+    endpoints = lib.listToAttrs (map (s: nameValuePair s.name s) (ofType "endpoint"));
   in
     if rawSections == null
-    then []
+    then {}
     else
-      filter (
-        name: let
-          s = endpoints.${name};
-        in
-          !pcfg.endpoints.${name}.open
-          && refList (s.auth or null) == []
-          && !(identified ? ${name})
-          && builtins.any (aor: takesRegistrations (aors.${aor} or {})) (refList (s.aors or null))
-      ) (filter (name: endpoints ? ${name}) (attrNames pcfg.endpoints));
+      filterAttrs (name: s: !pcfg.endpoints.${name}.open && refList (s.auth or null) == []) (
+        lib.getAttrs (filter (name: endpoints ? ${name}) (attrNames pcfg.endpoints)) endpoints
+      );
+  identified = lib.genAttrs (map (s: toString s.endpoint) (filter (s: s ? endpoint) (ofType "identify"))) (_: true);
+
+  # those anyone who reaches the SIP port can register as
+  openEndpoints = let
+    aors = lib.listToAttrs (map (s: nameValuePair s.name s) (ofType "aor"));
+  in
+    attrNames (filterAttrs (name: s: !(identified ? ${name}) && builtins.any (aor: takesRegistrations (aors.${aor} or {})) (refList (s.aors or null))) unchallenged);
+
+  # those with an identify that still take requests from anyone who names them
+  # in From (res/res_pjsip_endpoint_identifier_user.c:155): neither an ACL nor
+  # an identify_by without username and auth_username keeps others out
+  identifiedFromAnywhere = attrNames (filterAttrs (
+      name: s:
+        identified ? ${name}
+        && !(s ? deny || s ? permit || s ? acl)
+        && builtins.any (method: builtins.elem (lib.toLower method) ["username" "auth_username"]) (refList (s.identify_by or "username,ip"))
+    )
+    unchallenged);
 
   # a udp transport's TCP listener with each tcp or tls transport Linux would
   # not let listen beside it: one port, and one address or a wildcard one
@@ -1654,6 +1668,10 @@ in {
       {
         assertion = openEndpoints == [];
         message = "services.asterisk: PJSIP endpoint(s) ${concatStringsSep ", " openEndpoints} have neither auth nor identify and their aor takes registrations, so anyone who reaches the SIP port can register as them. Give each a password (pjsip.endpoints.<name>.auth.password), an identify for a device known by its address, or aor.maxContacts = 0 if it never registers, or set open = true where anyone may register on purpose.";
+      }
+      {
+        assertion = identifiedFromAnywhere == [];
+        message = "services.asterisk: PJSIP endpoint(s) ${concatStringsSep ", " identifiedFromAnywhere} have no auth, and Asterisk takes a request whose From names them from any address unless an ACL keeps others out. The module writes that ACL from the addresses in pjsip.endpoints.<name>.identify.match, which it cannot do for a host name, and not from identify sections of settings. List the addresses there, give each a password (pjsip.endpoints.<name>.auth.password), set deny and permit in its settings, or identify_by = ip if it never registers, or set open = true where anyone may use them on purpose.";
       }
       {
         assertion = tcpListenerClashes == [];

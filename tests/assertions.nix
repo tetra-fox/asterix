@@ -618,6 +618,49 @@
       assertions = ["services.asterisk: PJSIP endpoint(s) 102, 103 have neither auth nor identify and their aor takes registrations, so anyone who reaches the SIP port can register as them. Give each a password (pjsip.endpoints.<name>.auth.password), an identify for a device known by its address, or aor.maxContacts = 0 if it never registers, or set open = true where anyone may register on purpose."];
     };
 
+    # an identify keeps others out of an endpoint without auth only through an
+    # ACL, which the module writes from typed addresses alone: 102 lists a host
+    # name and 103 has an identify of settings, while 104 and 105 keep others
+    # out through their settings and 106 is open on purpose
+    endpointsIdentifiedFromAnywhere = {
+      module.services.asterisk = {
+        pjsip.endpoints = {
+          "102" = {
+            context = "internal";
+            identify.match = ["10.0.0.2" "gate.example.org"];
+          };
+          "103" = {
+            context = "internal";
+            aor.maxContacts = 0;
+          };
+          "104" = {
+            context = "internal";
+            aor.maxContacts = 0;
+            settings.identify_by = "ip";
+          };
+          "105" = {
+            context = "internal";
+            settings = {
+              deny = "0.0.0.0/0.0.0.0";
+              permit = "10.0.0.5";
+            };
+          };
+          "106" = {
+            context = "internal";
+            identify.match = ["gate.example.org"];
+            open = true;
+          };
+        };
+        settings."pjsip.conf" = lib.genAttrs ["103" "104" "105"] (name: {
+          inherit name;
+          type = "identify";
+          endpoint = name;
+          match = "10.0.0.${lib.substring 2 1 name}";
+        });
+      };
+      assertions = ["services.asterisk: PJSIP endpoint(s) 102, 103 have no auth, and Asterisk takes a request whose From names them from any address unless an ACL keeps others out. The module writes that ACL from the addresses in pjsip.endpoints.<name>.identify.match, which it cannot do for a host name, and not from identify sections of settings. List the addresses there, give each a password (pjsip.endpoints.<name>.auth.password), set deny and permit in its settings, or identify_by = ip if it never registers, or set open = true where anyone may use them on purpose."];
+    };
+
     # an included file can hold an identify or an aor of any endpoint
     endpointWithoutAuthBesideIncludedFiles = {
       module.services.asterisk = {

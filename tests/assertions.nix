@@ -820,6 +820,15 @@
       assertion = "services.asterisk: AMI secrets longer than the 1014 bytes a Login can send, since AMI reads a line into 1024 bytes with `Secret: ` and the line end; use shorter ones: monitor, vault.";
     };
 
+    # Asterisk takes AMI ports from 1024 up
+    amiPortBelow1024Throws = {
+      module.services.asterisk.ami = {
+        enable = true;
+        port = 1023;
+      };
+      throws = true;
+    };
+
     reservedContextName = {
       module.services.asterisk.dialplan.contexts.globals.extensions.s = ["Answer()"];
       assertion = "`general` and `globals` are reserved";

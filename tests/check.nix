@@ -147,11 +147,12 @@
       withoutUserNamespaces = true;
       expect = ["(to listen below port 1024)"];
     };
-    # AMI only takes ports from 1024 up, whatever the privileges
+    # AMI only takes ports from 1024 up, whatever the privileges; ami.port
+    # refuses lower ones, settings leave them to Asterisk
     amiBelowPort1024 = {
       module.services.asterisk.ami = {
         enable = true;
-        port = 1000;
+        settings.port = 1000;
       };
       expect = ["Invalid port number '1000'"];
     };

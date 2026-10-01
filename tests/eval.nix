@@ -550,11 +550,19 @@ in {
               port = 80;
             };
           }
+          # Asterisk refuses an AMI port below 1024 instead of binding it
+          {
+            services.asterisk.ami = {
+              enable = true;
+              settings.port = 1000;
+            };
+          }
         ];
       expected = [
         [""]
         ["CAP_NET_BIND_SERVICE"]
         ["CAP_NET_BIND_SERVICE"]
+        [""]
       ];
     };
 

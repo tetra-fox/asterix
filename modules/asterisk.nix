@@ -650,8 +650,8 @@
     };
 
   # Ports Asterisk binds at startup (not only the ones opened in the
-  # firewall); one below 1024 needs CAP_NET_BIND_SERVICE. RTP ports are never
-  # below 1024.
+  # firewall); one below 1024 needs CAP_NET_BIND_SERVICE. RTP and AMI ports
+  # are never below 1024: Asterisk refuses an AMI port there (main/manager.c:9799).
   httpGeneral = cfg.settings."http.conf".general or {};
   managerGeneral = cfg.settings."manager.conf".general or {};
   httpPorts =
@@ -660,7 +660,7 @@
       parseBindPort (toString (httpGeneral.tlsbindaddr or "0.0.0.0")) 8089
     );
   amiPorts = optional (format.isTrue (managerGeneral.enabled or false)) (toPort (managerGeneral.port or 5038));
-  listenPorts = map (t: t.port) transportPorts ++ httpPorts ++ amiPorts;
+  listenPorts = map (t: t.port) transportPorts ++ httpPorts;
   lowPort = port: port < 1024;
   needsLowPorts = builtins.any lowPort listenPorts;
 

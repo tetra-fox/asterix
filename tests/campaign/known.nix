@@ -7,9 +7,6 @@
   "services.asterisk.ami.address = \"127.0.0.1:5038\"" = "rejected by asterisk-config-check";
   "services.asterisk.ami.address = \"300.0.0.1\"" = "rejected by asterisk-config-check";
   "services.asterisk.ami.address = \"pbx\"" = "rejected by asterisk-config-check";
-  "services.asterisk.ami.port = 0" = "P2: does not load";
-  "services.asterisk.ami.port = 1" = "P2: does not load";
-  "services.asterisk.ami.port = 1023" = "P2: does not load";
   "services.asterisk.ami.settings = {\"q7unknown\":\"x\"}" = "P3: loads";
   "services.asterisk.ami.users.<name>.permit = [\"10.0.0.0/33\"]" = "rejected by asterisk-config-check";
   "services.asterisk.ami.users.<name>.permit = [\"pbx\"]" = "rejected by asterisk-config-check";

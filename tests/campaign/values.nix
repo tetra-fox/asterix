@@ -97,6 +97,10 @@ in
       valid = ["0.0.0.0" "10.0.20.10" "::1"];
       invalid = ["pbx" "300.0.0.1" "127.0.0.1:5038"];
     };
+    "services.asterisk.ami.port" = {
+      valid = [1024 65535];
+      invalid = [1023];
+    };
     "services.asterisk.ami.settings" = freeform {
       bool.displayconnects = false;
       int.authtimeout = 60;

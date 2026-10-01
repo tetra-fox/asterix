@@ -123,9 +123,11 @@ in {
     };
 
     port = mkOption {
-      type = types.port;
+      # Asterisk logs a lower port as invalid and then binds an uninitialized
+      # one (main/manager.c:9797-9802)
+      type = types.ints.between 1024 65535;
       default = 5038;
-      description = "TCP port AMI listens on.";
+      description = "TCP port AMI listens on; Asterisk takes none below 1024.";
     };
 
     openFirewall = mkOption {

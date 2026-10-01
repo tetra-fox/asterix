@@ -45,6 +45,32 @@
   users;
   longSecrets = builtins.filter (secret: secret.room < 0) userSecrets;
 
+  # the classes manager.c knows, in lower case only; it ignores any other
+  # without a word (main/manager.c:750-775 and get_perm)
+  class = types.enum [
+    "system"
+    "call"
+    "log"
+    "verbose"
+    "command"
+    "agent"
+    "user"
+    "config"
+    "dtmf"
+    "reporting"
+    "cdr"
+    "dialplan"
+    "originate"
+    "agi"
+    "cc"
+    "aoc"
+    "test"
+    "security"
+    "message"
+    "all"
+    "none"
+  ];
+
   userType = types.submodule {
     options = {
       secret = mkOption {
@@ -56,7 +82,7 @@
         '';
       };
       read = mkOption {
-        type = types.listOf types.str;
+        type = types.listOf class;
         default = [];
         example = [
           "system"
@@ -69,7 +95,7 @@
         '';
       };
       write = mkOption {
-        type = types.listOf types.str;
+        type = types.listOf class;
         default = [];
         example = [
           "system"

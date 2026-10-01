@@ -40,10 +40,18 @@
     map (key: "featureMap.${key}") (builtins.attrNames (lib.filterAttrs (_: tooLong) fcfg.featureMap))
     ++ map (name: "applications.${name}.dtmf") (builtins.attrNames (lib.filterAttrs (_: a: tooLong a.dtmf) fcfg.applications));
 
+  # the keys a phone sends, which Asterisk compares in any case
+  # (main/bridge.c:3618-3638); a sequence with another character never matches
+  keys = least:
+    types.strMatching "[0-9A-Da-d*#]{${toString least},}"
+    // {
+      description = "key sequence of 0-9, *, # and A-D";
+    };
+
   applicationType = types.submodule {
     options = {
       dtmf = mkOption {
-        type = types.str;
+        type = keys 1;
         example = "*9";
         description = "Key sequence that triggers the feature, at most 10 keys.";
       };
@@ -85,7 +93,7 @@ in {
     };
 
     featureMap = mkOption {
-      type = types.attrsOf types.str;
+      type = types.attrsOf (keys 0);
       default = {};
       example = {
         blindxfer = "#1";

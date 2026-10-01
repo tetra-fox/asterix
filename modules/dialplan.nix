@@ -128,8 +128,12 @@
         };
         description = ''
           Device state hints (`exten => 101,hint,PJSIP/101`) for BLF and
-          presence. A hint may only have a `(` after a variable, as in
-          `PJSIP/''${GLOBAL(PHONE)}`, since Asterisk cuts it there otherwise.
+          presence: devices joined by `&`, each a channel driver and a
+          resource (`PJSIP/101`) or a state provider and a name
+          (`Custom:dnd101`, `Queue:support_avail`), then optionally a comma
+          and `CustomPresence:<name>`. A hint may only have a `(` after a
+          variable, as in `PJSIP/''${GLOBAL(PHONE)}`, since Asterisk cuts it
+          there otherwise.
         '';
       };
       extraConfig = mkOption {
@@ -334,6 +338,38 @@
     )
     dcfg.contexts
   );
+  # the drivers and providers that give a hint's devices a state, in any case,
+  # and the prefixes modules publish states under, as written (main/devicestate.c)
+  hintDrivers = ["PJSIP" "Local" "IAX2" "DAHDI" "Motif" "USTM" "AudioSocket" "WebSocket" "MulticastRTP" "UnicastRTP" "Console" "Mobile"];
+  hintProviders = ["Custom" "Park" "Calendar" "Meetme" "Agent" "SLA" "ccss" "Stasis"];
+  hintPrefixes = ["Queue" "confbridge" "MWI"];
+  inAnyCase = names: name: builtins.elem (lib.toLower name) (map lib.toLower names);
+  # a variable can name anything
+  known = check: s: lib.hasInfix "$" s || check s;
+  knownDevice = known (device: let
+    provider = builtins.match "([^/:]*):.*" device;
+    driver = builtins.match "([^/]*)/.*" device;
+  in
+    if provider != null
+    then inAnyCase hintProviders (builtins.head provider) || builtins.elem (builtins.head provider) hintPrefixes
+    else driver != null && inAnyCase hintDrivers (builtins.head driver));
+  # func_presencestate is the only presence provider (main/presencestate.c)
+  knownPresence = known (presence: lib.hasPrefix "custompresence:" (lib.toLower presence));
+  knownHint = hint: let
+    parts = builtins.match "([^,]*)(,(.*))?" hint;
+    presence = builtins.elemAt parts 2;
+  in
+    parts
+    != null
+    && builtins.all knownDevice (filter (device: device != "") (lib.splitString "&" (builtins.head parts)))
+    && (presence == null || knownPresence presence);
+  unknownHints = lib.concatLists (
+    mapAttrsToList (
+      name: context:
+        lib.mapAttrsToList (ext: hint: "${name}/${ext} (${hint})") (filterAttrs (_: hint: !(knownHint hint)) context.hints)
+    )
+    dcfg.contexts
+  );
   # Goto() reads a label that is a whole number as a priority and one that
   # starts with + or - as a jump from the current step (main/pbx.c
   # pbx_parse_location), and pbx_config ends a label at its first ) and the
@@ -494,6 +530,10 @@ in {
       {
         assertion = cutHints == [];
         message = "services.asterisk.dialplan: hints that Asterisk cuts at their first ( unless a variable comes before it: ${concatStringsSep ", " cutHints}.";
+      }
+      {
+        assertion = unknownHints == [];
+        message = "services.asterisk.dialplan: hints with a device Asterisk has no state for, which it takes as invalid without a word: ${concatStringsSep ", " unknownHints}. Write devices joined by &, each <driver>/<resource> with a driver of ${concatStringsSep ", " hintDrivers} or <provider>:<name> with a provider of ${concatStringsSep ", " (hintProviders ++ hintPrefixes)}, then optionally ,CustomPresence:<name>.";
       }
       {
         assertion = reservedContexts == [];

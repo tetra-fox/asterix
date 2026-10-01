@@ -81,6 +81,34 @@
     };
   };
 
+  # the actions app_confbridge knows, in any case; it skips any other without
+  # a word (apps/confbridge/conf_config_parser.c:1539-1631)
+  menuActions = [
+    "toggle_mute"
+    "toggle_binaural"
+    "no_op"
+    "increase_listening_volume"
+    "decrease_listening_volume"
+    "increase_talking_volume"
+    "reset_listening_volume"
+    "reset_talking_volume"
+    "decrease_talking_volume"
+    "admin_toggle_conference_lock"
+    "admin_toggle_mute_participants"
+    "participant_count"
+    "admin_kick_last"
+    "leave_conference"
+    "set_as_single_video_src"
+    "release_as_single_video_src"
+  ];
+  menuEntry = let
+    action = "[[:space:]]*(${lib.concatStringsSep "|" menuActions}|(dialplan_exec|playback|playback_and_continue)[(][^)]*[)])[[:space:]]*";
+  in
+    types.addCheck types.str (entry: builtins.match "${action}(,${action})*" (lib.toLower entry) != null)
+    // {
+      description = "ConfBridge menu actions, separated by commas (${lib.concatStringsSep ", " menuActions}, dialplan_exec(<context>,<extension>,<priority>), playback(<sounds>) or playback_and_continue(<sounds>))";
+    };
+
   profiles = kind: attrs: toValues:
     mapAttrs' (
       name: p:
@@ -126,7 +154,7 @@ in {
     };
 
     menus = mkOption {
-      type = types.attrsOf (types.attrsOf types.str);
+      type = types.attrsOf (types.attrsOf menuEntry);
       default = {};
       example = {
         admin_menu = {

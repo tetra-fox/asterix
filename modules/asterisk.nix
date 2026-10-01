@@ -256,6 +256,15 @@
     ++ map (key: ''settings."asterisk.conf".options.${key}'') (
       filter (key: builtins.elem (lib.toLower key) ["runuser" "rungroup"]) (attrNames (cfg.settings."asterisk.conf".options or {}))
     );
+  # Asterisk reads maxcalls, in any case, up to the first character that is no
+  # digit, and a negative number as no limit (main/options.c:386-389)
+  badMaxCalls = attrNames (filterAttrs (
+    key: value:
+      lib.toLower key
+      == "maxcalls"
+      && value != null
+      && !(builtins.isInt value && value >= 0 || builtins.isString value && builtins.match "[0-9]+" value != null)
+  ) (removeAttrs (cfg.settings."asterisk.conf".options or {}) format.metaAttrs));
   # the check's arguments are passed on for the probe (tests/campaign/probe.nix),
   # which boots Asterisk the same way
   checkArguments =
@@ -1136,6 +1145,10 @@ in {
           {
             assertion = ignoredArguments == [];
             message = "services.asterisk.extraArguments: Asterisk ignores words that are not options or their values: ${lib.concatMapStringsSep ", " builtins.toJSON ignoredArguments}.";
+          }
+          {
+            assertion = badMaxCalls == [];
+            message = "services.asterisk: ${concatStringsSep ", " (map (key: ''settings."asterisk.conf".options.${key}'') badMaxCalls)} takes a whole number of calls, or 0 for no limit: Asterisk reads only the digits a value starts with, so 0.5 means no limit.";
           }
           {
             # the check runs Asterisk as whoever builds it, without the unit's filter

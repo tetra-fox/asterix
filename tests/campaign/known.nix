@@ -10,9 +10,7 @@
   "services.asterisk.ami.settings = {\"q7unknown\":\"x\"}" = "P3: loads";
   "services.asterisk.ami.users.<name>.permit = [\"10.0.0.0/33\"]" = "rejected by asterisk-config-check";
   "services.asterisk.ami.users.<name>.permit = [\"pbx\"]" = "rejected by asterisk-config-check";
-  "services.asterisk.ami.users.<name>.read = [\"q7class\"]" = "P3: loads";
   "services.asterisk.ami.users.<name>.settings = {\"q7unknown\":\"x\"}" = "P3: loads";
-  "services.asterisk.ami.users.<name>.write = [\"q7class\"]" = "P3: loads";
   "services.asterisk.ari.settings = {\"q7unknown\":\"x\"}" = "P3: loads";
   "services.asterisk.cdr.csv.settings = {\"q7unknown\":\"x\"}" = "P3: loads";
   "services.asterisk.cdr.settings = {\"q7unknown\":\"x\"}" = "rejected by asterisk-config-check";
@@ -22,18 +20,14 @@
   "services.asterisk.confbridge.bridges.<name>.maxMembers = 4294967296" = "P2: does not load";
   "services.asterisk.confbridge.bridges.<name>.maxMembers = 9223372036854775807" = "P2: does not load";
   "services.asterisk.confbridge.bridges.<name>.settings = {\"q7unknown\":\"x\"}" = "rejected by asterisk-config-check";
-  "services.asterisk.confbridge.menus = {\"admin_menu\":{\"*1\":\"q7action\"}}" = "P3: loads";
   "services.asterisk.confbridge.users.<name>.settings = {\"q7unknown\":\"x\"}" = "rejected by asterisk-config-check";
   "services.asterisk.dialplan.contexts.<name>.extensions = {\"100\":[\"Dial(PJSIP/101\"]}" = "rejected by asterisk-config-check";
   "services.asterisk.dialplan.contexts.<name>.extensions = {\"100\":[\"Q7NoSuchApp(x)\"]}" = "rejected by asterisk-config-check";
   "services.asterisk.dialplan.contexts.<name>.extensions = {\"100\":[\"q7notanapp\"]}" = "rejected by asterisk-config-check";
-  "services.asterisk.dialplan.contexts.<name>.hints = {\"101\":\"Q7Tech/101\"}" = "P3: loads";
   "services.asterisk.dialplan.general = {\"q7unknown\":\"x\"}" = "P3: loads";
   "services.asterisk.extraArguments = [\"--q7-no-such-option\"]" = "rejected by asterisk-config-check";
   "services.asterisk.extraConfig = {\"pjsip.conf\":\"[q7]\\ntype = q7type\\n\"}" = "P3: loads";
   "services.asterisk.features.applications.<name>.app = \"Q7NoSuchApp\"" = "P3: loads";
-  "services.asterisk.features.applications.<name>.dtmf = \"q7\"" = "P3: loads";
-  "services.asterisk.features.featureMap = {\"blindxfer\":\"q7\"}" = "P3: loads";
   "services.asterisk.features.featureMap = {\"q7feature\":\"*1\"}" = "rejected by asterisk-config-check";
   "services.asterisk.features.general = {\"q7unknown\":\"x\"}" = "rejected by asterisk-config-check";
   "services.asterisk.http.address = \"300.0.0.1\"" = "rejected by asterisk-config-check";
@@ -42,7 +36,6 @@
   "services.asterisk.http.tls.address = \"pbx\"" = "rejected by asterisk-config-check";
   "services.asterisk.includes.<name>.*.optional = default" = "limitation (the included file is not in the build)";
   "services.asterisk.includes.<name>.*.optional = false" = "limitation (the included file is not in the build)";
-  "services.asterisk.logger.channels = {\"messages\":[\"q7level\"]}" = "P3: loads";
   "services.asterisk.modules.autoload = true" = "P2: does not load";
   "services.asterisk.modules.defaultModules = false" = "rejected by asterisk-config-check";
   "services.asterisk.modules.load = [\"q7_no_such_module.so\"]" = "rejected by asterisk-modules-check";
@@ -110,7 +103,6 @@
   "services.asterisk.rtp.settings = {\"q7unknown\":\"x\"}" = "P3: loads";
   "services.asterisk.rtp.stunServer = \"q7 host\"" = "rejected by asterisk-config-check";
   "services.asterisk.settings = {\"acl.conf\":{\"office\":{\"q7unknown\":true}}}" = "rejected by asterisk-config-check";
-  "services.asterisk.settings = {\"asterisk.conf\":{\"options\":{\"maxcalls\":0.5}}}" = "P3: loads";
   "services.asterisk.settings = {\"asterisk.conf\":{\"options\":{\"q7unknown\":true}}}" = "P3: loads";
   "services.asterisk.settings = {\"ccss.conf\":{\"general\":{\"q7unknown\":true}}}" = "P3: loads";
   "services.asterisk.settings = {\"cdr.conf\":{\"general\":{\"q7unknown\":true}}}" = "rejected by asterisk-config-check";

@@ -900,6 +900,42 @@ in {
         '';
     };
 
+    # the closed sets take what Asterisk takes: names in any case where it
+    # compares so, actions with arguments, an empty key sequence for a
+    # feature turned off, and hints with variables or a provider's own names
+    testClosedSetsTakeWhatAsteriskTakes = {
+      expr = let
+        files = rendered [
+          phone
+          {
+            services.asterisk = {
+              logger.channels.messages = ["NOTICE" " warning" "verbose(3)"];
+              confbridge.menus.admin_menu."*1" = "Toggle_Mute, playback(beep&beep),dialplan_exec(internal,101,1)";
+              features.featureMap = {
+                blindxfer = "#a";
+                atxfer = "";
+              };
+              dialplan.contexts.internal.hints = {
+                "101" = "PJSIP/101&custom:dnd101,CustomPresence:101";
+                "102" = "Queue:support_avail&Custom:front/desk";
+                "103" = "\${TECH}/103";
+              };
+            };
+          }
+        ];
+      in
+        builtins.filter (line: !(lib.hasInfix "\n${line}\n" (lib.concatStrings (builtins.attrValues files)))) [
+          "messages => NOTICE, warning,verbose(3)"
+          "*1 = Toggle_Mute, playback(beep&beep),dialplan_exec(internal,101,1)"
+          "blindxfer = #a"
+          "atxfer = "
+          "exten => 101,hint,PJSIP/101&custom:dnd101,CustomPresence:101"
+          "exten => 102,hint,Queue:support_avail&Custom:front/desk"
+          "exten => 103,hint,\${TECH}/103"
+        ];
+      expected = [];
+    };
+
     # res_parking provides parkcall, and declines to load without its file
     testParkcallLoadsItsModule = {
       expr = let

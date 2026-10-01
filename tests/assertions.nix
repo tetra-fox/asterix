@@ -1569,6 +1569,54 @@
       throws = true;
     };
 
+    # values Asterisk ignores without a word, outside the closed sets it knows
+    amiClassUnknownThrows = {
+      module = {config, ...}: {
+        services.asterisk.ami = {
+          enable = true;
+          users.monitor = {
+            secret = config.lib.asterisk.secret "/run/secrets/ami";
+            read = ["System"];
+          };
+        };
+      };
+      throws = true;
+    };
+    logLevelUnknownThrows = {
+      module.services.asterisk.logger.channels.messages = ["notice" "warnings"];
+      throws = true;
+    };
+    confbridgeMenuActionUnknownThrows = {
+      module.services.asterisk.confbridge.menus.admin_menu."*1" = "toggle_mute,kick_last";
+      throws = true;
+    };
+    featureKeysUnknownThrows = {
+      module.services.asterisk.features.featureMap.blindxfer = "#x";
+      throws = true;
+    };
+    applicationKeysUnknownThrows = {
+      module.services.asterisk.features.applications.monkeys = {
+        dtmf = "*e";
+        app = "Playback";
+        args = "tt-monkeys";
+      };
+      throws = true;
+    };
+    hintDeviceOrPresenceUnknown = {
+      module.services.asterisk.dialplan.contexts.internal.hints = {
+        "101" = "SIP/101";
+        "102" = "PJSIP/102,Presence:102";
+        "103" = "queue:support_avail";
+        "104" = "PJSIP/104&Custom:dnd104";
+      };
+      assertion = "services.asterisk.dialplan: hints with a device Asterisk has no state for, which it takes as invalid without a word: internal/101 (SIP/101), internal/102 (PJSIP/102,Presence:102), internal/103 (queue:support_avail). Write devices joined by &";
+    };
+    # Asterisk reads 0.5 as 0, which is no limit
+    maxCallsNotAWholeNumber = {
+      module.services.asterisk.settings."asterisk.conf".options.maxcalls = 0.5;
+      assertions = [''services.asterisk: settings."asterisk.conf".options.maxcalls takes a whole number of calls, or 0 for no limit: Asterisk reads only the digits a value starts with, so 0.5 means no limit.''];
+    };
+
     # app_queue ranks a member by its penalty times 1000000 in an int, which
     # overflows from 2147 on
     queuePenaltyAbove2146Throws = {

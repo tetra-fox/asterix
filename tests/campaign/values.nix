@@ -154,7 +154,6 @@ in
       invalid = [""];
     };
     "services.asterisk.confbridge.bridges.<name>.language".valid = ["de"];
-    "services.asterisk.confbridge.bridges.<name>.musicOnHoldClass".valid = ["default"];
     "services.asterisk.confbridge.bridges.<name>.settings" = freeform {
       int.mixing_interval = 40;
       bool.binaural_active = false;
@@ -166,6 +165,7 @@ in
       invalid = [{admin_menu."*1" = "q7action";}];
       key = "*1";
     };
+    "services.asterisk.confbridge.users.<name>.musicOnHoldClass".valid = ["default"];
     "services.asterisk.confbridge.users.<name>.pin" = {
       valid = [password];
       warn = ["1234"];

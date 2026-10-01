@@ -259,6 +259,7 @@
       users.chair = {
         admin = true;
         marked = true;
+        musicOnHoldClass = "default";
       };
       menus.chair."*1" = "toggle_mute";
     };

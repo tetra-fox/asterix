@@ -794,6 +794,7 @@ in {
                   admin = true;
                   marked = true;
                   pin = config.lib.asterisk.secret "/run/secrets/conference";
+                  musicOnHoldClass = "default";
                 };
                 menus.admin_menu = {
                   "*1" = "toggle_mute";
@@ -821,6 +822,7 @@ in {
           type = user
           admin = yes
           marked = yes
+          music_on_hold_class = default
           pin = ${placeholderFor "/run/secrets/conference"}
         '';
     };

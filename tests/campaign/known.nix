@@ -21,7 +21,6 @@
   "services.asterisk.cel.sqlite.table = \"\"" = "rejected by asterisk-config-check";
   "services.asterisk.confbridge.bridges.<name>.maxMembers = 4294967296" = "P2: does not load";
   "services.asterisk.confbridge.bridges.<name>.maxMembers = 9223372036854775807" = "P2: does not load";
-  "services.asterisk.confbridge.bridges.<name>.musicOnHoldClass = \"default\"" = "P2: does not load";
   "services.asterisk.confbridge.bridges.<name>.settings = {\"q7unknown\":\"x\"}" = "rejected by asterisk-config-check";
   "services.asterisk.confbridge.menus = {\"admin_menu\":{\"*1\":\"q7action\"}}" = "P3: loads";
   "services.asterisk.confbridge.users.<name>.settings = {\"q7unknown\":\"x\"}" = "rejected by asterisk-config-check";

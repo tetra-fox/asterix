@@ -1405,6 +1405,13 @@
       warning = ''settings."confbridge.conf"."user:guest".pin is a plain string'';
     };
 
+    # only user profiles have a music on hold class: app_confbridge declined
+    # to load a bridge profile with one
+    confbridgeBridgeMusicOnHoldClass = {
+      module.services.asterisk.confbridge.bridges.board.musicOnHoldClass = "default";
+      assertion = "Set services.asterisk.confbridge.users.<name>.musicOnHoldClass instead.";
+    };
+
     # the store holds only their placeholders
     secretsInterpolatedIntoStringsDoNotWarn = {
       module = {config, ...}: let

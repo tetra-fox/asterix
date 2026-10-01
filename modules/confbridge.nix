@@ -2,6 +2,7 @@
 {
   config,
   lib,
+  options,
   ...
 }: let
   inherit
@@ -28,6 +29,15 @@
     };
 
   bridgeType = types.submodule {
+    imports = [
+      # app_confbridge knows music_on_hold_class in user profiles only, and
+      # declines to load a bridge profile with it (apps/confbridge/conf_config_parser.c:2637)
+      (lib.mkRemovedOptionModule ["musicOnHoldClass"] ''
+        services.asterisk.confbridge.bridges.<name>.musicOnHoldClass kept app_confbridge from loading, since only user profiles have a music on hold class. Set services.asterisk.confbridge.users.<name>.musicOnHoldClass instead.
+      '')
+      # where that module's assertion goes, which the config below passes on
+      {options.assertions = options.assertions;}
+    ];
     options = {
       maxMembers = mkOption {
         type = types.nullOr types.ints.positive;
@@ -35,11 +45,6 @@
         description = "Maximum number of participants (`max_members`); an admin joins a full conference anyway.";
       };
       recordConference = optionalBool "Record the conference (`record_conference`).";
-      musicOnHoldClass = mkOption {
-        type = types.nullOr types.str;
-        default = null;
-        description = "Music on hold class for users waiting alone.";
-      };
       language = mkOption {
         type = types.nullOr types.str;
         default = null;
@@ -67,6 +72,11 @@
       quiet = optionalBool "Do not play join/leave sounds for this user.";
       announceUserCount = optionalBool "Announce the number of participants on join (`announce_user_count`).";
       musicOnHoldWhenEmpty = optionalBool "Play music on hold while alone, or waiting for a marked user (`music_on_hold_when_empty`).";
+      musicOnHoldClass = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = "Music on hold class played with `musicOnHoldWhenEmpty` (`music_on_hold_class`).";
+      };
       settings = settingsOption "user profile";
     };
   };
@@ -130,13 +140,14 @@ in {
   };
 
   config = mkIf cfg.enable {
+    assertions = lib.concatMap (bridge: bridge.assertions) (builtins.attrValues ccfg.bridges);
+
     services.asterisk.modules.needed."services.asterisk.confbridge" = mkIf (ccfg.bridges != {} || ccfg.users != {} || ccfg.menus != {}) ["app_confbridge.so"];
 
     services.asterisk.settings."confbridge.conf" = mkMerge [
       (profiles "bridge" ccfg.bridges (b: {
         max_members = b.maxMembers;
         record_conference = b.recordConference;
-        music_on_hold_class = b.musicOnHoldClass;
         inherit (b) language;
       }))
       (profiles "user" ccfg.users (u: {
@@ -152,6 +163,7 @@ in {
         startmuted = u.startMuted;
         announce_user_count = u.announceUserCount;
         music_on_hold_when_empty = u.musicOnHoldWhenEmpty;
+        music_on_hold_class = u.musicOnHoldClass;
       }))
       (profiles "menu" ccfg.menus (m: m))
     ];

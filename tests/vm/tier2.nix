@@ -664,8 +664,15 @@ in
             caller.hangup()
             wait_idle(pbx)
             cdrs, events, position = records_since(position)
-            # Asterisk's CDR specification has 102 as the first record's dst
-            assert cdrs == [("101", "103", "101", "102", "Dial", "ANSWERED"), ("101", "103", "101", "103", "Dial", "ANSWERED")], cdrs
+            # the first record takes 103 as dst if 101's snapshot from leaving the bridge,
+            # which names 103 already (main/bridge_channel.c:316), reaches the CDR engine
+            # before 102's hangup ends the record (main/cdr.c:2119-2122), and keeps 102, as
+            # Asterisk's CDR specification has, if after; each channel leaves in its own thread
+            # TODO: expect one dst once Asterisk writes the same one every time
+            assert cdrs in (
+                [("101", "103", "101", "102", "Dial", "ANSWERED"), ("101", "103", "101", "103", "Dial", "ANSWERED")],
+                [("101", "102", "101", "102", "Dial", "ANSWERED"), ("101", "103", "101", "103", "Dial", "ANSWERED")],
+            ), cdrs
             assert legs(events) == expected_legs(["101", "102", "103"]), events
             assert who(events, "BLINDTRANSFER") == ["102"] and len(who(events, "LINKEDID_END")) == 1, events
             # the columns hold what they are named after: the caller's channel starts the call's linkedid

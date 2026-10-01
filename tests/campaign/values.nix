@@ -410,6 +410,11 @@ in
       valid = [(with' {services.asterisk.voicemail.mailboxes."102".pin = password;} ["102@default"])];
       invalid = [["102@default"]];
     };
+    # the endpoint has neither auth nor identify
+    "services.asterisk.pjsip.endpoints.<name>.open" = {
+      default = "reject";
+      invalid = [false];
+    };
     "services.asterisk.pjsip.endpoints.<name>.outboundAuth.name".valid = ["102-out"];
     "services.asterisk.pjsip.endpoints.<name>.outboundAuth.password".warn = ["hunter2"];
     "services.asterisk.pjsip.endpoints.<name>.outboundAuth.realm".valid = ["provider.example"];

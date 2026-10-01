@@ -274,6 +274,18 @@
             description = ''
               Credentials the device must present (an auth section named like
               the endpoint). The user name defaults to the endpoint name.
+              Without them, Asterisk takes the endpoint's requests from anyone
+              (see `open`).
+            '';
+          };
+          open = mkOption {
+            type = types.bool;
+            default = false;
+            description = ''
+              Let anyone who reaches the SIP port register as this endpoint
+              and call from its context, without a password or a known
+              address. An endpoint with neither `auth` nor `identify` whose
+              aor takes registrations does not evaluate unless this is set.
             '';
           };
           aor = mkOption {
@@ -875,6 +887,7 @@
   objects = resolved.sections;
   ofType = type: filter (s: (s.type or null) == type) objects;
   endpointObjects = ofType "endpoint";
+  takesRegistrations = aor: toString (aor.max_contacts or 0) != "0";
 
   # the modules the objects need; without res_pjsip_authenticator_digest,
   # Asterisk takes every request as authenticated (res_pjsip.c)
@@ -885,7 +898,7 @@
       "res_pjsip_mwi.so"
       "res_pjsip_mwi_body_generator.so"
     ];
-    "aors that accept registrations in pjsip.conf" = mkIf (builtins.any (s: toString (s.max_contacts or 0) != "0") (ofType "aor")) ["res_pjsip_registrar.so"];
+    "aors that accept registrations in pjsip.conf" = mkIf (builtins.any takesRegistrations (ofType "aor")) ["res_pjsip_registrar.so"];
     "outbound_auth in pjsip.conf" = mkIf (builtins.any (s: s ? outbound_auth) objects) ["res_pjsip_outbound_authenticator_digest.so"];
     "identify sections in pjsip.conf" = mkIf (ofType "identify" != []) ["res_pjsip_endpoint_identifier_ip.so"];
     "registrations in pjsip.conf" = mkIf (ofType "registration" != []) ["res_pjsip_outbound_registration.so"];
@@ -984,6 +997,28 @@
     )
     objects
   );
+
+  # typed endpoints anyone who reaches the SIP port can register as: Asterisk
+  # takes every request of an endpoint without auth as authenticated
+  # (res_pjsip_authenticator_digest.c:53-58)
+  openEndpoints = let
+    byName = type: lib.listToAttrs (map (s: nameValuePair s.name s) (ofType type));
+    endpoints = byName "endpoint";
+    aors = byName "aor";
+    identified = lib.genAttrs (map (s: toString s.endpoint) (filter (s: s ? endpoint) (ofType "identify"))) (_: true);
+  in
+    if rawSections == null
+    then []
+    else
+      filter (
+        name: let
+          s = endpoints.${name};
+        in
+          !pcfg.endpoints.${name}.open
+          && refList (s.auth or null) == []
+          && !(identified ? ${name})
+          && builtins.any (aor: takesRegistrations (aors.${aor} or {})) (refList (s.aors or null))
+      ) (filter (name: endpoints ? ${name}) (attrNames pcfg.endpoints));
 
   missingContexts = filter (s: !(builtins.elem s.context cfg.dialplan.knownContexts)) (
     filter (s: (s.type or null) == "endpoint" && isString (s.context or null)) objects
@@ -1253,6 +1288,10 @@ in {
       {
         assertion = tlsWithoutKeys == [];
         message = "services.asterisk: TLS transport(s) ${concatStringsSep ", " tlsWithoutKeys} need a certificate and a private key (pjsip.transports.<name>.tls.certFile and tls.keyFile, or cert_file and priv_key_file).";
+      }
+      {
+        assertion = openEndpoints == [];
+        message = "services.asterisk: PJSIP endpoint(s) ${concatStringsSep ", " openEndpoints} have neither auth nor identify and their aor takes registrations, so anyone who reaches the SIP port can register as them. Give each a password (pjsip.endpoints.<name>.auth.password), or for a device known by its address an identify with settings.identify_by = \"ip\", or aor.maxContacts = 0 if it never registers, or set open = true where anyone may register on purpose.";
       }
       {
         assertion = longCallerIds == [];

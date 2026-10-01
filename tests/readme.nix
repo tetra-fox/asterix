@@ -153,13 +153,17 @@
       age.keyFile = sopsKey;
     };
   };
-  # an endpoint 101 in a context that exists, for the blocks that change one
+  # an endpoint 101 in a context that exists, for the blocks that change one,
+  # with a password the blocks that set one replace
   endpoint101 = {
     services.asterisk = {
       enable = true;
       pjsip = {
         transports.udp = {};
-        endpoints."101".context = "phones";
+        endpoints."101" = {
+          context = "phones";
+          auth.password = lib.mkDefault (self.lib.secret "/run/secrets/sip-101");
+        };
       };
       dialplan.contexts.phones.extensions."_10X" = ["Dial(PJSIP/\${EXTEN},30)"];
     };

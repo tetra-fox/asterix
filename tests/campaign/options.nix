@@ -165,9 +165,14 @@
       name = "lan";
       def = _: {permit = ["10.0.0.0/8"];};
     };
+    # without auth or identify, an endpoint that takes registrations is open
+    # only on purpose
     "services.asterisk.pjsip.endpoints.<name>" = {
       name = "102";
-      def = _: {context = "internal";};
+      def = _: {
+        context = "internal";
+        open = true;
+      };
     };
     "services.asterisk.pjsip.endpoints.<name>.auth".def = _: {password = secret "/run/secrets/102";};
     "services.asterisk.pjsip.endpoints.<name>.identify".def = _: {match = ["10.0.0.5"];};

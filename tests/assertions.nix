@@ -503,6 +503,72 @@
       assertion = "TLS transport(s) tls need a certificate and a private key";
     };
 
+    # Asterisk takes every request of an endpoint without auth as
+    # authenticated: 102, and 103 through an aor of settings, let anyone
+    # register; the others take no registrations, have a password or an
+    # identify, or are open on purpose
+    endpointsAnyoneCanRegisterAs = {
+      module = {config, ...}: {
+        services.asterisk = {
+          pjsip.endpoints = {
+            "102".context = "internal";
+            "103" = {
+              context = "internal";
+              aor = null;
+              settings.aors = "shared";
+            };
+            "104" = {
+              context = "internal";
+              aor = null;
+            };
+            "105" = {
+              context = "internal";
+              aor.maxContacts = 0;
+            };
+            "106" = {
+              context = "internal";
+              aor.settings.max_contacts = 0;
+            };
+            "107" = {
+              context = "internal";
+              settings.auth = "shared";
+            };
+            "108" = {
+              context = "internal";
+              identify.match = ["10.0.0.8"];
+            };
+            "109" = {
+              context = "internal";
+              open = true;
+            };
+          };
+          settings."pjsip.conf" = {
+            "aor:shared" = {
+              name = "shared";
+              type = "aor";
+              max_contacts = 2;
+            };
+            "auth:shared" = {
+              name = "shared";
+              type = "auth";
+              username = "107";
+              password = config.lib.asterisk.secret "/run/secrets/107";
+            };
+          };
+        };
+      };
+      assertions = ["services.asterisk: PJSIP endpoint(s) 102, 103 have neither auth nor identify and their aor takes registrations, so anyone who reaches the SIP port can register as them. Give each a password (pjsip.endpoints.<name>.auth.password), or for a device known by its address an identify with settings.identify_by = \"ip\", or aor.maxContacts = 0 if it never registers, or set open = true where anyone may register on purpose."];
+    };
+
+    # an included file can hold an identify or an aor of any endpoint
+    endpointWithoutAuthBesideIncludedFiles = {
+      module.services.asterisk = {
+        pjsip.endpoints."102".context = "internal";
+        includes."pjsip.conf" = ["/var/lib/asterisk/pjsip-local.conf"];
+      };
+      assertions = [];
+    };
+
     rtpRangeInverted = {
       module.services.asterisk.rtp.portRange = {
         from = 20000;
@@ -1536,10 +1602,12 @@
               "102" = {
                 context = "internal";
                 callerId = ''"${mountains 27}" <102>'';
+                auth.password = config.lib.asterisk.secret "/run/secrets/102";
               };
               "103" = {
                 context = "internal";
                 callerId = ''"${lib.strings.replicate 40 "\\\""}" <103>'';
+                auth.password = config.lib.asterisk.secret "/run/secrets/103";
               };
             };
             trunks.provider = {

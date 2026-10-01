@@ -107,6 +107,7 @@ in
                   context = "dialogs";
                   aor = {
                     contacts = ["sip:uas@${nodes.phones.networking.primaryIPAddress}:${toString uasPort}"];
+                    maxContacts = 0;
                     # SIPp takes nothing but the calls of its scenario
                     qualifyFrequency = 0;
                   };

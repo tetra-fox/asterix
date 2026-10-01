@@ -208,7 +208,10 @@ in
               // lib.mapAttrs (_: server: {
                 context = "phones";
                 transport = "verify";
-                aor.contacts = ["sip:192.168.1.2:${toString server.port};transport=tls"];
+                aor = {
+                  contacts = ["sip:192.168.1.2:${toString server.port};transport=tls"];
+                  maxContacts = 0;
+                };
               })
               servers
               // {
@@ -216,7 +219,10 @@ in
                 unverified = {
                   context = "phones";
                   transport = "tls";
-                  aor.contacts = ["sip:192.168.1.2:${toString servers.self-signed.port};transport=tls"];
+                  aor = {
+                    contacts = ["sip:192.168.1.2:${toString servers.self-signed.port};transport=tls"];
+                    maxContacts = 0;
+                  };
                 };
               };
           };

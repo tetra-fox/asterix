@@ -501,6 +501,14 @@ in {
       modules.needed."the dialplan in extensions.conf" = mkIf hasDialplan ["pbx_config.so"];
       modules.needed."switches in extensions.conf" = mkIf (neededSwitchModules != []) neededSwitchModules;
 
+      # pbx_config checks includes as it loads (pbx/pbx_config.c
+      # pbx_load_module), before pbx_ael and pbx_lua add their contexts, so the
+      # check loads those first, and with pbx_ael the functions its compiler
+      # looks for (res/ael/pval.c ast_compile_ael2)
+      modules.checkPreload =
+        attrValues otherDialplans
+        ++ lib.optionals (otherDialplans ? "extensions.ael") (filter loaded ["func_dialplan.so" "app_stack.so"]);
+
       dialplan.knownContexts = knownContexts;
 
       dialplan.general = {

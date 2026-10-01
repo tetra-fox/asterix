@@ -474,9 +474,15 @@
         voicemailMenu = "*97";
       };
     };
-    # an endpoint in a context only the AEL dialplan defines, and a Lua one
+    # an endpoint in a context only the AEL dialplan defines, a Lua one, and
+    # a context of extensions.conf that includes both, which pbx_config
+    # checks when it loads
     aelAndLuaDialplans.services.asterisk = {
       pjsip.endpoints."101".context = lib.mkForce "from-ael";
+      dialplan.contexts.lobby.includes = [
+        "from-ael"
+        "from-lua"
+      ];
       modules.load = [
         "res_ael_share"
         "pbx_ael"

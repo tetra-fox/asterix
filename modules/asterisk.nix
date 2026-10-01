@@ -147,6 +147,15 @@
       // lib.optionalAttrs (stunName != null) {
         "rtp.conf" = lib.replaceStrings ["stunaddr = ${stunName}"] ["stunaddr = 192.0.2.1"] cfg.renderedFiles."rtp.conf";
       }
+      // lib.optionalAttrs (cfg.modules.checkPreload != []) {
+        "modules.conf" = let
+          conf = cfg.settings."modules.conf";
+        in
+          renderWith "modules.conf" (conf
+            // {
+              modules = conf.modules // {preload = unique (conf.modules.preload ++ cfg.modules.checkPreload);};
+            });
+      }
       // {
         "asterisk.conf" = checkAsteriskConf;
         "logger.conf" = format.render {syntax = syntaxFor "logger.conf";} {sections.logfiles.check = "error,warning,verbose";};

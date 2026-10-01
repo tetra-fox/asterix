@@ -451,7 +451,16 @@
           default = "udp";
           description = ''
             Transport protocol. `ws` and `wss` run over Asterisk's HTTP server
-            (http.conf) and ignore the address and port here.
+            (http.conf) and ignore the address and port here. Over WebSocket,
+            Asterisk's SDP carries the IPv4 address of the host's default
+            route, to IPv6 phones too, and never an external address, so calls
+            fail unless the phones reach that address, and so always for
+            phones outside a PBX behind NAT; for IPv4 phones, an endpoint's
+            `media_address` in `settings` names an address they reach instead.
+            The Contact of Asterisk's own requests names the host name and
+            port 5060, so a phone Asterisk calls cannot send its BYE or
+            re-INVITE, and the 200 OK to an IPv6 phone's registration gives
+            its contact cut at the first colon.
           '';
         };
         address = mkOption {

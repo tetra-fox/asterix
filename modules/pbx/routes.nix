@@ -73,7 +73,9 @@
         example = "9";
         description = ''
           Digits dialled before a number outside, removed before the call
-          leaves; the number outside has two digits or more. Can be empty. A
+          leaves; the number outside has two digits or more. Can be empty, and
+          then every number of two digits or more that no pbx number takes
+          goes out through the trunk, a mistyped extension number included. A
           pbx number that starts with them still reaches the pbx: with `9`, a
           ring group on 900 takes the calls to 900, so 00 outside cannot be
           dialled. So does a call pickup code (`pickupexten` of features.conf)

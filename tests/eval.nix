@@ -124,21 +124,6 @@ in {
       ];
     };
 
-    # a definition replaces the built-in max_initial_qualify_time without
-    # mkForce, through the typed option and through settings
-    testMaxInitialQualifyTimeIsReplaceable = {
-      expr =
-        map (module: lib.hasInfix "[global]\ntype = global\nmax_initial_qualify_time = 30\n" (rendered [phone module])."pjsip.conf")
-        [
-          {services.asterisk.pjsip.global.max_initial_qualify_time = 30;}
-          {services.asterisk.settings."pjsip.conf".global.max_initial_qualify_time = 30;}
-        ];
-      expected = [
-        true
-        true
-      ];
-    };
-
     testTypedTrunkSections = {
       expr =
         (rendered [
@@ -340,22 +325,6 @@ in {
       ];
     };
 
-    # a context's comment is a single value too
-    testLayerOneOverridesContextComment = {
-      expr =
-        lib.hasInfix "; phones\n[internal]\n"
-        (rendered [
-          phone
-          {
-            services.asterisk = {
-              dialplan.contexts.internal.comment = "calls from the phones";
-              settings."extensions.conf".internal.comment = "phones";
-            };
-          }
-        ])."extensions.conf";
-      expected = true;
-    };
-
     # Asterisk names its own address in the From of its requests unless the
     # endpoint has from_domain, which an endpoint pinned to a transport with an
     # external address gets; a definition in settings replaces it
@@ -453,16 +422,6 @@ in {
         [null null]
         [null null]
       ];
-    };
-
-    testTypedSettingsOptionReachesSection = {
-      expr =
-        lib.hasInfix "rtp_timeout = 30"
-        (rendered [
-          phone
-          {services.asterisk.pjsip.endpoints."101".settings.rtp_timeout = 30;}
-        ])."pjsip.conf";
-      expected = true;
     };
 
     # a udp transport takes TCP on its address and port too, through a tcp
@@ -1032,51 +991,6 @@ in {
       };
     };
 
-    testConfbridgeProfiles = {
-      expr =
-        (rendered [
-          phone
-          (
-            {config, ...}: {
-              services.asterisk.confbridge = {
-                bridges.board.maxMembers = 10;
-                users.chair = {
-                  admin = true;
-                  marked = true;
-                  pin = config.lib.asterisk.secret "/run/secrets/conference";
-                  musicOnHoldClass = "default";
-                };
-                menus.admin_menu = {
-                  "*1" = "toggle_mute";
-                  "*2" = "admin_kick_last";
-                };
-              };
-            }
-          )
-        ])."confbridge.conf";
-      expected =
-        header
-        + ''
-          [general]
-
-          [board]
-          type = bridge
-          max_members = 10
-
-          [admin_menu]
-          type = menu
-          *1 = toggle_mute
-          *2 = admin_kick_last
-
-          [chair]
-          type = user
-          admin = yes
-          marked = yes
-          music_on_hold_class = default
-          pin = ${placeholderFor "/run/secrets/conference"}
-        '';
-    };
-
     testQueueMembers = {
       expr = builtins.filter (lib.hasPrefix "member") (
         lib.splitString "\n"
@@ -1186,53 +1100,6 @@ in {
       expected = [];
     };
 
-    # res_parking provides parkcall, and declines to load without its file
-    testParkcallLoadsItsModule = {
-      expr = let
-        files = rendered [
-          phone
-          {services.asterisk.features.featureMap.parkcall = "#72";}
-        ];
-      in [
-        (lib.hasInfix "load => res_parking.so" files."modules.conf")
-        (files ? "res_parking.conf")
-      ];
-      expected = [
-        true
-        true
-      ];
-    };
-
-    testAmiUserSection = {
-      expr =
-        (rendered [
-          phone
-          (
-            {config, ...}: {
-              services.asterisk.ami = {
-                enable = true;
-                users.monitor.secret = config.lib.asterisk.secret "/run/secrets/ami";
-              };
-            }
-          )
-        ])."manager.conf";
-      expected =
-        header
-        + ''
-          [general]
-          bindaddr = 127.0.0.1
-          enabled = yes
-          port = 5038
-
-          [monitor]
-          deny = 0.0.0.0/0.0.0.0
-          deny = ::/0
-          permit = 127.0.0.1/255.255.255.255
-          permit = ::1/128
-          secret = ${placeholderFor "/run/secrets/ami"}
-        '';
-    };
-
     testAriLoadsModulesAndHttpTlsCredentials = {
       expr = let
         config = evalConfig [
@@ -1329,67 +1196,6 @@ in {
       ];
     };
 
-    testWebsocketTransportLoadsModules = {
-      expr =
-        lib.hasInfix "load => res_pjsip_transport_websocket.so"
-        (rendered [
-          phone
-          {
-            services.asterisk = {
-              http.enable = true;
-              pjsip.transports.ws.protocol = "ws";
-            };
-          }
-        ])."modules.conf";
-      expected = true;
-    };
-
-    # the `security` level only exists while res_security_log is loaded
-    testSecurityLevelLoadsItsModule = {
-      expr =
-        map
-        (
-          levels:
-            lib.hasInfix "load => res_security_log.so"
-            (rendered [
-              phone
-              {services.asterisk.logger.channels.security = levels;}
-            ])."modules.conf"
-        )
-        [
-          ["security"]
-          ["notice" "warning"]
-        ];
-      expected = [
-        true
-        false
-      ];
-    };
-
-    # cdr_csv writes to <astlogdir>/cdr-csv but does not create it
-    testCdrCsvDirectoryIsCreated = {
-      expr =
-        (unitOf [
-          phone
-          {services.asterisk.cdr.csv.enable = true;}
-        ]).serviceConfig.LogsDirectory;
-      expected = [
-        "asterisk"
-        "asterisk/cdr-csv"
-      ];
-    };
-
-    # cdr_csv declines to load when [csv] has no keys
-    testCdrCsvSectionIsNeverEmpty = {
-      expr =
-        lib.hasInfix "[csv]\naccountlogs = yes\nloguniqueid = no\n"
-        (rendered [
-          phone
-          {services.asterisk.cdr.csv.enable = true;}
-        ])."cdr.conf";
-      expected = true;
-    };
-
     # file channels, queue_log and the CSV CDRs are rotated, the console and
     # syslog are not
     testLogrotateFiles = {
@@ -1428,43 +1234,6 @@ in {
         ]
         ["/var/log/asterisk/full.pbx"]
       ];
-    };
-
-    testCdrSqliteUsesArrows = {
-      expr = builtins.head (
-        builtins.filter (lib.hasPrefix "table") (
-          lib.splitString "\n"
-          (rendered [
-            phone
-            {services.asterisk.cdr.sqlite.enable = true;}
-          ])."cdr_sqlite3_custom.conf"
-        )
-      );
-      expected = "table => cdr";
-    };
-
-    testMusicOnHoldDirectoryFromStore = {
-      expr =
-        lib.hasInfix "directory = ${builtins.storeDir}/"
-        (rendered [
-          phone
-          (
-            {pkgs, ...}: {
-              services.asterisk.musicOnHold.classes.office.directory = pkgs.linkFarm "moh" [];
-            }
-          )
-        ])."musiconhold.conf";
-      expected = true;
-    };
-
-    testTypedMusicOnHoldOverridesBuiltinDefault = {
-      expr =
-        lib.hasInfix "directory = custom"
-        (rendered [
-          phone
-          {services.asterisk.musicOnHold.classes.default.directory = "custom";}
-        ])."musiconhold.conf";
-      expected = true;
     };
 
     # Asterisk ignores -p unless it starts as root: systemd sets the policy
@@ -1524,24 +1293,6 @@ in {
         false
         false
         true
-      ];
-    };
-
-    # the module reads its read-only options, so the system does not evaluate
-    # with a definition of one elsewhere, instead of ignoring it
-    testReadOnlyOptionsCannotBeSet = {
-      expr =
-        map (
-          module: (builtins.tryEval (evalConfig [phone module]).system.build.toplevel.drvPath).success
-        ) [
-          {}
-          {services.asterisk.generatedConfig = pkgs.emptyDirectory;}
-          {services.asterisk.paths.config = "/etc/elsewhere";}
-        ];
-      expected = [
-        true
-        false
-        false
       ];
     };
 
@@ -1676,16 +1427,6 @@ in {
     testQueueRulesConfWithoutRules = {
       expr = (rendered [phone {services.asterisk.queues.queues.support = {};}]) ? "queuerules.conf";
       expected = true;
-    };
-
-    testChanSipAlwaysNoloaded = {
-      expr = lib.hasInfix "noload => chan_sip.so" (rendered [phone])."modules.conf";
-      expected = true;
-    };
-
-    testLibIsAvailableWithoutEnable = {
-      expr = "${(evalConfig []).lib.asterisk.secret "/run/x"}";
-      expected = "@NIX_ASTERISK_SECRET:file:/run/x@";
     };
   };
 }

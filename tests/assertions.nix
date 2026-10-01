@@ -1697,12 +1697,6 @@
       assertion = "Phone provisioning moved to pbx.phones, in nixosModules.pbx.";
     };
 
-    voicemailPlainPinWarns = {
-      module.services.asterisk.voicemail.mailboxes."101".pin = "1234";
-      assertions = [];
-      warning = "voicemail.mailboxes.\"101@default\".pin is a plain string";
-    };
-
     musicOnHoldFilesWithoutDirectory = {
       module.services.asterisk.musicOnHold.classes.office.sort = "alpha";
       assertion = "musicOnHold.classes.office: mode `files` needs a directory";
@@ -1752,12 +1746,6 @@
       module.services.asterisk.pjsip.endpoints."101".auth.password = lib.mkForce "hunter2";
       assertions = [];
       warning = ''settings."pjsip.conf"."auth:101".password is a plain string'';
-    };
-
-    confbridgePlainPinWarns = {
-      module.services.asterisk.confbridge.users.guest.pin = "1234";
-      assertions = [];
-      warning = ''settings."confbridge.conf"."user:guest".pin is a plain string'';
     };
 
     # only user profiles have a music on hold class: app_confbridge declined

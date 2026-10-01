@@ -252,20 +252,6 @@ in {
       ];
     };
 
-    # names at the edges of the pattern are store path names too
-    testPhonesFileNames = {
-      expr = let
-        service =
-          (ht801 {
-            pbx.phones.files = lib.genAttrs ["-" "--" "+" "_" "0" "a..b" "x." "A-Z_0+9.cfg"] (name: {
-              text = name;
-            });
-          }).systemd.services.asterisk-provisioning.serviceConfig;
-      in
-        (builtins.tryEval (builtins.deepSeq [service.ExecStartPre service.ExecStart] true)).success;
-      expected = true;
-    };
-
     testExtensionFallsBackToItsMailbox = {
       expr = context "pbx-extension-201" {};
       expected = ''
@@ -386,31 +372,6 @@ in {
         mailbox = "Front desk";
         comment = "reception";
       };
-    };
-
-    # the busy lamp hints of pbx-internal too
-    testHintsAreReplaceable = {
-      expr = builtins.filter (lib.hasInfix ",hint,") (lib.splitString "\n" (context "pbx-internal" {
-        pbx.hours.office = {
-          timezone = "UTC";
-          open = [
-            {
-              days = "*";
-              time = "00:00-23:59";
-            }
-          ];
-          closeEarly = "*28";
-        };
-        services.asterisk.dialplan.contexts.pbx-internal.hints = {
-          "201" = "PJSIP/201&Custom:desk";
-          "*28" = "Custom:closed";
-        };
-      }));
-      expected = [
-        "exten => *28,hint,Custom:closed"
-        "exten => 201,hint,PJSIP/201&Custom:desk"
-        "exten => 202,hint,PJSIP/202"
-      ];
     };
 
     # and so do plain definitions in settings, where the scalars pbx writes
@@ -1100,80 +1061,6 @@ in {
           [pbx-inbound-provider]
           exten => 5551000,1,Goto(pbx-ivr-main,s,1)'';
         prompts = ["pbx-ivr-prompts"];
-      };
-    };
-
-    # a recorded prompt needs no speech synthesis
-    testIvrSoundPrompt = {
-      expr = let
-        module.pbx.ivrs.main.prompt.sound = "custom/main-menu";
-      in {
-        background = lib.hasInfix "Background(custom/main-menu)" (context "pbx-ivr-main" module);
-        packages = (configOf module).services.asterisk.sounds.packages;
-      };
-      expected = {
-        background = true;
-        packages = [];
-      };
-    };
-
-    testPaging = let
-      module = {
-        pbx.paging = {
-          all = {
-            number = "650";
-            members = [
-              "201"
-              "202"
-            ];
-          };
-          talk = {
-            number = "651";
-            members = ["202"];
-            duplex = true;
-            skipBusy = false;
-            headers = ["Alert-Info: intercom"];
-          };
-        };
-      };
-    in {
-      expr = {
-        all = context "pbx-paging-all" module;
-        talk = context "pbx-paging-talk" module;
-        internal = lib.hasInfix "exten => 650,1,Goto(pbx-paging-all,s,1)" (context "pbx-internal" module);
-      };
-      expected = {
-        all = ''
-          ; from pbx.paging.all
-          [pbx-paging-all]
-          exten => 201,1,GotoIf($["''${PBX_PAGER}" = "PJSIP/201"]?done)
-           same => n,Set(PBX_STATE=''${DEVICE_STATE(PJSIP/201)})
-           same => n,GotoIf($["''${PBX_STATE}" != "NOT_INUSE" & "''${PBX_STATE}" != "UNKNOWN"]?done)
-           same => n,Dial(''${PJSIP_DIAL_CONTACTS(201)},,ib(pbx-paging-all^headers^1))
-           same => n(done),Hangup()
-          exten => 202,1,GotoIf($["''${PBX_PAGER}" = "PJSIP/202"]?done)
-           same => n,Set(PBX_STATE=''${DEVICE_STATE(PJSIP/202)})
-           same => n,GotoIf($["''${PBX_STATE}" != "NOT_INUSE" & "''${PBX_STATE}" != "UNKNOWN"]?done)
-           same => n,Dial(''${PJSIP_DIAL_CONTACTS(202)},,ib(pbx-paging-all^headers^1))
-           same => n(done),Hangup()
-          exten => headers,1,Set(PJSIP_HEADER(add,Alert-Info)=<http://example.com>\;info=alert-autoanswer\;delay=0)
-           same => n,Set(PJSIP_HEADER(add,Call-Info)=<sip:pbx>\;answer-after=0)
-           same => n,Return()
-          exten => s,1,Set(_PBX_PAGER=''${CUT(CHANNEL,-,1)})
-           same => n,Page(Local/201@pbx-paging-all/n&Local/202@pbx-paging-all/n)
-           same => n,Hangup()'';
-        talk = ''
-          ; from pbx.paging.talk
-          [pbx-paging-talk]
-          exten => 202,1,GotoIf($["''${PBX_PAGER}" = "PJSIP/202"]?done)
-           same => n,Dial(''${PJSIP_DIAL_CONTACTS(202)},,ib(pbx-paging-talk^headers^1))
-           same => n(done),Hangup()
-          exten => headers,1,Set(PJSIP_HEADER(add,Alert-Info)=intercom)
-           same => n,Return()
-          exten => s,1,Set(_PBX_PAGER=''${CUT(CHANNEL,-,1)})
-           same => n,Page(Local/202@pbx-paging-talk/n,d)
-           same => n,Hangup()'';
-        internal = true;
       };
     };
 

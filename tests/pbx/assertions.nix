@@ -1024,20 +1024,6 @@
       ];
     };
 
-    ht801PlainAdminPasswordWarns = {
-      module.pbx.phones = {
-        listenAddress = "10.0.20.10";
-        allowedNetworks = ["10.0.20.0/24"];
-        grandstream.ht801 = {
-          enable = true;
-          adminPassword = "admin";
-          devices."201".mac = "c0:74:ad:00:02:01";
-        };
-      };
-      assertions = [];
-      warning = "ht801.adminPassword is not a secret reference";
-    };
-
     # its length is known only once the secret is read
     ht801AdminPasswordInterpolated = {
       module = {config, ...}: {

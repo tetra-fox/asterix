@@ -681,6 +681,32 @@ in {
       ];
     };
 
+    # the secrets of typed PINs, alone and inside a string; not a PIN in a
+    # layer-1 mailbox line, where a leading - is Asterisk's own prefix
+    testPinSecrets = {
+      expr = let
+        config = evalConfig [
+          phone
+          (
+            {config, ...}: {
+              services.asterisk = {
+                voicemail.mailboxes = {
+                  "101".pin = config.lib.asterisk.secret "/run/secrets/vm-101";
+                  "102".pin = "${config.lib.asterisk.secret "/run/secrets/vm-102"}0";
+                };
+                settings."voicemail.conf".sales."200" = "-${config.lib.asterisk.secret "/run/secrets/vm-200"},Sales";
+              };
+            }
+          )
+        ];
+      in
+        config.services.asterisk.pinSecrets;
+      expected = map (path: {_secret = path;}) [
+        "/run/secrets/vm-101"
+        "/run/secrets/vm-102"
+      ];
+    };
+
     # what a secret may add to the other bytes of a PIN (a typed one's `-`), a
     # name, a pager or sender address to reach the 79 Asterisk keeps of each
     testPinSecretLengths = {

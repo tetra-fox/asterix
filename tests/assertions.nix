@@ -1003,6 +1003,24 @@
       assertion = "PINs, names and e-mail addresses cannot contain commas (101@default)";
     };
 
+    # VoiceMailMain ends a PIN at #, takes one that starts with * for a jump
+    # to extension a, and keeps the - of a PIN that starts with one, after the
+    # one the module writes; a * further on can be typed, and a secret's own
+    # characters count when the service starts
+    voicemailPinsNoPhoneCanType = {
+      module = {config, ...}: {
+        services.asterisk.voicemail.mailboxes = {
+          "101".pin = "-1234";
+          "102".pin = "*1234";
+          "103".pin = "12#4";
+          "104".pin = "1*2";
+          "105".pin = "${config.lib.asterisk.secret "/run/secrets/vm-105"}#";
+          "106".pin = "${config.lib.asterisk.secret "/run/secrets/vm-106"}*";
+        };
+      };
+      assertion = "services.asterisk.voicemail.mailboxes: PINs cannot start with - or *, or contain #, which no phone can type into VoiceMailMain: 101@default, 102@default, 103@default, 105@default.";
+    };
+
     # 79 bytes of a PIN with the `-` of a typed one, where \; is one byte and a
     # comment none; a secret's own length counts when the service starts
     voicemailPinLongerThan79Bytes = {

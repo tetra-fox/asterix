@@ -89,13 +89,15 @@ in rec {
   # what pkgs/render-secrets reads: a line per reference with its
   # placeholder, credential name, a description for error messages, `field`
   # for the references in `fields`, which are one field of a comma-separated
-  # value, and the most bytes it may have, from `maxLengths` by placeholder
+  # value, the most bytes it may have, from `maxLengths` by placeholder, and
+  # `pin` for the references in `pins`, which are in a voicemail PIN
   manifest = {
     fields ? [],
     maxLengths ? {},
+    pins ? [],
   }: refs:
     lib.concatMapStrings (
-      ref: "${placeholderOf ref}\t${credentialName ref}\t${ref._secret or "credential ${ref._credential}"}\t${lib.optionalString (builtins.elem ref fields) "field"}\t${toString (maxLengths.${placeholderOf ref} or "")}\n"
+      ref: "${placeholderOf ref}\t${credentialName ref}\t${ref._secret or "credential ${ref._credential}"}\t${lib.optionalString (builtins.elem ref fields) "field"}\t${toString (maxLengths.${placeholderOf ref} or "")}\t${lib.optionalString (builtins.elem ref pins) "pin"}\n"
     )
     refs;
 

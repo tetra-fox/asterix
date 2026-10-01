@@ -7,10 +7,10 @@ mkdir "$CREDENTIALS_DIRECTORY"
 
 placeholder() { printf '@NIX_ASTERISK_SECRET:file:/run/secrets/%s@' "$1"; }
 
-# secret NAME VALUE [field] [MAX]: a credential and its manifest line
+# secret NAME VALUE [field] [MAX] [pin]: a credential and its manifest line
 secret() {
   printf '%s' "$2" > "$CREDENTIALS_DIRECTORY/secret-$1"
-  printf '%s\tsecret-%s\t/run/secrets/%s\t%s\t%s\n' "$(placeholder "$1")" "$1" "$1" "${3:-}" "${4:-}" >> manifest
+  printf '%s\tsecret-%s\t/run/secrets/%s\t%s\t%s\t%s\n' "$(placeholder "$1")" "$1" "$1" "${3:-}" "${4:-}" "${5:-}" >> manifest
 }
 
 secret semicolon $'p;w&d\\x"$HOME\n'
@@ -25,6 +25,10 @@ secret pin $'1234\n' field
 secret commapin $'12,34\n' field
 secret shortpin $'12;4\n' field 4
 secret longpin $'12345\n' field 4
+secret typedpin $'1*2\n' field '' pin
+secret dashpin $'-12\n' field '' pin
+secret starpin $'*12\n' field '' pin
+secret hashpin $'1#2\n' field '' pin
 long=$(printf '0123456789%.0s' $(seq 818))
 secret long "$long"
 printf '%s\tsecret-missing\t/run/secrets/missing\n' "$(placeholder missing)" >> manifest
@@ -71,6 +75,11 @@ fails asterisk "101 => $(placeholder commapin),Sales" "secret /run/secrets/comma
 # the most bytes a secret can have, before `;` becomes `\;`
 check asterisk "101 => $(placeholder shortpin),Sales" '101 => 12\;4,Sales'
 fails asterisk "101 => $(placeholder longpin),Sales" "secret /run/secrets/longpin is longer than 4 bytes, the most it can have where Asterisk uses it"
+# keys a phone can type into VoiceMailMain: no # anywhere, and no - or * first
+check asterisk "101 => -$(placeholder typedpin),Sales" '101 => -1*2,Sales'
+for name in dashpin starpin hashpin; do
+  fails asterisk "101 => -$(placeholder "$name"),Sales" "secret /run/secrets/$name is in a voicemail PIN, so it cannot start with - or *, or contain #"
+done
 fails asterisk "x = $(placeholder missing)" "secret /run/secrets/missing (credential secret-missing) is not available"
 fails none "x = $(placeholder unknown)" "no credential for $(placeholder unknown)"
 

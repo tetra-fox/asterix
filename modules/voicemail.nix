@@ -58,8 +58,11 @@
             the world-readable Nix store and triggers a warning. It cannot
             contain a comma, which ends the PIN in the mailbox line. Callers
             cannot change it from the phone: it is rendered with Asterisk's `-`
-            prefix for unchangeable PINs, so it cannot start with `-` itself.
-            Asterisk keeps 79 bytes of the two, so the PIN can have 78.
+            prefix for unchangeable PINs, so it cannot start with `-` itself,
+            which no phone could type. Nor can it start with `*`, which
+            VoiceMailMain takes for a jump to extension `a`, or contain `#`,
+            which ends the PIN a caller types. Asterisk keeps 79 bytes of the
+            `-` and the PIN, so the PIN can have 78.
           '';
         };
         fullName = mkOption {
@@ -158,6 +161,17 @@
         ]
     )
     mailboxes;
+
+  # VoiceMailMain ends a PIN at # and takes one that starts with * for a jump
+  # to extension a (apps/app_voicemail.c:11819-11837), and it drops only the
+  # `-` the module writes before a PIN (11842); render-secrets checks the
+  # secrets in a PIN for these characters
+  untypeablePins = filter (box: let
+    parts = filter isString (builtins.split secrets.placeholderPattern (pinText box.pin));
+  in
+    builtins.match "[-*].*" (builtins.head parts) != null || builtins.any (hasInfix "#") parts)
+  mailboxes;
+  pinSecrets = lib.concatMap (box: secrets.fromText (pinText box.pin)) mailboxes;
 
   # app_voicemail splits the options at every | and each option at its
   # first = (apps/app_voicemail.c apply_options)
@@ -521,9 +535,17 @@ in {
         );
 
         syntax."voicemail.conf".arrowSections = contexts;
+
+        inherit pinSecrets;
       };
 
       assertions = [
+        {
+          assertion = untypeablePins == [];
+          message = "services.asterisk.voicemail.mailboxes: PINs cannot start with - or *, or contain #, which no phone can type into VoiceMailMain: ${
+            concatStringsSep ", " (map (box: "${box.mailbox}@${box.context}") untypeablePins)
+          }.";
+        }
         {
           assertion = badFields == [];
           message = "services.asterisk.voicemail.mailboxes: PINs, names and e-mail addresses cannot contain commas (${

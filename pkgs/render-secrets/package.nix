@@ -5,8 +5,9 @@
 # $CREDENTIALS_DIRECTORY. MANIFEST has one line per secret: the placeholder,
 # the credential name, a description for error messages, `field` for a
 # secret that is one field of a comma-separated value and so cannot contain a
-# comma, and the most bytes the secret may have, or nothing, separated by
-# tabs. MODE says how values are written:
+# comma, the most bytes the secret may have, or nothing, and `pin` for a
+# secret in a voicemail PIN, which cannot start with - or * or contain #,
+# separated by tabs. MODE says how values are written:
 #
 #   asterisk  a single line without leading or trailing whitespace, `;` as `\;`,
 #             in a line of at most 8190 bytes

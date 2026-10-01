@@ -17,7 +17,8 @@
 # removes a global the configuration no longer has; a deploy that leaves
 # extensions.conf alone, and a reload with nothing changed, keep them. There
 # is no `dialplan save`; with writeprotect off it cannot write the rendered
-# extensions.conf, and what it saves elsewhere is not loaded.
+# extensions.conf, and what it saves elsewhere is not loaded. A secret PIN no
+# phone can type fails the reload.
 {
   pkgs,
   self,
@@ -466,6 +467,16 @@ in
             audio_went_on(since)
             # the next switch would write the sops files back, and reload
             pbx.succeed("printf secret-102 > /run/secrets/sip-102 && printf 4242 > /run/secrets/pin")
+            pbx.succeed("systemctl reload asterisk.service")
+
+        with subtest("a secret PIN no phone can type fails the reload, and the mailbox keeps its PIN"):
+            # VoiceMailMain takes a PIN that starts with * for a jump to extension a
+            cursor = journal_cursor(pbx)
+            pbx.succeed("printf '*4242' > /run/secrets/pin")
+            pbx.fail("systemctl reload asterisk.service")
+            wait_journal(pbx, cursor, "secret /run/secrets/pin is in a voicemail PIN")
+            assert "Result: -4242\n" in asterisk(pbx, "dialplan eval function VM_INFO(102@default,password)")
+            pbx.succeed("printf 4242 > /run/secrets/pin")
             pbx.succeed("systemctl reload asterisk.service")
 
         with subtest("a rotated systemd credential is applied with a reload"):

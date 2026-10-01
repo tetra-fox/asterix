@@ -282,6 +282,7 @@
   secretManifest = pkgs.writeText "asterisk-secrets" (secrets.manifest {
       fields = cfg.fieldSecrets;
       maxLengths = cfg.secretMaxLengths;
+      pins = cfg.pinSecrets;
     }
     secretRefs);
 
@@ -1010,6 +1011,17 @@ in {
         Secret references that are one field of a comma-separated value, from
         the modules that know the file's format. The service does not start
         when one of them contains a comma.
+      '';
+    };
+
+    pinSecrets = mkOption {
+      type = types.listOf (types.attrsOf types.str);
+      default = [];
+      internal = true;
+      description = ''
+        Secret references in the PIN of a typed voicemail mailbox. The service
+        does not start when one of them starts with `-` or `*` or contains
+        `#`, which no phone can type into VoiceMailMain.
       '';
     };
 

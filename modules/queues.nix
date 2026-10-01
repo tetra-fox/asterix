@@ -167,6 +167,10 @@ in {
       description = ''
         Keep members added at runtime (AddQueueMember) across restarts in
         astdb. Off by default, so the configured members are the whole truth.
+        Asterisk reads them back only when it starts, so a queue that one
+        deploy removes and a later one restores comes back without them until
+        the next restart, and loses them for good if Asterisk starts while the
+        queue is gone.
       '';
     };
 

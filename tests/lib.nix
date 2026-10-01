@@ -121,6 +121,12 @@ in
       expected = true;
     };
 
+    # Asterisk strips whitespace at either end of a value, and keeps it inside
+    testWhitespaceAtEitherEndOfValueThrows = {
+      expr = map (a: throws (render {} {sections.s = {inherit a;};})) ["  x" "x\t" " " "x  y"];
+      expected = [true true true false];
+    };
+
     testAttrsetValueThrows = {
       expr = throws (
         render {} {

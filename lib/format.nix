@@ -58,6 +58,10 @@
   fail = ctx: msg: throw "asterisk config (${contextString ctx}): ${msg}";
 
   hasNewline = s: builtins.match ".*[\n\r].*" s != null;
+
+  # Asterisk strips whitespace at either end of a value when it reads the file
+  # (main/config.c:2311)
+  hasOuterSpace = s: builtins.match "[[:space:]].*|.*[[:space:]]" s != null;
 in rec {
   inherit metaAttrs;
 
@@ -187,6 +191,8 @@ in rec {
       (
         if hasNewline v
         then fail ctx "value contains a line break"
+        else if hasOuterSpace v
+        then fail ctx "value starts or ends with whitespace, which Asterisk drops when it reads the file; write the value without it"
         else escapeValue v
       )
     else if isStringLike v

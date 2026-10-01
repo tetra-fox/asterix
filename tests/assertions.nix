@@ -1161,7 +1161,7 @@
       module = {config, ...}: {
         services.asterisk.voicemail = {
           mailboxes."101".pin = config.lib.asterisk.secret "/run/secrets/vm-101";
-          settings.cidinternalcontexts = " ${lib.strings.replicate 63 "a"},\t${lib.strings.replicate 64 "b"},";
+          settings.cidinternalcontexts = "${lib.strings.replicate 63 "a"},\t${lib.strings.replicate 64 "b"},";
         };
       };
       assertions = [

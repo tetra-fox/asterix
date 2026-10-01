@@ -169,10 +169,12 @@ def configurations(draw, fast=False, wide=False, vm=False):
                 e["voicemail"]["email"] = "office@example.com"
         if draw(st.floats(0, 1)) < 0.3:
             # Nix strings hold no NUL, so no control characters at all; the
-            # mailbox owner's name has no comma
+            # mailbox owner's name has no comma, nor a space at the end of the
+            # mailbox line, which Asterisk would drop
             e["name"] = draw(
                 st.text(st.characters(exclude_categories=["Cc", "Cs"]), min_size=1, max_size=20).filter(
-                    lambda s: len(s.encode()) <= 79 and ("voicemail" not in e or "," not in s)
+                    lambda s: len(s.encode()) <= 79
+                    and ("voicemail" not in e or ("," not in s and ("email" in e["voicemail"] or not s.endswith(" "))))
                 )
             )
         # with `fast` a phone that rings, in the VMs, rings briefly

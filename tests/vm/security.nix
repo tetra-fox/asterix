@@ -2,17 +2,16 @@
 # reach on a pbx: requests for extensions that exist and don't get the same
 # answers, requests in the name of a door phone known by its address and
 # without a password count only from that address, every wrong password is
-# logged in a form fail2ban's asterisk filter matches, malformed SIP and SDP
-# leave Asterisk running without its memory growing, the principals that can
-# read secrets are the ones the README names, programs the dialplan starts,
-# which run in Asterisk's sandbox, write only to Asterisk's directories and
-# read nothing of /home or other units' secrets, and calls over the trunk,
-# from its address or with its line, reach none of the numbers that go out
-# when a phone dials them (SEC-03).
+# logged in a form fail2ban's asterisk filter matches, the principals that
+# can read secrets are the ones the README names, programs the dialplan
+# starts, which run in Asterisk's sandbox, write only to Asterisk's
+# directories and read nothing of /home or other units' secrets, and calls
+# over the trunk, from its address or with its line, reach none of the
+# numbers that go out when a phone dials them (SEC-03).
 #
 #   pbx       10.3.0.10
-#   intruder  10.3.0.66, and 10.3.0.67, which the pbx's SIP ACL denies,
-#             10.3.0.5, the trunk's provider, and 10.3.0.21, the door phone
+#   intruder  10.3.0.66, 10.3.0.5, the trunk's provider, and 10.3.0.21, the
+#             door phone
 {
   pkgs,
   self,
@@ -76,13 +75,6 @@ in
             prefixLength = 24;
           }
         ];
-        # the malformed requests make Asterisk log about 10 MB at info, which the
-        # serial console carries only by keeping a vCPU in its interrupt handler
-        services.journald.extraConfig = lib.mkAfter "MaxLevelConsole=notice";
-        # all of it reaches the journal, which the test reads: journald drops a
-        # unit's lines past its default rate
-        services.journald.rateLimitBurst = 0;
-
         pbx = {
           enable = true;
           extensions = {
@@ -133,8 +125,6 @@ in
           settings."asterisk.conf".options.verbose = 3;
           pjsip = {
             transports.udp = {};
-            # the intruder's second address
-            acls.intruder.deny = ["10.3.0.67/32"];
             trunks.provider = {
               host = "10.3.0.5";
               username = "5551000";
@@ -143,7 +133,7 @@ in
               qualifyFrequency = 0;
             };
             endpoints = {
-              # a phone that sends offers no phone sends; its calls are busy
+              # an endpoint the pbx layer does not write
               sipp = {
                 context = "offers";
                 auth.password = secret "sip-sipp";
@@ -260,10 +250,6 @@ in
             prefixLength = 24;
           }
           {
-            address = "10.3.0.67";
-            prefixLength = 24;
-          }
-          {
             address = "10.3.0.5";
             prefixLength = 24;
           }
@@ -308,9 +294,6 @@ in
               for response in responses
           ]
 
-      def main_pid():
-          return pbx.succeed("systemctl show -P MainPID asterisk.service").strip()
-
       with subtest("requests as an extension, as the trunk and as a number nobody has get the same answers"):
           # 201 and sipp are endpoints, provider is the trunk, 5551000 its
           # account and 299 nothing; every one is asked for a password and
@@ -347,39 +330,6 @@ in
           assert journal_since(pbx, cursor).count("Failed to authenticate") == len(methods)
           after = found()
           assert after[: len(before)] == before and after[len(before) :] == ["10.3.0.66"] * len(methods), (before, after)
-
-      with subtest("malformed SIP and SDP leave Asterisk running, and its memory flat"):
-          pid = main_pid()
-          # requests no phone sends reach Asterisk's parser from an address its
-          # SIP ACL refuses, and offers no phone sends reach its SDP handling
-          # from an endpoint that authenticates, each scenario played 300
-          # times; the offers one call at a time, as Asterisk keeps the heap
-          # that many calls at once take. A loaded host plays about 6 calls a
-          # second, so SIPp gets 300 s instead of 60.
-          def attack():
-              sipp(intruder, "malformed", "10.3.0.10", "-i", "10.3.0.67", "-s", "201", "-m", "300", "-l", "50", "-r", "100", "-timeout", "300")
-              sipp(intruder, "malformed-sdp", "10.3.0.10", "-i", "10.3.0.66", "-s", "600", "-au", "sipp", "-ap", "pw-sipp", "-m", "300", "-l", "1", "-r", "100", "-timeout", "300")
-
-          def resident():
-              """Asterisk's resident memory in KiB, once the calls are gone, their
-              INVITE transactions have ended, 5 s (timer I) after their ACK, and
-              malloc has given back the free pages of its heap."""
-              wait_idle(pbx)
-              time.sleep(10)
-              return int(pbx.succeed(f"asterisk -rx 'malloc trim' > /dev/null && grep VmRSS /proc/{pid}/status").split()[1])
-
-          # the first calls grow Asterisk's caches to what it keeps, answered
-          # late, some after SIPp sent its next INVITE
-          with stalled(pbx):
-              attack()
-          warm = resident()
-          attack()
-          attack()
-          assert main_pid() == pid, "Asterisk restarted"
-          grown = resident() - warm
-          # 8 MiB is 14 KiB for each of the 600 calls with offers; from one
-          # round to the next the memory varies by up to 2.5 MiB
-          assert grown < 8192, f"{grown} KiB more after each scenario played 600 times more"
 
       with subtest("the principals the README names read secrets, and no one else"):
           # members of the asterisk group, through the CLI

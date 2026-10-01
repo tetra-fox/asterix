@@ -126,7 +126,10 @@ in
               "*2"
             ];
           };
-          queues.symbols.number = "6#2";
+          queues.symbols = {
+            number = "6#2";
+            members = ["*2"];
+          };
           conferences.symbols.number = "*63";
           paging.symbols = {
             number = "65#";
@@ -221,7 +224,6 @@ in
             fullName = "Front desk";
             pin = secret "vm-200";
           };
-          queues.queues.symbols.members = ["PJSIP/*2"];
         };
       };
 

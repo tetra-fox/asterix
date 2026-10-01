@@ -719,7 +719,7 @@ in {
       expr = {
         internal = context "pbx-internal" module;
         emergency = context "pbx-emergency" module;
-        notify = context "pbx-emergency-notify" module;
+        devices = context "pbx-devices" module;
       };
       expected = {
         internal = ''
@@ -755,11 +755,11 @@ in {
            same => n,Dial(PJSIP/911@provider,,b(pbx-caller-id^s^1(sip.provider.example)))
            same => n,Hangup()
           exten => notify,1,GotoIf($["''${CUT(CHANNEL,-,1)}" = "PJSIP/''${ARG1}"]?done)
-           same => n,Originate(Local/''${ARG1}@pbx-emergency-notify,app,SayDigits,''${CALLERID(num)},,30,acn)
+           same => n,Originate(Local/''${ARG1}@pbx-devices,app,SayDigits,''${CALLERID(num)},,30,acn)
            same => n(done),Return()'';
-        notify = ''
-          ; from pbx.emergency.notify
-          [pbx-emergency-notify]
+        devices = ''
+          ; from pbx: every device of an extension, through a Local channel
+          [pbx-devices]
           exten => 201,1,Dial(''${PJSIP_DIAL_CONTACTS(201)})
            same => n,Hangup()
           exten => 202,1,Dial(''${PJSIP_DIAL_CONTACTS(202)})
@@ -825,6 +825,41 @@ in {
            same => n,ConfBridge(quiet,,muted)
            same => n,Hangup()''
       ];
+    };
+
+    # extensions as members, next to the core's own: a Local channel into
+    # pbx-devices rings every device, and the extension's endpoint gives the
+    # member's state
+    testQueueMembers = let
+      module = {
+        pbx.queues.support = {
+          number = "610";
+          members = [
+            "201"
+            "202"
+          ];
+        };
+        services.asterisk.queues.queues.support.members = ["PJSIP/301"];
+      };
+    in {
+      expr = {
+        members = builtins.filter (lib.hasPrefix "member") (lib.splitString "\n" (configOf module).services.asterisk.renderedFiles."queues.conf");
+        devices = context "pbx-devices" module;
+      };
+      expected = {
+        members = [
+          "member => PJSIP/301"
+          "member => Local/201@pbx-devices/n,,201,PJSIP/201"
+          "member => Local/202@pbx-devices/n,,202,PJSIP/202"
+        ];
+        devices = ''
+          ; from pbx: every device of an extension, through a Local channel
+          [pbx-devices]
+          exten => 201,1,Dial(''${PJSIP_DIAL_CONTACTS(201)})
+           same => n,Hangup()
+          exten => 202,1,Dial(''${PJSIP_DIAL_CONTACTS(202)})
+           same => n,Hangup()'';
+      };
     };
 
     # calls from a trunk without a context of its own start in

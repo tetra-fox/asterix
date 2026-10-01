@@ -72,7 +72,7 @@ A small office PBX with a SIP trunk, written with the PBX layer: import
 | 800        | conference bridge                                                           |
 | \*97       | voicemail menu                                                              |
 
-The trunk, the queue's members and the conference profiles are core options,
+The trunk, the queue's strategy and the conference profiles are core options,
 next to `pbx`. It also shows keys without a typed option, set through the
 `settings` of a typed object.
 

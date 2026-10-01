@@ -518,6 +518,23 @@
       assertion = "General, sales are not queues of queues.conf";
     };
 
+    # its members make it a queue of queues.conf
+    queueWithMembersOnlyInPbx = {
+      module.pbx.queues.sales = {
+        number = "620";
+        members = ["202"];
+      };
+      assertions = [];
+    };
+
+    queueMemberIsNoExtension = {
+      module.pbx.queues.support.members = [
+        "201"
+        "299"
+      ];
+      assertion = "pbx.queues.support: 299";
+    };
+
     # Asterisk cuts the section's name, so Queue() never finds it
     queueNameTooLong = {
       module = {

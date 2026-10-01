@@ -56,6 +56,10 @@ in {
     queues.support = {
       number = "600";
       timeout = 120;
+      members = [
+        "201"
+        "202"
+      ];
       noAnswer.voicemail = "200";
     };
 
@@ -132,16 +136,12 @@ in {
       maxSeconds = 300;
     };
 
-    # pbx.queues.support gives this queue its number
+    # pbx.queues.support gives this queue its number and members
     queues.queues.support = {
       strategy = "ringall";
       timeout = 20;
       retry = 5;
       musicOnHoldClass = "default";
-      members = [
-        "PJSIP/201"
-        "PJSIP/202"
-      ];
     };
 
     confbridge = {

@@ -274,7 +274,9 @@ in
             for phone in (reception, sales):
                 phone.wait_request("INVITE", after=invites[phone.name])
             reception.cli("call answer 200")
-            wait_bridged(pbx, "203", "201")
+            # through the Local channel into pbx-devices that rings 201
+            wait_bridged(pbx, "203", "201@pbx-devices")
+            wait_bridged(pbx, "201@pbx-devices", "201")
             sales.wait_request("CANCEL", after=cancels)
             hear_each_other(boss, reception)
             boss.hangup()

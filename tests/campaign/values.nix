@@ -945,6 +945,10 @@ in
       valid = ["::" "10.0.20.10"];
       full = true;
     };
+    "pbx.queues.<name>.members" = {
+      valid = [["201" "202"]];
+      invalid = [["299"]];
+    };
     "pbx.queues.<name>.number" = {
       valid = ["611"];
       invalid = ["61a" "620"];

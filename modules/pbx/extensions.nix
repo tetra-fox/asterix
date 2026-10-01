@@ -1,5 +1,6 @@
 # pbx.extensions: a phone (PJSIP endpoint), its mailbox and what happens to
-# calls it does not take, in pbx-extension-<number>
+# calls it does not take, in pbx-extension-<number>, and pbx-devices, which
+# rings every device of an extension for queues and emergency notify
 {
   config,
   lib,
@@ -15,6 +16,7 @@
     mkOption
     nameValuePair
     optional
+    optionalAttrs
     types
     ;
 
@@ -98,6 +100,12 @@
   # an endpoint's caller ID name is read into 80 bytes, and the rest cut off
   # (res/res_pjsip/pjsip_configuration.c, caller_id_handler)
   longNames = filterAttrs (_: e: builtins.stringLength e.name > 79) cfg.extensions;
+
+  # the extensions a Local channel into pbx-devices rings
+  rungThroughLocal = lib.unique (
+    lib.concatMap (queue: queue.members) (builtins.attrValues cfg.queues)
+    ++ lib.optionals (cfg.emergency != null) cfg.emergency.notify
+  );
 in {
   options.pbx = {
     extensions = mkOption {
@@ -194,7 +202,18 @@ in {
                 );
             }
         )
-        cfg.extensions;
+        cfg.extensions
+        // optionalAttrs (rungThroughLocal != []) {
+          # Dial() has no timeout: the queue or Originate() that called the
+          # Local channel hangs it up after its own
+          pbx-devices = {
+            comment = mkDefault "from pbx: every device of an extension, through a Local channel";
+            extensions = lib.genAttrs rungThroughLocal (number: [
+              (pbxLib.app "Dial" [(pbxLib.devices number)])
+              (pbxLib.app "Hangup" [])
+            ]);
+          };
+        };
     };
   };
 }

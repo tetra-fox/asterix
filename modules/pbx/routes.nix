@@ -363,9 +363,9 @@ in {
               notify = [
                 (pbxLib.app "GotoIf" [''$["''${CUT(CHANNEL,-,1)}" = "PJSIP/''${ARG1}"]?done''])
                 # Originate() calls one channel, so a Local channel into
-                # pbx-emergency-notify rings every device of the extension
+                # pbx-devices rings every device, for Originate()'s 30 s
                 (pbxLib.app "Originate" [
-                  "Local/\${ARG1}@pbx-emergency-notify"
+                  "Local/\${ARG1}@pbx-devices"
                   "app"
                   "SayDigits"
                   "\${CALLERID(num)}"
@@ -380,15 +380,6 @@ in {
                 }
               ];
             };
-        };
-        # Dial() has no timeout: Originate() hangs up the Local channel after
-        # its own
-        pbx-emergency-notify = mkIf (cfg.emergency.notify != []) {
-          comment = mkDefault "from pbx.emergency.notify";
-          extensions = genAttrs cfg.emergency.notify (extension: [
-            (pbxLib.app "Dial" [(pbxLib.devices extension)])
-            (pbxLib.app "Hangup" [])
-          ]);
         };
       };
 

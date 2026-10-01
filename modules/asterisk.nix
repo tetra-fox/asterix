@@ -830,8 +830,8 @@ in {
         `inherits`; every other attribute is a key. Lists render as repeated
         keys, booleans as `yes`/`no`, and any value can be a secret reference
         (`config.lib.asterisk.secret config.sops.secrets.foo.path`). A value
-        cannot contain a line break, nor start or end with whitespace, which
-        Asterisk drops when it reads the file.
+        cannot contain a line break, nor start or end with whitespace or a
+        control character, which Asterisk drops when it reads the file.
 
         The typed options (`pjsip`, `dialplan`, ...) write into this option,
         so everything they generate can be extended or overridden here.

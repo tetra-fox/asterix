@@ -121,10 +121,11 @@ in
       expected = true;
     };
 
-    # Asterisk strips whitespace at either end of a value, and keeps it inside
-    testWhitespaceAtEitherEndOfValueThrows = {
-      expr = map (a: throws (render {} {sections.s = {inherit a;};})) ["  x" "x\t" " " "x  y"];
-      expected = [true true true false];
+    # Asterisk strips every byte below 33 at either end of a value, and keeps
+    # it inside, and any other byte anywhere, such as DEL or those of UTF-8
+    testBlankAtEitherEndOfValueThrows = {
+      expr = map (a: throws (render {} {sections.s = {inherit a;};})) (["  x" "x\t" " " "x  y"] ++ map builtins.fromJSON [''"\u0001x"'' ''"x\u001f"'' ''"x\u0001y"'' ''"x\u007f"'' ''"\u00e9"'']);
+      expected = [true true true false true true false false false];
     };
 
     testAttrsetValueThrows = {

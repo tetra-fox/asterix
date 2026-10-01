@@ -59,9 +59,12 @@
 
   hasNewline = s: builtins.match ".*[\n\r].*" s != null;
 
-  # Asterisk strips whitespace at either end of a value when it reads the file
-  # (main/config.c:2311)
-  hasOuterSpace = s: builtins.match "[[:space:]].*|.*[[:space:]]" s != null;
+  # Asterisk strips every byte below 33 at either end of a value when it reads
+  # the file (main/config.c:2311, ast_strip); Nix compares strings by bytes
+  hasOuterBlank = s: let
+    n = builtins.stringLength s;
+  in
+    n > 0 && (builtins.substring 0 1 s <= " " || builtins.substring (n - 1) 1 s <= " ");
 in rec {
   inherit metaAttrs;
 
@@ -191,8 +194,8 @@ in rec {
       (
         if hasNewline v
         then fail ctx "value contains a line break"
-        else if hasOuterSpace v
-        then fail ctx "value starts or ends with whitespace, which Asterisk drops when it reads the file; write the value without it"
+        else if hasOuterBlank v
+        then fail ctx "value starts or ends with whitespace or a control character, which Asterisk drops when it reads the file; write the value without it"
         else escapeValue v
       )
     else if isStringLike v

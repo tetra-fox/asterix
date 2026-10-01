@@ -70,7 +70,12 @@
           "wrandom"
         ];
         default = "ringall";
-        description = "How members are chosen.";
+        description = ''
+          How members are chosen. A queue that a deploy switches to `linear`
+          rings its members in its old order, not the listed one, until
+          Asterisk restarts, since a reload keeps the queue's member list as
+          it was.
+        '';
       };
       timeout = mkOption {
         type = types.nullOr types.ints.unsigned;

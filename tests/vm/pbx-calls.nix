@@ -17,9 +17,9 @@
 # number reach their objects. Emergency: each number, with and without the
 # prefix, leaves for the provider within a second of the phone's INVITE from
 # every extension, and so does a second call during the first, while notify
-# rings the other extensions, one of them busy and one not registered; with
-# the provider unreachable, the caller learns it once the trunk's INVITE
-# times out.
+# rings the other extensions, one of them busy and one not registered, but
+# not the caller's own; with the provider unreachable, the caller learns it
+# once the trunk's INVITE times out.
 #
 #   pbx       10.2.0.10, trunks provider and second
 #   provider  10.2.0.5, accounts 5551000 (provider) and 5552000 (second)
@@ -530,15 +530,19 @@ in
             )
             return out["time"] - dialling["time"]
 
-        with subtest("each emergency number, with and without the prefix, leaves within a second from every extension, and notify rings the others"):
+        with subtest("each emergency number, with and without the prefix, leaves within a second from every extension, and notify rings the others but not the caller"):
             for caller, dialled, number in [(desk, "911", "911"), (sales, "#911", "911")]:
                 (other,) = [p for p in (desk, sales) if p is not caller]
-                before = invites([other])
+                before = invites([desk, sales])
                 delay = emergency(caller, dialled, number)
                 assert delay < 1, f"{caller.name} dialled {dialled}: the call left after {delay:.2f} s"
                 other.wait_request("INVITE", after=before[other.name])
                 invite = other.received("INVITE")[-1]
                 assert f"From: {quoted(NAMES[caller.name])} <sip:{caller.name}@" in invite, invite
+                # a notify call to the caller would leave within milliseconds
+                # of the other's
+                time.sleep(1)
+                assert caller.requests("INVITE") == before[caller.name], f"{caller.name} was notified of its own emergency call"
                 hang_up(desk, sales)
 
         with subtest("a second emergency call during the first leaves within a second too, while a notified phone is busy"):

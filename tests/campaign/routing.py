@@ -29,7 +29,8 @@ The facts it uses, each from a description or the README:
   after each; a key goes to its option; nothing pressed after the last
   attempt goes to `noInput`, a key without a destination on the last attempt
   to `invalid`; with `directDial` the extensions' numbers work too
-- an emergency call also calls each extension of `notify`
+- an emergency call also calls each extension of `notify` but the caller's
+  own
 - a voicemail destination leaves a message in `box@context`, `default`
   without a context, with the unavailable greeting unless `greeting` says
   `busy`
@@ -279,7 +280,7 @@ class Oracle:
                 # the options after the dial string carry a caller ID
                 path.apps.append(["Dial", {"first": f"PJSIP/{name}@{self.m['emergency']['trunk']}"}])
                 # the extensions of notify are called at the same moment
-                path.legs += [["Dial", "", e] for e in self.m["emergency"].get("notify", [])]
+                path.legs += [["Dial", "", e] for e in self.m["emergency"].get("notify", []) if e != callerid]
                 # how a call outside ends is the far end's
                 path.answered = None
             else:

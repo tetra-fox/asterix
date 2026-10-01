@@ -19,6 +19,7 @@
     mkMerge
     mkOption
     optional
+    optionalAttrs
     types
     unique
     ;
@@ -124,7 +125,8 @@
         example = ["201"];
         description = ''
           Extensions called at the same moment, which hear the caller's
-          number, for example the front desk. Some places require this.
+          number, for example the front desk. Some places require this. The
+          caller's own extension is left out, with all of its devices.
         '';
       };
     };
@@ -174,20 +176,8 @@
       (pbxLib.callerIdOption trunks.${trunk})
     ];
 
-  # Originate() calls one channel, so a Local channel into
-  # pbx-emergency-notify rings every device of the extension
   emergencySteps = e: number:
-    map (extension:
-      pbxLib.app "Originate" [
-        "Local/${extension}@pbx-emergency-notify"
-        "app"
-        "SayDigits"
-        "\${CALLERID(num)}"
-        ""
-        30
-        "acn"
-      ])
-    e.notify
+    map (extension: pbxLib.app "Gosub" ["notify" "1(${extension})"]) e.notify
     ++ setCallerId emergencyCallerId
     ++ [
       (pbxLib.app "Dial" (["PJSIP/${number}@${e.trunk}"] ++ callerIdArguments emergencyCallerId e.trunk))
@@ -365,7 +355,31 @@ in {
       services.asterisk.dialplan.contexts = {
         pbx-emergency = {
           comment = mkDefault "from pbx.emergency";
-          extensions = genAttrs cfg.emergency.numbers (emergencySteps cfg.emergency);
+          extensions =
+            genAttrs cfg.emergency.numbers (emergencySteps cfg.emergency)
+            // optionalAttrs (cfg.emergency.notify != []) {
+              # calls extension ARG1, unless it is the caller's own, as a page
+              # leaves out the pager
+              notify = [
+                (pbxLib.app "GotoIf" [''$["''${CUT(CHANNEL,-,1)}" = "PJSIP/''${ARG1}"]?done''])
+                # Originate() calls one channel, so a Local channel into
+                # pbx-emergency-notify rings every device of the extension
+                (pbxLib.app "Originate" [
+                  "Local/\${ARG1}@pbx-emergency-notify"
+                  "app"
+                  "SayDigits"
+                  "\${CALLERID(num)}"
+                  ""
+                  30
+                  "acn"
+                ])
+                {
+                  app = "Return";
+                  args = [];
+                  label = "done";
+                }
+              ];
+            };
         };
         # Dial() has no timeout: Originate() hangs up the Local channel after
         # its own

@@ -196,7 +196,16 @@
         "ulaw"
         "alaw"
       ];
-      description = "Allowed codecs in order of preference (`disallow = all` is rendered first).";
+      description = ''
+        Allowed codecs in order of preference (`disallow = all` is rendered
+        first). Asterisk translates ulaw, alaw, g722, gsm and opus with the
+        default modules, and adpcm, g726, ilbc, lpc10 and speex once their
+        codec module is in {option}`services.asterisk.modules.load`. It
+        passes the others through without translating them, such as g729,
+        g723, g719, siren7, siren14, silk and the video codecs: an endpoint
+        that allows only those can only call endpoints that allow the same
+        codec, and evaluation warns about it.
+      '';
     };
     directMedia = mkOption {
       type = types.bool;
@@ -1046,6 +1055,26 @@
     && builtins.any (key: toString (rtpGeneral.${key} or "") != "") ["stunaddr" "turnaddr"]
     && !(builtins.any (s: format.isTrue (s.ice_support or false)) endpointObjects);
 
+  # the codecs an endpoint allows, read as Asterisk does: split at , and |,
+  # without a framing after :, leaving out the ones ! takes away (main/format_cap.c:347-366)
+  allowedCodecs = s:
+    map (codec: lib.toLower (builtins.head (splitString ":" codec))) (
+      filter (codec: codec != "" && !(lib.hasPrefix "!" codec)) (
+        map lib.trim (filter isString (lib.concatMap (v: builtins.split "[,|]" (toString v)) (lib.toList s.allow)))
+      )
+    );
+  # signed linear and the codecs the package's codec modules translate to and
+  # from it (codecs/codec_*.c, and codec_opus_open_source)
+  translatable = codec:
+    lib.hasPrefix "slin" codec
+    || builtins.elem codec ["adpcm" "alaw" "g722" "g726" "g726aal2" "gsm" "ilbc" "lpc10" "opus" "speex" "speex16" "speex32" "ulaw"];
+  untranslatable = lib.concatMap (
+    s: let
+      codecs = allowedCodecs s;
+    in
+      optional (!(builtins.elem "all" codecs) && !(builtins.any translatable codecs)) "[${s.name}] ${concatStringsSep ", " codecs}"
+  ) (filter (s: s ? allow) endpointObjects);
+
   # with direct_media, Asterisk hands each phone of a call the address the other
   # gave (chan_pjsip.c:215, bridges/bridge_native_rtp.c:376), reachable or not
   directMediaObjects = filter (s: format.isTrue (s.direct_media or false)) endpointObjects;
@@ -1393,6 +1422,11 @@ in {
         services.asterisk: Asterisk hears keys sent as tones only in ulaw and alaw calls, so endpoints with dtmf_mode = inband lose the keys of calls in the other codecs they allow:
           ${concatStringsSep "\n  " inbandCodecs}
         Allow only ulaw and alaw there, or use another dtmfMode.
+      ''
+      ++ optional (untranslatable != []) ''
+        services.asterisk: the package translates none of the codecs these PJSIP endpoints allow, so their calls fail with every endpoint that does not allow the same codec:
+          ${concatStringsSep "\n  " untranslatable}
+        Allow one it translates as well, such as ulaw, alaw, g722, gsm or opus.
       ''
       ++ optional unusedIceServers "services.asterisk: no PJSIP endpoint uses ICE (ice_support), which is all a STUN or TURN server (rtp.stunServer, rtp.turn.server) serves. With rtp.ice on, as Asterisk has it by default, every call leg still asks the STUN server for its address and allocates a relay on the TURN server, and the call waits for their answers. Remove them, or set ice_support in the settings of the endpoints that use ICE."
       ++ optional (directMediaBehindNat != []) "services.asterisk: PJSIP endpoints with direct_media and behindNat (rtp_symmetric, force_rport or rewrite_contact): ${concatStringsSep ", " directMediaBehindNat}. Asterisk hands the other phone of a call the private address such a phone gives, so the call has no audio. Turn directMedia off for them."

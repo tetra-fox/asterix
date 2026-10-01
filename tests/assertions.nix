@@ -1730,6 +1730,40 @@
       warnings = [];
     };
 
+    # the package has codec modules for neither g729 nor siren7, so Asterisk
+    # passes them through and cannot translate them
+    codecsThePackageCannotTranslateWarn = {
+      module.services.asterisk = {
+        pjsip.endpoints."101".allow = ["g729" "siren7:20"];
+        settings."pjsip.conf" = {
+          gate = {
+            type = "endpoint";
+            context = "internal";
+            allow = "G729|g723";
+          };
+          door = {
+            type = "endpoint";
+            context = "internal";
+            allow = "g729, ILBC";
+          };
+          lobby = {
+            type = "endpoint";
+            context = "internal";
+            allow = "all,!g722";
+          };
+        };
+      };
+      assertions = [];
+      warnings = [
+        ''
+          services.asterisk: the package translates none of the codecs these PJSIP endpoints allow, so their calls fail with every endpoint that does not allow the same codec:
+            [101] g729, siren7
+            [gate] g729, g723
+          Allow one it translates as well, such as ulaw, alaw, g722, gsm or opus.
+        ''
+      ];
+    };
+
     # Asterisk hands each phone of a call with direct media the address the
     # other gave: 211 gives a private one, 203 one of a network that 201 and
     # 202 may have no route to; 212 is pinned to no transport and 213 to one

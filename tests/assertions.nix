@@ -1537,6 +1537,18 @@
       module.services.asterisk.queues.queues.support.retry = 0;
       throws = true;
     };
+
+    # app_queue ranks a member by its penalty times 1000000 in an int, which
+    # overflows from 2147 on
+    queuePenaltyAbove2146Throws = {
+      module.services.asterisk.queues.queues.support.members = [
+        {
+          interface = "PJSIP/101";
+          penalty = 2147;
+        }
+      ];
+      throws = true;
+    };
   };
 in {
   run = checkCases base;

@@ -848,6 +848,11 @@ in {
                 interface = "PJSIP/104";
                 name = ''Doe, "Jane" \ (Sales'';
               }
+              # the largest penalty app_queue ranks without overflowing
+              {
+                interface = "PJSIP/105";
+                penalty = 2146;
+              }
             ];
           }
         ])."queues.conf"
@@ -857,6 +862,7 @@ in {
         "member => PJSIP/102,2,Bob"
         "member => Local/103@internal,,,PJSIP/103"
         ''member => PJSIP/104,,Doe\, \"Jane\" \\ \(Sales''
+        "member => PJSIP/105,2146"
       ];
     };
 

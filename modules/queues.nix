@@ -29,14 +29,18 @@
         description = "Device that is called.";
       };
       penalty = mkOption {
-        type = types.nullOr types.ints.unsigned;
+        # larger penalties overflow the int app_queue ranks members by, which then
+        # rings them first, and make wrandom divide by zero (apps/app_queue.c:6264-6312)
+        # TODO: allow larger penalties once app_queue ranks members without overflowing
+        type = types.nullOr (types.ints.between 0 2146);
         default = null;
         description = ''
           Members with a higher penalty are only called when every member with
           a lower one is paused, busy, in wrap-up time or unreachable, not when
           they do not answer. With the `wrandom` strategy the penalty is a
           weight instead: the higher it is, the less likely the member is
-          called first.
+          called first. At most 2146, since app_queue overflows on larger
+          penalties and rings those members first.
         '';
       };
       name = mkOption {

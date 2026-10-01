@@ -550,6 +550,11 @@ in
       valid = ["Alice"];
       verbatim = false;
     };
+    # app_queue overflows from 2147 on
+    "services.asterisk.queues.queues.<name>.members.*.penalty" = {
+      valid = [0 2146];
+      invalid = [2147];
+    };
     "services.asterisk.queues.queues.<name>.members.*.stateInterface" = {
       valid = ["PJSIP/101"];
       verbatim = false;

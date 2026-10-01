@@ -2036,6 +2036,26 @@
       };
       throws = true;
     };
+    # ",call" grants every class and "sys,call" grants system
+    amiClassesInSettingsMisread = {
+      module = {config, ...}: {
+        services.asterisk.ami = {
+          enable = true;
+          users.monitor = {
+            secret = config.lib.asterisk.secret "/run/secrets/ami";
+            read = ["call"];
+            settings = {
+              read = ",call";
+              write = "sys,call";
+            };
+          };
+        };
+      };
+      assertion = ''
+        [monitor] read = ",call"
+          [monitor] write = "sys,call"
+      '';
+    };
     logLevelUnknownThrows = {
       module.services.asterisk.logger.channels.messages = ["notice" "warnings"];
       throws = true;

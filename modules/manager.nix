@@ -47,7 +47,7 @@
 
   # the classes manager.c knows, in lower case only; it ignores any other
   # without a word (main/manager.c:750-775 and get_perm)
-  class = types.enum [
+  classes = [
     "system"
     "call"
     "log"
@@ -70,6 +70,22 @@
     "all"
     "none"
   ];
+  class = types.enum classes;
+
+  # read and write values of the user sections, settings included, that are
+  # not classes joined by commas: manager.c takes an item before the last as
+  # the start of a class name, so an empty one grants every class and `sys`
+  # grants system (main/manager.c ast_instring)
+  isClassList = value: builtins.isString value && builtins.all (item: builtins.elem item classes) (lib.splitString "," value);
+  misreadClasses =
+    lib.concatMap (
+      user:
+        lib.concatMap (
+          key:
+            map (value: "[${user.name}] ${key} = ${builtins.toJSON value}") (builtins.filter (value: !isClassList value) (lib.toList user.${key}))
+        ) (builtins.filter (key: builtins.elem (lib.toLower key) ["read" "write"]) (builtins.attrNames user))
+    )
+    users;
 
   userType = types.submodule {
     options = {
@@ -239,6 +255,13 @@ in {
       {
         assertion = longSecrets == [];
         message = "services.asterisk: AMI secrets longer than the ${toString secretBytes} bytes a Login can send, since AMI reads a line into 1024 bytes with `Secret: ` and the line end; use shorter ones: ${concatStringsSep ", " (map (secret: secret.what) longSecrets)}.";
+      }
+      {
+        assertion = misreadClasses == [];
+        message = ''
+          services.asterisk: manager.conf read and write values must be classes joined by commas. Asterisk takes an item before the last as the start of a class name, so an empty one grants every class, and ignores a last item that is no class:
+            ${concatStringsSep "\n  " misreadClasses}
+        '';
       }
     ];
   };

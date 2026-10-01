@@ -23,16 +23,37 @@
   acfg = cfg.ami;
   asteriskLib = import ../lib {inherit lib;};
   inherit (asteriskLib) format;
+  inherit (import ./lib.nix {inherit lib;}) limited secretMaxLengths;
 
   # manager.c takes a section called general in any case for its settings and
   # skips it as a user (main/manager.c __init_manager)
   reserved = builtins.filter (name: lib.toLower name == "general") (builtins.attrNames acfg.users);
 
+  # AMI reads a line into 1024 bytes and drops a longer one, logging its first
+  # 25 bytes (main/manager.c:298 and get_input), so a Login's `Secret: ` line
+  # with its CRLF leaves 1014 bytes for the secret
+  secretBytes = 1014;
+  users = builtins.filter (s: lib.toLower s.name != "general") (format.resolveInheritance (cfg.settings."manager.conf" or {})).sections;
+  userSecrets = lib.concatMap (user: let
+    ctx = {
+      file = "manager.conf";
+      section = user.name;
+      key = "secret";
+    };
+  in
+    map (secret: limited user.name secretBytes (format.mkValueString {inherit ctx;} secret)) (lib.toList (user.secret or [])))
+  users;
+  longSecrets = builtins.filter (secret: secret.room < 0) userSecrets;
+
   userType = types.submodule {
     options = {
       secret = mkOption {
         type = format.types.secretOrString;
-        description = "Password, normally a secret reference.";
+        description = ''
+          Password, normally a secret reference. A Login sends it in a line
+          that AMI reads into 1024 bytes, `Secret: ` and the line end
+          included, so it can have 1014 bytes.
+        '';
       };
       read = mkOption {
         type = types.listOf types.str;
@@ -175,6 +196,8 @@ in {
         acfg.users;
 
       firewall.ami = acfg.openFirewall;
+
+      secretMaxLengths = secretMaxLengths userSecrets;
     };
 
     # the flag comes first, so its type is checked when openFirewall is off
@@ -184,6 +207,10 @@ in {
       {
         assertion = reserved == [];
         message = "services.asterisk.ami.users: `general` is reserved, in any case: ${concatStringsSep ", " reserved}.";
+      }
+      {
+        assertion = longSecrets == [];
+        message = "services.asterisk: AMI secrets longer than the ${toString secretBytes} bytes a Login can send, since AMI reads a line into 1024 bytes with `Secret: ` and the line end; use shorter ones: ${concatStringsSep ", " (map (secret: secret.what) longSecrets)}.";
       }
     ];
   };

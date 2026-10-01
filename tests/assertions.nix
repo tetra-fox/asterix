@@ -803,6 +803,23 @@
       assertion = "services.asterisk.ami.users: `general` is reserved, in any case: General.";
     };
 
+    # AMI reads a line into 1024 bytes, so `Secret: `, the secret and the
+    # line's CRLF have to fit; a secret's own length counts when the service
+    # starts
+    amiSecretsLongerThanALoginLine = {
+      module = {config, ...}: {
+        services.asterisk.ami = {
+          enable = true;
+          users = {
+            dialer.secret = lib.strings.replicate 1014 "d";
+            monitor.secret = lib.strings.replicate 1015 "m";
+            vault.secret = "${lib.strings.replicate 1015 "v"}${config.lib.asterisk.secret "/run/secrets/ami"}";
+          };
+        };
+      };
+      assertion = "services.asterisk: AMI secrets longer than the 1014 bytes a Login can send, since AMI reads a line into 1024 bytes with `Secret: ` and the line end; use shorter ones: monitor, vault.";
+    };
+
     reservedContextName = {
       module.services.asterisk.dialplan.contexts.globals.extensions.s = ["Answer()"];
       assertion = "`general` and `globals` are reserved";

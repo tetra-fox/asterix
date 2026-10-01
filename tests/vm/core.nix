@@ -463,6 +463,21 @@ pkgs.testers.runNixOSTest {
         pbx.succeed(f"printf %s {shlex.quote(kept)} > /run/test-secrets/ari")
         pbx.succeed("systemctl reload asterisk.service")
 
+    with subtest("an AMI secret as long as a Login line carries logs in, and a byte more fails the reload"):
+        # AMI reads `Secret: <secret>` and its CRLF into 1024 bytes
+        kept = pbx.succeed("cat /run/test-secrets/ami")
+        pbx.succeed("printf %01015d 0 > /run/test-secrets/ami")
+        pbx.fail("systemctl reload asterisk.service")
+        pbx.succeed("journalctl --sync")
+        pbx.succeed("journalctl -u asterisk.service | grep -F 'secret /run/test-secrets/ami is longer than 1014 bytes'")
+        pbx.succeed("printf %01014d 0 > /run/test-secrets/ami")
+        pbx.succeed("systemctl reload asterisk.service")
+        login = f"Action: Login\r\nUsername: monitor\r\nSecret: {'0' * 1014}\r\n\r\nAction: Logoff\r\n\r\n"
+        answer = pbx.succeed(f"exec 3<>/dev/tcp/127.0.0.1/5038; printf %s {shlex.quote(login)} >&3; timeout 5 cat <&3 || true")
+        assert "Authentication accepted" in answer, answer
+        pbx.succeed(f"printf %s {shlex.quote(kept)} > /run/test-secrets/ami")
+        pbx.succeed("systemctl reload asterisk.service")
+
     with subtest("a secret that makes its line longer than 8190 bytes fails the reload"):
         # Asterisk would skip the line and log how it begins, with part of the
         # secret

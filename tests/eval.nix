@@ -719,8 +719,8 @@ in {
     };
 
     # what a secret may add to an ARI password, of which HTTP basic
-    # authentication carries 255 bytes with `user:`; a secret also used as a
-    # voicemail PIN gets the least of the two
+    # authentication carries 255 bytes with `user:`, and to an AMI secret, of
+    # which a Login sends 1014; a secret used in two places gets the least
     testLoginSecretLengths = {
       expr = let
         config = evalConfig [
@@ -736,6 +736,13 @@ in {
                     pinned.password = "pre-${config.lib.asterisk.secret "/run/secrets/pin"}";
                   };
                 };
+                ami = {
+                  enable = true;
+                  users = {
+                    monitor.secret = config.lib.asterisk.secret "/run/secrets/ami";
+                    app.secret = "${config.lib.asterisk.secret "/run/secrets/ari"};";
+                  };
+                };
                 voicemail.mailboxes."101".pin = config.lib.asterisk.secret "/run/secrets/pin";
               };
             }
@@ -744,6 +751,7 @@ in {
       in
         config.services.asterisk.secretMaxLengths;
       expected = {
+        ${placeholderFor "/run/secrets/ami"} = 1014;
         ${placeholderFor "/run/secrets/ari"} = 251;
         ${placeholderFor "/run/secrets/pin"} = 78;
       };

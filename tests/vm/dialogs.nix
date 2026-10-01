@@ -153,9 +153,6 @@ in
         SIPP_UAS = f"{PHONES}:${toString uasPort}"
         SIPP = ["-i", PHONES, "-mi", PHONES]
 
-        start_all()
-        pbx.wait_for_unit("asterisk.service")
-
         answers = {"504": 183, "506": 183}
         options = {
             "505": "--use-100rel",
@@ -200,6 +197,16 @@ in
                 for m in messages
             ]
 
+        def same_dialog(at_pbx, at_phones):
+            """Whether both ends captured the same messages from each sender,
+            in the order sent. Messages going opposite ways can cross on the
+            wire, so the two captures can interleave the senders differently."""
+            senders = {m["source"] for m in at_pbx + at_phones}
+            return all(
+                summary([m for m in at_pbx if m["source"] == s]) == summary([m for m in at_phones if m["source"] == s])
+                for s in senders
+            )
+
         def leg(mark, address):
             """The messages of the first dialog between the pbx and `address`
             (host:port) after the first `mark` messages of the pbx's capture.
@@ -212,7 +219,7 @@ in
                 assert first, f"no dialog with {address} after message {mark}"
                 messages = [m for m in at_pbx if call_id(m) == call_id(first)]
                 at_phones = [m for m in sip_messages(phones) if call_id(m) == call_id(first)]
-                if summary(messages) == summary(at_phones):
+                if same_dialog(messages, at_phones):
                     return messages
                 assert time.time() < deadline, (summary(messages), summary(at_phones))
                 time.sleep(0.5)
@@ -282,7 +289,9 @@ in
             applied the answer it just sent, and the music takes over from
             the holder's audio a moment after that."""
             start = sent(holding, PBX, "SIP/2.0 200", answer)[0]["time"]
-            end = sent(holding, holder, "INVITE", "sendrecv")[-1]["time"]
+            # the INVITE that takes the call back as first sent; a copy sent
+            # again can arrive after the pbx answered and sent the holder RTP
+            end = firsts(sent(holding, holder, "INVITE", "sendrecv"))[-1]["time"]
             assert not rtp_to(media(holding, holder), start + 0.1, end), "the pbx sent RTP to the phone that holds"
             music = rtp_to(media(held_leg, held), start + 0.5, end)
             assert len(music) >= 25 and one_stream(music), music
@@ -299,6 +308,63 @@ in
 
         def uas_listening():
             phones.wait_until_succeeds("ss -Hlun 'sport = :${toString uasPort}' | grep -q .")
+
+        with subtest("captures of a dialog at both ends agree where messages going opposite ways crossed on the wire, and differ where a response's status does"):
+            # two calls from SIPp while Asterisk answered late, as each end
+            # captured them: SIPp sent its first INVITE again, Asterisk
+            # challenged both copies, and a copy crossed the other end's
+            # message on the wire
+            def captured(sender, line, media=None):
+                source, destination = (PBX, SIPP_UAC) if sender == "pbx" else (SIPP_UAC, PBX)
+                return {"source": source, "destination": destination, "text": f"{line}\r\n\r\n" + (f"v=0\r\na={media}\r\n" if media else "")}
+
+            invite = captured("sipp", f"INVITE sip:502@{PBX} SIP/2.0", "sendrecv")
+            challenge = captured("pbx", "SIP/2.0 401 Unauthorized")
+            challenged_again = captured("pbx", "SIP/2.0 401 Unauthorized")
+            ack = captured("sipp", f"ACK sip:502@{PBX} SIP/2.0")
+            answered = [
+                captured("sipp", f"INVITE sip:502@{PBX} SIP/2.0", "sendrecv"),
+                captured("pbx", "SIP/2.0 100 Trying"),
+                captured("pbx", "SIP/2.0 200 OK", "sendrecv"),
+            ]
+            bye = captured("sipp", f"BYE sip:{PBX} SIP/2.0")
+            bye_answer = captured("pbx", "SIP/2.0 200 OK")
+            cancelled = answered + [
+                captured("sipp", f"CANCEL sip:502@{PBX} SIP/2.0"),
+                captured("pbx", "SIP/2.0 200 OK"),
+                captured("sipp", f"ACK sip:{PBX} SIP/2.0"),
+                bye, bye, bye_answer, bye_answer,
+            ]
+            held = answered + [
+                captured(*fields) for fields in [
+                    ("sipp", f"ACK sip:{PBX} SIP/2.0"),
+                    ("pbx", f"NOTIFY sip:sipp@{SIPP_UAC} SIP/2.0"),
+                    ("sipp", "SIP/2.0 200 OK"),
+                    ("sipp", f"INVITE sip:{PBX} SIP/2.0", "inactive"),
+                    ("pbx", "SIP/2.0 200 OK", "inactive"),
+                    ("sipp", f"ACK sip:{PBX} SIP/2.0"),
+                    ("pbx", f"NOTIFY sip:sipp@{SIPP_UAC} SIP/2.0"),
+                    ("sipp", "SIP/2.0 200 OK"),
+                    ("sipp", f"INVITE sip:{PBX} SIP/2.0", "sendrecv"),
+                    ("pbx", "SIP/2.0 200 OK", "sendrecv"),
+                    ("sipp", f"ACK sip:{PBX} SIP/2.0"),
+                    ("pbx", f"BYE sip:sipp@{SIPP_UAC} SIP/2.0"),
+                    ("sipp", "SIP/2.0 200 OK"),
+                ]
+            ]
+            for at_pbx, at_phones in [
+                # the CANCEL that crosses a 200: the second challenge crossed SIPp's first ACK
+                ([invite, invite, challenge, challenged_again, ack, ack] + cancelled, [invite, invite, challenge, ack, challenged_again, ack] + cancelled),
+                # hold with inactive: the first challenge crossed SIPp's retransmitted INVITE
+                ([invite, challenge, invite, challenged_again, ack, ack] + held, [invite, invite, challenge, challenged_again, ack, ack] + held),
+            ]:
+                assert same_dialog(at_pbx, at_phones), (summary(at_pbx), summary(at_phones))
+                # the same, but for the second challenge's status at one end
+                changed = [captured("pbx", "SIP/2.0 407 Proxy Authentication Required") if m is challenged_again else m for m in at_phones]
+                assert not same_dialog(at_pbx, changed), summary(changed)
+
+        start_all()
+        pbx.wait_for_unit("asterisk.service")
 
         with subtest("phones register"):
             start_phones(list(phone.values()))

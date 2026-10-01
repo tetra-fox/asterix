@@ -86,6 +86,7 @@ in
     };
     codec-order = import ./codec-order.nix {inherit pkgs self;};
     musiconhold = import ./musiconhold.nix {inherit pkgs self;};
+    voicemail = import ./voicemail.nix {inherit pkgs self;};
     pbx-destinations = import ./pbx/destinations.nix {inherit pkgs self;};
     pbx-numbering = import ./pbx/numbering.nix {inherit pkgs self;};
     pbx-outbound = import ./pbx/outbound.nix {inherit pkgs self;};

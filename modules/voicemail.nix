@@ -115,15 +115,22 @@
     then secrets.placeholderOf pin
     else pin;
 
+  # the e-mail field is written even when empty: app_voicemail keeps a null
+  # address when the line ends before it (apps/app_voicemail.c:13420-13422),
+  # and VM_INFO(<mailbox>,email), which AMI's Getvar can run, then crashes
+  # Asterisk (13696)
+  # TODO: leave the empty field out once app_voicemail no longer keeps a null address
   mailboxLine = box:
     format.joinFields [
-      "-${pinText box.pin}"
-      box.fullName
-      (
-        if box.email == null
-        then ""
-        else box.email
-      )
+      (concatStringsSep "," [
+        "-${pinText box.pin}"
+        box.fullName
+        (
+          if box.email == null
+          then ""
+          else box.email
+        )
+      ])
       (
         if box.pagerEmail == null
         then ""

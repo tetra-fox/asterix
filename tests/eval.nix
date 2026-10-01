@@ -650,7 +650,7 @@ in {
         "[default]"
         "101 => -${placeholderFor "/run/secrets/vm-101"},Alice,alice@example.org,,attach=yes|volgain=0.500000"
         "[sales]"
-        "200 => -${placeholderFor "/run/secrets/vm-200"},200"
+        "200 => -${placeholderFor "/run/secrets/vm-200"},200,"
       ];
     };
 

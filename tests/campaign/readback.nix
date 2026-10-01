@@ -67,15 +67,13 @@
     ++ each "acl show" (named "acl.conf");
 
   # what no command shows, read with VM_INFO in a call: the PIN, name and
-  # addresses of each mailbox an argument holds as it is, but no e-mail
-  # address where none is set, which VM_INFO reads through a null pointer
-  # (apps/app_voicemail.c:13420-13422, 13696)
+  # addresses of each mailbox an argument holds as it is
   reader = {config, ...}: let
     boxes = builtins.filter (box: builtins.match "[A-Za-z0-9_-]+" "${box.mailbox}${box.context}" != null) (builtins.attrValues config.services.asterisk.voicemail.mailboxes);
   in
     lib.mkIf (config.services.asterisk.enable && config.services.asterisk.voicemail.enable && boxes != []) {
       services.asterisk.dialplan.contexts.asterix-readback.extensions.s =
-        lib.concatMap (box: map (field: "NoOp(\${VM_INFO(${box.mailbox}@${box.context},${field})})") (["password" "fullname" "pager"] ++ lib.optional (box.email != null) "email")) boxes
+        lib.concatMap (box: map (field: "NoOp(\${VM_INFO(${box.mailbox}@${box.context},${field})})") ["password" "fullname" "email" "pager"]) boxes
         ++ ["Hangup()"];
     };
 

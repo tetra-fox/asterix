@@ -400,7 +400,9 @@ in
                 time.sleep(1)
             times = [r["time"] for r, _ in requests("REGISTER ", "203.0.113.5:5074")][:16]
             gaps = [later - earlier for earlier, later in zip(times, times[1:])]
-            assert all(1 <= gap < 1.5 for gap in gaps), gaps
+            # pjsip keeps a timer's expiry in whole milliseconds, so a retry can
+            # come up to 1 ms before a full retryInterval after the 503
+            assert all(0.999 <= gap < 1.5 for gap in gaps), gaps
             pbx.fail("journalctl -u asterisk.service | grep -q 'Maximum retries reached'")
 
         with subtest("a call is matched to the trunk whose identify has its source, given as an address, a host name or through an SRV record"):

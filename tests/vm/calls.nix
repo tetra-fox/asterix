@@ -223,10 +223,13 @@ in
             caller.call(callee)
             wait_journal(pbx, cursor, "Playing 'beep\\.")
             time.sleep(3)
+            bye = (r"\ABYE ", rf"^From: .*sip:{caller.user}@")
+            byes = len(sip_times(pbx, *bye))
             caller.hangup()
             pbx.wait_until_succeeds(f"test -f /var/lib/asterisk/spool/voicemail/default/{callee}/INBOX/msg0000.txt")
             wait_idle(pbx)
-            return sip_times(pbx, r"\ABYE ", rf"^From: .*sip:{caller.user}@")[-1]
+            # its first copy, as one sent again comes later
+            return sip_times(pbx, *bye)[byes]
 
         with subtest("phones register"):
             start_phones(list(phone.values()))

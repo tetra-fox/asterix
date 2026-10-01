@@ -525,7 +525,8 @@ in
             for caller, dialled, number in calls:
                 status = ended(caller, done[caller.name])
                 out = wait_sent(mark, f"INVITE sip:{number}@10.2.0.5", "10.2.0.5:")[0]
-                final = wait_sent(mark, f"SIP/2.0 {status} ", f"10.2.0.21:{caller.sip_port}")[-1]
+                # the first copy, as one sent again comes later
+                final = wait_sent(mark, f"SIP/2.0 {status} ", f"10.2.0.21:{caller.sip_port}")[0]
                 # a fast busy once pjsip gives up after timer B, 64 times T1 of
                 # 0.5 s
                 assert status == 503 and final["time"] - out["time"] < 33, f"{dialled}: {status} after {final['time'] - out['time']:.1f} s"

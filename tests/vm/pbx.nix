@@ -404,8 +404,14 @@ in
             return sip_times(pbx, r"\ANOTIFY sip:219@", f'entity="sip:{re.escape(number)}@', f"<note>{note}</note>")
 
         def answered(p):
-            """Capture time of the answer to the last call `p` placed."""
-            return sip_times(pbx, r"\ASIP/2\.0 200 ", r"^CSeq: \d+ INVITE", rf"^From: .*sip:{p.user}@")[-1]
+            """Capture time of the answer to the last call `p` placed, its first
+            copy, as one sent again comes later."""
+            answers = [
+                m for m in sip_messages(pbx)
+                if all(re.search(pattern, m["text"], re.M) for pattern in (r"\ASIP/2\.0 200 ", r"^CSeq: \d+ INVITE", rf"^From: .*sip:{p.user}@"))
+            ]
+            call = re.findall(r"^Call-ID: (.*)$", answers[-1]["text"], re.M)
+            return next(m["time"] for m in answers if re.findall(r"^Call-ID: (.*)$", m["text"], re.M) == call)
 
         def called(cursor):
             """Extensions Dial called since `cursor`, in order."""
@@ -489,6 +495,15 @@ in
             # a device's ringing comes first, then the pbx's to 200
             ringing = (r"\ASIP/2\.0 180 ", r"^To: .*sip:230@")
             rings = len(sip_times(pbx, *ringing))
+
+            # the first copy of each request, as one sent again comes later
+            def invite_to(d):
+                return rf"\AINVITE sip:230@[\d.]+:{d.sip_port}\b"
+
+            def cancel_to(d):
+                return rf"\ACANCEL sip:230@[\d.]+:{d.sip_port}\b"
+
+            sent = {d.name: (len(sip_times(pbx, invite_to(d))), len(sip_times(pbx, cancel_to(d)))) for d in devices}
             boss.call("230")
             for device in devices:
                 device.wait_request("INVITE", after=invites[device.name], timeout=30)
@@ -498,12 +513,12 @@ in
             assert channel["data"] == "230@default,u", channel
             # Dial counts the ring time from before the INVITE leaves, and the
             # CANCEL leaves after it, each a few ms away on an idle machine
-            invited = sip_times(pbx, rf"\AINVITE sip:230@[\d.]+:{sales.sip_port}\b")[-1]
-            cancelled = sip_times(pbx, rf"\ACANCEL sip:230@[\d.]+:{sales.sip_port}\b")[-1]
+            invited = sip_times(pbx, invite_to(sales))[sent[sales.name][0]]
+            cancelled = sip_times(pbx, cancel_to(sales))[sent[sales.name][1]]
             assert 2.7 < cancelled - invited < 3.3, f"230 rang for {cancelled - invited:.2f} s"
             # the lamp goes out once both devices stopped ringing
             retry(lambda _: len(lamp("230", "Ready")) > freed, timeout_seconds=30)
-            within(2, sip_times(pbx, r"\ACANCEL sip:230@")[-1], lamp("230", "Ready"))
+            within(2, max(sip_times(pbx, cancel_to(d))[sent[d.name][1]] for d in devices), lamp("230", "Ready"))
             boss.hangup()
             wait_idle(pbx)
 

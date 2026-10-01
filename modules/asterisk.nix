@@ -417,7 +417,8 @@
 
   # Files whose change is applied by targeted reloads, a command or a list run
   # in its order; any other file falls back to `core reload`. Only `module
-  # reload` reports a result, so every targeted reload is one.
+  # reload` and `module refresh` report a result, so every targeted reload is
+  # one of them.
   reloadCommands = {
     "extensions.conf" = dialplanReloads;
     "extensions.ael" = dialplanReloads;
@@ -440,7 +441,11 @@
     "cdr_sqlite3_custom.conf" = "module reload cdr_sqlite3_custom.so";
     "cel.conf" = "module reload cel";
     "cel_custom.conf" = "module reload cel_custom.so";
-    "cel_sqlite3_custom.conf" = "module reload cel_sqlite3_custom.so";
+    # cel_sqlite3_custom closes master.db when it reloads a changed file and
+    # never opens it again (cel/cel_sqlite3_custom.c:168-170, 341-350), so it
+    # is unloaded and loaded instead
+    # TODO: reload it like the others once its reload keeps the database open
+    "cel_sqlite3_custom.conf" = "module refresh cel_sqlite3_custom.so";
     "acl.conf" = "module reload acl";
     "indications.conf" = "module reload indications";
     "udptl.conf" = "module reload udptl";
@@ -571,22 +576,29 @@
           done
           if [ -n "''${queued["core reload"]:-}" ]; then
             commands=("core reload")
+            # core reload reloads cel_sqlite3_custom too, whose file is new
+            # like every file here, so the module is refreshed after it
+            shown=$(${asteriskBin} -C "$current/asterisk.conf" -rx "module show like cel_sqlite3_custom.so")
+            if grep -qE '^cel_sqlite3_custom\.so .* [0-9]+ +Running ' <<< "$shown"; then
+              commands+=(${lib.escapeShellArg reloadCommands."cel_sqlite3_custom.conf"})
+            fi
           fi
-          # asterisk -rx exits 0 whatever the command did; module reload says
-          # whether the reload failed as a whole, core reload says nothing
+          # asterisk -rx exits 0 whatever the command did; module reload and
+          # module refresh say whether they failed, core reload says nothing
           failed=0
           for command in "''${commands[@]}"; do
             echo "asterisk-config: $command"
             output=$(${asteriskBin} -C "$current/asterisk.conf" -rx "$command")
+            module=''${command#module * }
             case $command in
-              "module reload "*)
-                module=''${command#module reload }
-                if ! grep -qxF "Module '$module' reloaded successfully." <<< "$output"; then
-                  echo "asterisk-config: $command failed: $output" >&2
-                  failed=1
-                fi
-                ;;
+              "module reload "*) expected="Module '$module' reloaded successfully." ;;
+              "module refresh "*) expected="Unloaded and loaded $module" ;;
+              *) expected="" ;;
             esac
+            if [ -n "$expected" ] && ! grep -qxF "$expected" <<< "$output"; then
+              echo "asterisk-config: $command failed: $output" >&2
+              failed=1
+            fi
           done
           exit "$failed"
           ;;

@@ -1,26 +1,26 @@
 # Deploying configuration changes to examples/minimal.nix, with every file
 # that has a reload of its own in use. During a call, a change to each of
 # those files is applied by its own reload and one to any other file by
-# `core reload`, with the same PID and the registrations untouched, and the
-# call keeps its audio both ways; switching back applies the old files the
-# same way. A secret used in two files, a password and a systemd credential
-# are rotated with one reload each. A changed module list restarts Asterisk,
-# which ends the call, as do an added and a removed secret and, with
-# reloadOnChange off, a change that would otherwise be reloaded;
-# registrations survive each restart (they live in astdb). With checkConfig
-# off, a PJSIP object Asterisk rejects keeps its previous version on a
-# reload, until the next restart drops it, and the journal says so both
-# times; a file a module rejects as a whole fails the deploy. Globals and
-# extensions changed at runtime, from the dialplan and the CLI, are back to
-# the configuration after `dialplan reload`, `module reload pbx_config.so` and
-# `core reload`, and after a deploy that changes extensions.conf, which also
-# removes a global the configuration no longer has; a deploy that leaves
-# extensions.conf alone, and a reload with nothing changed, keep them. There
-# is no `dialplan save`; with writeprotect off it cannot write the rendered
-# extensions.conf, and what it saves elsewhere is not loaded. A secret PIN no
-# phone can type fails the reload. With pbx_ael loaded, a deploy of
-# extensions.conf or extensions.ael reloads pbx_config and then pbx_ael, and
-# the globals of the AEL dialplan stay.
+# `core reload`, with the same PID and the registrations untouched, the call
+# keeps its audio both ways and CEL keeps writing its records to master.db;
+# switching back applies the old files the same way. A secret used in two
+# files, a password and a systemd credential are rotated with one reload each.
+# A changed module list restarts Asterisk, which ends the call, as do an added
+# and a removed secret and, with reloadOnChange off, a change that would
+# otherwise be reloaded; registrations survive each restart (they live in
+# astdb). With checkConfig off, a PJSIP object Asterisk rejects keeps its
+# previous version on a reload, until the next restart drops it, and the
+# journal says so both times; a file a module rejects as a whole fails the
+# deploy. Globals and extensions changed at runtime, from the dialplan and the
+# CLI, are back to the configuration after `dialplan reload`, `module reload
+# pbx_config.so` and `core reload`, and after a deploy that changes
+# extensions.conf, which also removes a global the configuration no longer
+# has; a deploy that leaves extensions.conf alone, and a reload with nothing
+# changed, keep them. There is no `dialplan save`; with writeprotect off it
+# cannot write the rendered extensions.conf, and what it saves elsewhere is
+# not loaded. A secret PIN no phone can type fails the reload. With pbx_ael
+# loaded, a deploy of extensions.conf or extensions.ael reloads pbx_config and
+# then pbx_ael, and the globals of the AEL dialplan stay.
 {
   pkgs,
   self,
@@ -149,10 +149,9 @@
       change.services.asterisk.settings."cel_custom.conf".mappings."/var/log/asterisk/cel-reload-check.csv" = "\${eventtype}";
       reload = "module reload cel_custom.so";
     };
-    # its reload stops CEL records in master.db (F2)
     "cel_sqlite3_custom.conf" = {
       change.services.asterisk.settings."cel_sqlite3_custom.conf".master.busy_timeout = 2000;
-      reload = "module reload cel_sqlite3_custom.so";
+      reload = "module refresh cel_sqlite3_custom.so";
     };
     "acl.conf" = {
       change.services.asterisk.settings."acl.conf".reload-check = {
@@ -245,6 +244,11 @@ in
           enable = true;
           sqlite.enable = true;
         };
+        # calls whose channel events the test looks for in master.db
+        dialplan.contexts.records.extensions."_X." = [
+          "Answer()"
+          "Hangup()"
+        ];
         settings."cdr_custom.conf".mappings."/var/log/asterisk/cdr-custom.csv" = "\${CDR(src)},\${CDR(dst)}";
         settings."cel_custom.conf".mappings."/var/log/asterisk/cel-custom.csv" = "\${eventtype}";
         modules.load = [
@@ -280,7 +284,10 @@ in
       };
       systemd.services.asterisk.serviceConfig.LoadCredentialEncrypted = ["ari-password:/var/lib/test-credentials/ari-password"];
 
-      environment.systemPackages = [pkgs.curl];
+      environment.systemPackages = [
+        pkgs.curl
+        pkgs.sqlite
+      ];
 
       specialisation = {
         files.configuration = lib.mkMerge (lib.mapAttrsToList (_: change: change.change) changes);
@@ -416,7 +423,25 @@ in
             """The commands asterisk-config ran after `cursor`, none of which failed."""
             journal = journal_since(pbx, cursor)
             assert not re.search(r"asterisk-config: .* failed", journal), journal
-            return sorted(re.findall(r"asterisk-config: (module reload \S+|core reload)$", journal, re.M))
+            return sorted(re.findall(r"asterisk-config: (module (?:reload|refresh) \S+|core reload)$", journal, re.M))
+
+        # Asterisk may be writing records while the test reads them: wait for its lock
+        SQLITE = "sqlite3 -cmd '.timeout 10000' /var/log/asterisk/master.db"
+        record_numbers = itertools.count(1000)
+
+        def wait_row(query):
+            pbx.wait_until_succeeds(f"{SQLITE} {shlex.quote(query)} | grep -q .", timeout=30)
+
+        def record_call():
+            """Starts a channel into the records context, whose CDR and CEL
+            records name the number this returns."""
+            number = next(record_numbers)
+            asterisk(pbx, f"channel originate Local/{number}@records application NoOp")
+            return number
+
+        def channel_events_recorded():
+            """A channel started now runs to its end in master.db's CEL table."""
+            wait_row(f"select 1 from cel where exten = '{record_call()}' and eventtype = 'CHAN_END'")
 
         def shown(change):
             return change["shows"] in asterisk(pbx, change["show"])
@@ -473,6 +498,7 @@ in
                 assert change["show"] is None or shown(change), (file, asterisk(pbx, change["show"]))
             audio_went_on(since)
             assert registers() == registered
+            channel_events_recorded()
 
         with subtest("switching back applies the old files with the same reloads, during the call"):
             since, cursor = marks(), journal_cursor(pbx)
@@ -482,16 +508,19 @@ in
             for file, change in changes.items():
                 assert change["show"] is None or not shown(change), (file, asterisk(pbx, change["show"]))
             audio_went_on(since)
+            channel_events_recorded()
 
         with subtest("a change to a file without a reload of its own is applied by core reload, and so is switching back, during the call"):
             for specialisation, level in (("unmapped", "3,4,5"), (None, "3,4")):
                 since, cursor = marks(), journal_cursor(pbx)
                 assert switch(specialisation) == ["reloading"]
                 assert main_pid() == pid, "asterisk was restarted"
-                assert reloads(cursor) == ["core reload"], reloads(cursor)
+                # core reload also reloads cel_sqlite3_custom, which is then refreshed
+                assert reloads(cursor) == ["core reload", "module refresh cel_sqlite3_custom.so"], reloads(cursor)
                 mappings = asterisk(pbx, "pjproject show log mappings")
                 assert re.search(rf"^asterisk_debug +: {level}$", mappings, re.M), mappings
                 audio_went_on(since)
+                channel_events_recorded()
 
         with subtest("a secret used in two files is rotated with one reload, during the call"):
             # what sops-nix does on a deploy with a changed secret: new file

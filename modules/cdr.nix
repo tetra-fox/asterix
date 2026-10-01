@@ -119,8 +119,13 @@
     valueCounts
   );
 
-  sqliteOptions = what: defaultTable: {
-    enable = lib.mkEnableOption "${what} records in an SQLite database";
+  sqliteOptions = what: defaultTable: notes: {
+    enable = mkOption {
+      type = types.bool;
+      default = false;
+      example = true;
+      description = "Whether to write ${what} records to an SQLite database.${notes}";
+    };
     table = mkOption {
       type = types.str;
       default = defaultTable;
@@ -160,7 +165,7 @@ in {
         };
       };
 
-      sqlite = sqliteOptions "CDR" "cdr";
+      sqlite = sqliteOptions "CDR" "cdr" "";
 
       settings = mkOption {
         type = types.attrsOf format.types.value;
@@ -188,7 +193,7 @@ in {
         description = "Events to log.";
       };
 
-      sqlite = sqliteOptions "CEL" "cel";
+      sqlite = sqliteOptions "CEL" "cel" "\n\nTo reload cel_sqlite3_custom.so by hand, use `module refresh cel_sqlite3_custom.so`: Asterisk's own reload of it, which `core reload` also runs, can stop its records until the next restart.";
     };
   };
 

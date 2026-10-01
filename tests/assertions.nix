@@ -1730,6 +1730,58 @@
       warnings = [];
     };
 
+    # Asterisk hands each phone of a call with direct media the address the
+    # other gave: 211 gives a private one, 203 one of a network that 201 and
+    # 202 may have no route to; 212 is pinned to no transport and 213 to one
+    # on every address, so their network is unknown
+    directMediaThatMayNotReach = {
+      module = {config, ...}: let
+        phone = extension: settings:
+          {
+            context = "internal";
+            directMedia = true;
+            auth.password = config.lib.asterisk.secret "/run/secrets/${extension}";
+          }
+          // settings;
+      in {
+        services.asterisk = {
+          pjsip = {
+            transports = {
+              lan1.address = "10.3.1.10";
+              lan1-tcp = {
+                protocol = "tcp";
+                address = "10.3.1.10";
+              };
+              lan2.address = "10.3.2.10";
+            };
+            endpoints = {
+              "201" = phone "201" {transport = "lan1";};
+              "202" = phone "202" {transport = "lan1-tcp";};
+              "203" = phone "203" {transport = "lan2";};
+              "211" = phone "211" {behindNat = true;};
+              "212" = phone "212" {};
+              "213" = phone "213" {transport = "udp";};
+              "214" = {
+                context = "internal";
+                transport = "lan2";
+                auth.password = config.lib.asterisk.secret "/run/secrets/214";
+              };
+            };
+          };
+          # as the README shows it
+          settings."pjsip.conf"."endpoint:101" = {
+            direct_media = true;
+            rewrite_contact = true;
+          };
+        };
+      };
+      assertions = [];
+      warnings = [
+        "services.asterisk: PJSIP endpoints with direct_media and behindNat (rtp_symmetric, force_rport or rewrite_contact): 101, 211. Asterisk hands the other phone of a call the private address such a phone gives, so the call has no audio. Turn directMedia off for them."
+        "services.asterisk: PJSIP endpoints with direct_media on transports with different addresses: 10.3.1.10 (201, 202), 10.3.2.10 (203). Asterisk hands each phone of a call between them the address the other gave, without checking that it can reach it, so the call has no audio when their networks have no route between them. Turn directMedia off for them, or keep the endpoints with directMedia on one network."
+      ];
+    };
+
     # with ICE on, Asterisk gathers candidates for every call leg, from the
     # STUN and TURN servers too, whether the endpoint offers them or not
     stunAndTurnWithoutIceEndpointsWarn = {

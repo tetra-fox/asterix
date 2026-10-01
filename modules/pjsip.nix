@@ -1046,6 +1046,23 @@
     && builtins.any (key: toString (rtpGeneral.${key} or "") != "") ["stunaddr" "turnaddr"]
     && !(builtins.any (s: format.isTrue (s.ice_support or false)) endpointObjects);
 
+  # with direct_media, Asterisk hands each phone of a call the address the other
+  # gave (chan_pjsip.c:215, bridges/bridge_native_rtp.c:376), reachable or not
+  directMediaObjects = filter (s: format.isTrue (s.direct_media or false)) endpointObjects;
+  directMediaBehindNat = map (s: s.name) (
+    filter (s: builtins.any (key: format.isTrue (s.${key} or false)) ["rtp_symmetric" "force_rport" "rewrite_contact"]) directMediaObjects
+  );
+  # by the address of the typed transport they are pinned to, unless it binds them all
+  directMediaNetworks = builtins.groupBy (s: pcfg.transports.${s.transport}.address) (
+    filter (
+      s: let
+        transport = pcfg.transports.${toString (s.transport or "")} or null;
+      in
+        transport != null && !(builtins.elem transport.address ["0.0.0.0" "::"])
+    )
+    directMediaObjects
+  );
+
   # typed endpoints anyone who reaches the SIP port can register as: Asterisk
   # takes every request of an endpoint without auth as authenticated
   # (res_pjsip_authenticator_digest.c:53-58)
@@ -1377,6 +1394,10 @@ in {
           ${concatStringsSep "\n  " inbandCodecs}
         Allow only ulaw and alaw there, or use another dtmfMode.
       ''
-      ++ optional unusedIceServers "services.asterisk: no PJSIP endpoint uses ICE (ice_support), which is all a STUN or TURN server (rtp.stunServer, rtp.turn.server) serves. With rtp.ice on, as Asterisk has it by default, every call leg still asks the STUN server for its address and allocates a relay on the TURN server, and the call waits for their answers. Remove them, or set ice_support in the settings of the endpoints that use ICE.";
+      ++ optional unusedIceServers "services.asterisk: no PJSIP endpoint uses ICE (ice_support), which is all a STUN or TURN server (rtp.stunServer, rtp.turn.server) serves. With rtp.ice on, as Asterisk has it by default, every call leg still asks the STUN server for its address and allocates a relay on the TURN server, and the call waits for their answers. Remove them, or set ice_support in the settings of the endpoints that use ICE."
+      ++ optional (directMediaBehindNat != []) "services.asterisk: PJSIP endpoints with direct_media and behindNat (rtp_symmetric, force_rport or rewrite_contact): ${concatStringsSep ", " directMediaBehindNat}. Asterisk hands the other phone of a call the private address such a phone gives, so the call has no audio. Turn directMedia off for them."
+      ++ optional (builtins.length (attrNames directMediaNetworks) > 1) "services.asterisk: PJSIP endpoints with direct_media on transports with different addresses: ${
+        concatStringsSep ", " (mapAttrsToList (address: objects: "${address} (${concatStringsSep ", " (map (s: s.name) objects)})") directMediaNetworks)
+      }. Asterisk hands each phone of a call between them the address the other gave, without checking that it can reach it, so the call has no audio when their networks have no route between them. Turn directMedia off for them, or keep the endpoints with directMedia on one network.";
   };
 }

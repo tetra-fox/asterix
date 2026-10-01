@@ -107,6 +107,10 @@ Caveats and known issues:
 - An adapter cannot connect to 0.0.0.0 or ::. With a `listenAddress` like
   that, evaluation fails until `sipServer` and `settings.P237` name the PBX's
   address on the adapters' network.
+- An IPv6 `listenAddress` goes into P47, as the default `sipServer`, without
+  brackets (`2001:db8::10`), and into P237 with them (`[2001:db8::10]`, then
+  `:port` if the port is not 80). Neither form has been tried on a real
+  adapter.
 - A call to the analog phone rings it. It cannot be answered automatically.
 
 ## Adding a device

@@ -95,8 +95,9 @@
         limit = 1;
       };
       contexts = ["pbx-internal" (context "paging" o.name)];
-      last = "Page(&PJSIP/201/sip:busy@127.0.0.1:5060,ib(pbx-paging-${o.name}^headers^1))";
-      legs = ["${context "paging" o.name},headers"];
+      last = "Page(Local/201@pbx-paging-${o.name}/n)";
+      # the member's Local channel, and the pre-dial routine on its device
+      legs = ["${context "paging" o.name},201" "${context "paging" o.name},headers"];
       answered = true;
       limitReached = true;
     }) (objects "paging")

@@ -1052,30 +1052,32 @@ in {
         all = ''
           ; from pbx.paging.all
           [pbx-paging-all]
+          exten => 201,1,GotoIf($["''${PBX_PAGER}" = "PJSIP/201"]?done)
+           same => n,Set(PBX_STATE=''${DEVICE_STATE(PJSIP/201)})
+           same => n,GotoIf($["''${PBX_STATE}" != "NOT_INUSE" & "''${PBX_STATE}" != "UNKNOWN"]?done)
+           same => n,Dial(''${PJSIP_DIAL_CONTACTS(201)},,ib(pbx-paging-all^headers^1))
+           same => n(done),Hangup()
+          exten => 202,1,GotoIf($["''${PBX_PAGER}" = "PJSIP/202"]?done)
+           same => n,Set(PBX_STATE=''${DEVICE_STATE(PJSIP/202)})
+           same => n,GotoIf($["''${PBX_STATE}" != "NOT_INUSE" & "''${PBX_STATE}" != "UNKNOWN"]?done)
+           same => n,Dial(''${PJSIP_DIAL_CONTACTS(202)},,ib(pbx-paging-all^headers^1))
+           same => n(done),Hangup()
           exten => headers,1,Set(PJSIP_HEADER(add,Alert-Info)=<http://example.com>\;info=alert-autoanswer\;delay=0)
            same => n,Set(PJSIP_HEADER(add,Call-Info)=<sip:pbx>\;answer-after=0)
            same => n,Return()
-          exten => member,1,GotoIf($["''${CUT(CHANNEL,-,1)}" = "PJSIP/''${ARG1}"]?done)
-           same => n,Set(PBX_STATE=''${DEVICE_STATE(PJSIP/''${ARG1})})
-           same => n,GotoIf($["''${PBX_STATE}" != "NOT_INUSE" & "''${PBX_STATE}" != "UNKNOWN"]?done)
-           same => n,Set(PBX_PAGE=''${PBX_PAGE}&''${PJSIP_DIAL_CONTACTS(''${ARG1})})
-           same => n(done),Return()
-          exten => s,1,Set(PBX_PAGE=)
-           same => n,Gosub(member,1(201))
-           same => n,Gosub(member,1(202))
-           same => n,Page(''${PBX_PAGE},ib(pbx-paging-all^headers^1))
+          exten => s,1,Set(_PBX_PAGER=''${CUT(CHANNEL,-,1)})
+           same => n,Page(Local/201@pbx-paging-all/n&Local/202@pbx-paging-all/n)
            same => n,Hangup()'';
         talk = ''
           ; from pbx.paging.talk
           [pbx-paging-talk]
+          exten => 202,1,GotoIf($["''${PBX_PAGER}" = "PJSIP/202"]?done)
+           same => n,Dial(''${PJSIP_DIAL_CONTACTS(202)},,ib(pbx-paging-talk^headers^1))
+           same => n(done),Hangup()
           exten => headers,1,Set(PJSIP_HEADER(add,Alert-Info)=intercom)
            same => n,Return()
-          exten => member,1,GotoIf($["''${CUT(CHANNEL,-,1)}" = "PJSIP/''${ARG1}"]?done)
-           same => n,Set(PBX_PAGE=''${PBX_PAGE}&''${PJSIP_DIAL_CONTACTS(''${ARG1})})
-           same => n(done),Return()
-          exten => s,1,Set(PBX_PAGE=)
-           same => n,Gosub(member,1(202))
-           same => n,Page(''${PBX_PAGE},idb(pbx-paging-talk^headers^1))
+          exten => s,1,Set(_PBX_PAGER=''${CUT(CHANNEL,-,1)})
+           same => n,Page(Local/202@pbx-paging-talk/n,d)
            same => n,Hangup()'';
         internal = true;
       };

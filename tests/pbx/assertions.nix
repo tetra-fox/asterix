@@ -1198,12 +1198,17 @@
           number = "653";
           members = ["201"];
         };
+        "east&west" = {
+          number = "654";
+          members = ["201"];
+        };
       };
       assertion = ''
-        pbx.paging: names that Asterisk would misread in the dialplan (they may not contain , ; [ ] " \ ''${ $[ ( ) or ^):
+        pbx.paging: names that Asterisk would misread in the dialplan (they may not contain , ; [ ] " \ ''${ $[ ( ) ^ or &):
           pbx.paging."a,b"
           pbx.paging."a^b"
           pbx.paging."all (east)"
+          pbx.paging."east&west"
       '';
     };
 

@@ -1,7 +1,8 @@
 # pbx.paging: one number that makes several phones answer by themselves, in
-# pbx-paging-<name>. The `member` routine collects every device of the
-# members, and Page() sends each the headers phones take as an auto-answer
-# request, from its pre-dial routine (the `headers` extension).
+# pbx-paging-<name>. Page() calls each member through a Local channel into
+# the same context, where Dial() rings every device of the member with the
+# headers phones take as an auto-answer request, from its pre-dial routine
+# (the `headers` extension).
 {
   config,
   lib,
@@ -65,46 +66,48 @@
 
   pagingSection = name: paging: let
     context = pbxLib.objectContext "paging" name;
-    # Page() finds the caller's phone, and with `s` busy ones, by the device a
-    # dial string names, which a contact's does not, so `member` does both
-    options =
-      "i"
-      + lib.optionalString paging.duplex "d"
-      + "b(${context}^headers^1)";
   in {
     comment = mkDefault "from pbx.paging.${name}";
-    extensions = {
-      s =
-        [(pbxLib.app "Set" ["PBX_PAGE="])]
-        ++ map (member: pbxLib.app "Gosub" ["member" "1(${member})"]) paging.members
-        ++ [
-          (pbxLib.app "Page" ["\${PBX_PAGE}" options])
+    extensions =
+      {
+        # one Local channel per member, since the contacts of all devices
+        # outgrow a variable's 4,095 bytes; they inherit the caller's device
+        s = [
+          (pbxLib.app "Set" ["_PBX_PAGER=\${CUT(CHANNEL,-,1)}"])
+          (pbxLib.app "Page" (
+            [(concatMapStringsSep "&" (member: "Local/${member}@${context}/n") paging.members)]
+            ++ lib.optional paging.duplex "d"
+          ))
           (pbxLib.app "Hangup" [])
         ];
-      # adds the devices of extension ARG1 to PBX_PAGE, unless it is the
-      # caller's own or, with skipBusy, not idle
-      member =
-        [(pbxLib.app "GotoIf" [''$["''${CUT(CHANNEL,-,1)}" = "PJSIP/''${ARG1}"]?done''])]
+        headers =
+          map (header: let
+            m = builtins.match "([A-Za-z-]+): (.*)" header;
+          in
+            pbxLib.app "Set" ["PJSIP_HEADER(add,${builtins.elemAt m 0})=${builtins.elemAt m 1}"])
+          paging.headers
+          ++ [(pbxLib.app "Return" [])];
+      }
+      # each member rings on every device, unless it is the caller's own
+      # extension or, with skipBusy, not idle
+      // lib.genAttrs paging.members (member:
+        [(pbxLib.app "GotoIf" [''$["''${PBX_PAGER}" = "PJSIP/${member}"]?done''])]
         ++ lib.optionals paging.skipBusy [
-          (pbxLib.app "Set" ["PBX_STATE=\${DEVICE_STATE(PJSIP/\${ARG1})}"])
+          (pbxLib.app "Set" ["PBX_STATE=\${DEVICE_STATE(PJSIP/${member})}"])
           (pbxLib.app "GotoIf" [''$["''${PBX_STATE}" != "NOT_INUSE" & "''${PBX_STATE}" != "UNKNOWN"]?done''])
         ]
         ++ [
-          (pbxLib.app "Set" ["PBX_PAGE=\${PBX_PAGE}&${pbxLib.devices "\${ARG1}"}"])
+          (pbxLib.app "Dial" [
+            (pbxLib.devices member)
+            ""
+            "ib(${context}^headers^1)"
+          ])
           {
-            app = "Return";
+            app = "Hangup";
             args = [];
             label = "done";
           }
-        ];
-      headers =
-        map (header: let
-          m = builtins.match "([A-Za-z-]+): (.*)" header;
-        in
-          pbxLib.app "Set" ["PJSIP_HEADER(add,${builtins.elemAt m 0})=${builtins.elemAt m 1}"])
-        paging.headers
-        ++ [(pbxLib.app "Return" [])];
-    };
+        ]);
   };
 
   missing = concatMap (
@@ -113,9 +116,9 @@
         builtins.filter (member: !(cfg.extensions ? ${member})) cfg.paging.${name}.members
       )
   ) (builtins.attrNames cfg.paging);
-  # in Page's b() option, ) ends the routine, ^ becomes a comma, and Gosub
-  # ends its target at the first (
-  badNames = builtins.filter (name: pbxLib.breaksContext name || pbxLib.breaksArgument name || builtins.match ".*[()^].*" name != null) (builtins.attrNames cfg.paging);
+  # in Dial's b() option, ) ends the routine, ^ becomes a comma, and Gosub
+  # ends its target at the first (; Page() splits its channels at &
+  badNames = builtins.filter (name: pbxLib.breaksContext name || pbxLib.breaksArgument name || builtins.match ".*[()^&].*" name != null) (builtins.attrNames cfg.paging);
 in {
   options.pbx.paging = mkOption {
     type = types.attrsOf pagingType;
@@ -123,8 +126,8 @@ in {
     example = lib.literalExpression ''{ all = { number = "650"; members = [ "201" "202" ]; }; }'';
     description = ''
       Paging groups, keyed by group name. A name cannot contain `,` `;` `[`
-      `]` `"` `\` `''${` `$[` `(` `)` `^` or a line break, nor end with white
-      space.
+      `]` `"` `\` `''${` `$[` `(` `)` `^` `&` or a line break, nor end with
+      white space.
     '';
   };
 
@@ -142,7 +145,7 @@ in {
       {
         assertion = badNames == [];
         message = ''
-          pbx.paging: names that Asterisk would misread in the dialplan (they may not contain , ; [ ] " \ ''${ $[ ( ) or ^):
+          pbx.paging: names that Asterisk would misread in the dialplan (they may not contain , ; [ ] " \ ''${ $[ ( ) ^ or &):
             ${concatMapStringsSep "\n  " (name: lib.showOption ["pbx" "paging" name]) badNames}
         '';
       }

@@ -46,7 +46,7 @@ def named(option, name, closeEarly=False, external=False):
     if option == "conferences":
         return name != "" and not (common or any(c in name for c in '"\\') or unclosed or len(name.encode()) > 79)
     if option == "paging":
-        return not (common or any(c in name for c in '"\\()^'))
+        return not (common or any(c in name for c in '"\\()^&'))
     if option == "hours":
         return not (common or "(" in name or (closeEarly and (any(c in name for c in "&=") or len(name.encode()) > 62)))
     return True

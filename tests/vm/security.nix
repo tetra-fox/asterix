@@ -50,6 +50,7 @@ in
       in {
         imports = [
           self.nixosModules.pbx
+          ./ami.nix
           ./common.nix
           (import ./secrets.nix {
             fixed = {
@@ -227,7 +228,6 @@ in
         environment.systemPackages = [
           pkgs.curl
           pkgs.fail2ban
-          (pkgs.writers.writePython3Bin "ami" {} ./ami.py)
         ];
       };
 

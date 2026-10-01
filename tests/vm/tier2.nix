@@ -43,7 +43,6 @@
 
   certificates = import ./certificates.nix {inherit pkgs;};
 
-  amiClient = pkgs.writers.writePython3Bin "ami" {} ./ami.py;
   stasisApp = pkgs.writers.writePython3Bin "stasis" {libraries = [pkgs.python3Packages.websocket-client];} ./stasis.py;
 in
   pkgs.testers.runNixOSTest {
@@ -75,6 +74,7 @@ in
     in {
       imports = [
         self.nixosModules.default
+        ./ami.nix
         ./common.nix
         ./phone.nix
         (import ./secrets.nix {
@@ -93,7 +93,6 @@ in
         pkgs.curl
         pkgs.jq
         pkgs.sqlite
-        amiClient
         stasisApp
       ];
 
@@ -343,6 +342,7 @@ in
     testScript =
       builtins.readFile ./phone.py
       + builtins.readFile ./tones.py
+      + builtins.readFile ./ami-events.py
       + ''
         import csv
 
@@ -368,20 +368,6 @@ in
 
         def ami(*args):
             return pbx.succeed(f"ami {shlex.join(args)}")
-
-        def ami_listen(*users):
-            """Start writing the events each of `users` receives to /tmp/ami-<user>.json"""
-            for user in users:
-                pbx.succeed(f"systemd-run --unit=ami-{user} --collect ami events {user} ami-secret /tmp/ami-{user}.json")
-            for user in users:
-                pbx.wait_until_succeeds(f"head -n 1 /tmp/ami-{user}.json | grep -q '\"Response\": \"Success\"'")
-
-        def ami_done(*users):
-            """Send the UserEvent that ends the listeners, and wait until each of `users` received it"""
-            ami("run", "dialer", "ami-secret", "UserEvent", "UserEvent=Done")
-            for user in users:
-                pbx.wait_until_succeeds(f"tail -n 1 /tmp/ami-{user}.json | grep -q '\"End\"'")
-                assert pbx.succeed(f"tail -n 1 /tmp/ami-{user}.json").strip() == '{"End": "Done"}'
 
         def ami_events(user):
             """Event, channel and digit of each event `user` received"""
@@ -526,14 +512,14 @@ in
             assert "Ping: Pong" in ami("run", "calls", "ami-secret", "Ping")
 
         with subtest("AMI sends each user the events of its read classes, and DTMF only to users that ask for it"):
-            ami_listen("calls", "keys", "everything")
+            ami_listen(pbx, "ami-secret", "calls", "keys", "everything")
             caller.call("903")
             wait_channel(pbx, "101", app="Wait")
             caller.dtmf("12#")
             pbx.wait_until_succeeds("test $(grep -c '\"Event\": \"DTMFEnd\"' /tmp/ami-keys.json) -ge 3")
             caller.hangup()
             wait_idle(pbx)
-            ami_done("calls", "keys", "everything")
+            ami_done(pbx, "dialer", "ami-secret", "calls", "keys", "everything")
             events = {user: ami_events(user) for user in ["calls", "keys", "everything"]}
             for user in ["keys", "everything"]:
                 assert "".join(e["Digit"] for e in events[user] if e["Event"] == "DTMFEnd") == "12#", events[user]
@@ -763,13 +749,13 @@ in
             assert legs(events) == expected_legs([], unanswered=["103"]), events
 
         with subtest("AMI users receive every event of 128 calls at once"):
-            ami_listen("calls", "everything")
+            ami_listen(pbx, "ami-secret", "calls", "everything")
             answers = ami("run", "dialer", "ami-secret", "--times", "128", "Originate", "Channel=Local/s@flood", "Application=Wait", "Data=60", "Async=true")
             assert answers.count("Response: Success") == 128, answers
             pbx.wait_until_succeeds("asterisk -rx 'core show channels count' | grep -qx '256 active channels'")
             asterisk(pbx, "dialplan set global RELEASE 1")
             wait_idle(pbx)
-            ami_done("calls", "everything")
+            ami_done(pbx, "dialer", "ami-secret", "calls", "everything")
             for user in ["calls", "everything"]:
                 counts = json.loads(pbx.succeed(
                     f"jq -s '[.[] | select(.Channel // \"\" | startswith(\"Local/s@flood-\")) | .Event] | group_by(.) | map({{key: .[0], value: length}}) | from_entries' /tmp/ami-{user}.json"

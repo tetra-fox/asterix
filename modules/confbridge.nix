@@ -109,6 +109,14 @@
       description = "ConfBridge menu actions, separated by commas (${lib.concatStringsSep ", " menuActions}, dialplan_exec(<context>,<extension>,<priority>), playback(<sounds>) or playback_and_continue(<sounds>))";
     };
 
+  # ConfBridge takes a menu entry's keys as 0-9, A-D, * and #, in any case
+  # (apps/confbridge/conf_config_parser.c:2682), and keeps the first 11 of
+  # them (conf_config_parser.c:1570)
+  badMenuKeys = lib.concatLists (lib.mapAttrsToList (
+      menu: entries: map (keys: "${menu}: ${keys}") (builtins.filter (keys: builtins.match "[0-9A-Da-d*#]{1,11}" keys == null) (builtins.attrNames entries))
+    )
+    ccfg.menus);
+
   profiles = kind: attrs: toValues:
     mapAttrs' (
       name: p:
@@ -163,12 +171,22 @@ in {
           "*3" = "admin_kick_last";
         };
       };
-      description = "DTMF menus (`type = menu`), mapping key sequences to actions.";
+      description = "DTMF menus (`type = menu`), mapping key sequences of 1 to 11 of 0-9, A-D, `*` and `#` to actions.";
     };
   };
 
   config = mkIf cfg.enable {
-    assertions = lib.concatMap (bridge: bridge.assertions) (builtins.attrValues ccfg.bridges);
+    assertions =
+      lib.concatMap (bridge: bridge.assertions) (builtins.attrValues ccfg.bridges)
+      ++ [
+        {
+          assertion = badMenuKeys == [];
+          message = ''
+            services.asterisk.confbridge.menus: key sequences other than 1 to 11 of 0-9, A-D, * and #, which ConfBridge refuses or cuts to 11:
+              ${lib.concatStringsSep "\n  " badMenuKeys}
+          '';
+        }
+      ];
 
     services.asterisk.modules.needed."services.asterisk.confbridge" = mkIf (ccfg.bridges != {} || ccfg.users != {} || ccfg.menus != {}) confbridgeModules;
 

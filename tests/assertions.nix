@@ -1755,6 +1755,18 @@
       assertion = "Set services.asterisk.confbridge.users.<name>.musicOnHoldClass instead.";
     };
 
+    # app_confbridge declines to load with a key no phone sends, and a key of
+    # 12 answers to its first 11
+    confbridgeMenuKeys = {
+      module.services.asterisk.confbridge.menus.admin = {
+        "*1" = "toggle_mute";
+        "123456789012" = "leave_conference";
+        b = "no_op";
+        x = "no_op";
+      };
+      assertion = "cuts to 11:\n  admin: 123456789012\n  admin: x\n";
+    };
+
     # the store holds only their placeholders
     secretsInterpolatedIntoStringsDoNotWarn = {
       module = {config, ...}: let

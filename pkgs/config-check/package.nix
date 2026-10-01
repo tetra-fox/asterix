@@ -3,11 +3,13 @@
 # Starts ASTERISK with the configuration in CONFIG, followed by the ARGUMENTs
 # as the service passes its extra arguments, and fails if Asterisk logs an
 # error or warning while loading it, or if the dialplan uses an application,
-# function or switch that no loaded module provides. CONFIG is prepared by
+# function or switch that no loaded module provides, or plays a sound that a
+# language calls use lacks (dialplan.awk). CONFIG is prepared by
 # modules/asterisk.nix: `config/` with `@root@` where the files will be and a
 # log channel `check`, `credentials/`, `directories`, which lists the
-# directories to create below `@root@`, and `hosts` for the names Asterisk
-# resolves while loading, since a build has no DNS. Secrets become zeros.
+# directories to create below `@root@`, `hosts` for the names Asterisk
+# resolves while loading, since a build has no DNS, and `languages`, the
+# languages endpoints set. Secrets become zeros.
 #
 # ADDRESS are the addresses Asterisk listens on. IPv4 ones become loopback
 # addresses, which a build can bind without privileges. Asterisk only runs in
@@ -167,6 +169,8 @@ in
       rx "core show applications" > "$root/applications"
       rx "core show functions" > "$root/functions"
       rx "core show switches" > "$root/switches"
+      rx "core show settings" > "$root/settings"
+      rx "core show file formats" > "$root/formats"
 
       failed=0
       if gawk -f ${./problems.awk} "$root/log/check" > "$root/problems"; then
@@ -175,7 +179,9 @@ in
         failed=1
       fi
       if ! gawk -v applications="$root/applications" -v functions="$root/functions" \
-        -v switches="$root/switches" -f ${./dialplan.awk} "$root/dialplan" >&2; then
+        -v switches="$root/switches" -v settings="$root/settings" -v formats="$root/formats" \
+        -v languages="$root/languages" -v asterisk="$asterisk" -v config="$root/config/asterisk.conf" \
+        -f ${./dialplan.awk} "$root/dialplan" >&2; then
         failed=1
       fi
       if [ "$failed" = 0 ] && [ -n "$probe" ]; then

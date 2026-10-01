@@ -170,7 +170,16 @@
           lib.concatMapStrings (dir: "${dir}\n") (["run" "log"] ++ map (dir: "lib/${dir}") stateDirectories)
         );
       }
+      {
+        name = "languages";
+        path = pkgs.writeText "asterisk-check-languages" (lib.concatMapStrings (language: "${language}\n") endpointLanguages);
+      }
     ]
+  );
+  # the languages PJSIP endpoints set, which their calls use instead of the
+  # default one
+  endpointLanguages = unique (
+    map (s: toString s.language) (filter (s: (s.type or null) == "endpoint" && s ? language) pjsipObjects)
   );
   # the host of `host:port` and whether it is a name, not an address
   hostOf = v: builtins.head (builtins.match "[[:space:]]*([^:/[:space:]]*).*" (toString v));
@@ -926,14 +935,25 @@ in {
       description = ''
         Start Asterisk with the generated configuration when the system is
         built, and fail the build if Asterisk logs an error or a warning
-        while loading it, or if the dialplan uses an application, function
-        or switch that no loaded module provides. Secrets are replaced by zeros,
-        credentials by a throwaway certificate and IPv4 listen addresses by
-        loopback ones, so a sandboxed build needs no privileges. Listening on
-        IPv6 addresses or ports below 1024, or building without the sandbox,
-        needs unprivileged user namespaces on the build machine, which some
-        systems (Ubuntu 24.04) forbid. Files outside the Nix store that the
-        configuration names do not exist there.
+        while loading it, if the dialplan uses an application, function or
+        switch that no loaded module provides, or if it plays a sound Asterisk
+        cannot find. Secrets are replaced by zeros, credentials by a
+        throwaway certificate and IPv4 listen addresses by loopback ones, so
+        a sandboxed build needs no privileges. Listening on IPv6 addresses or
+        ports below 1024, or building without the sandbox, needs unprivileged
+        user namespaces on the build machine, which some systems (Ubuntu
+        24.04) forbid. Files outside the Nix store that the configuration
+        names do not exist there.
+
+        A sound has to exist in every language calls use: the default
+        language and those of the PJSIP endpoints in `settings`, where the
+        typed options write them. The check fails on a sound no language has,
+        on one a language lacks, which Asterisk then plays in English, and on
+        a language without any sounds. It sees the sounds that Playback(),
+        Background(), ControlPlayback(), BackgroundDetect() and Read() name in
+        the dialplan, and those of the bridge profiles ConfBridge() uses, but
+        not a sound named by a variable or an absolute path, the prompts of
+        other applications, or a language the dialplan sets during a call.
 
         Without the check, what Asterisk rejects only shows in its log. A
         reload that cannot create a PJSIP object still succeeds and keeps the

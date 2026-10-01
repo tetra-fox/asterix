@@ -23,6 +23,26 @@
     };
   };
 
+  # a phone of the pbx layer with a mailbox, which cases add pbx objects to
+  pbxPhone = {config, ...}: {
+    imports = [self.nixosModules.pbx];
+    pbx = {
+      enable = true;
+      extensions."201" = {
+        password = config.lib.asterisk.secret "/run/secrets/201";
+        voicemail.pin = config.lib.asterisk.secret "/run/secrets/vm-201";
+      };
+    };
+  };
+
+  # sounds of a language, as a sound package lays them out
+  soundsOf = language: names:
+    pkgs.linkFarm "sounds-${language}" (map (name: {
+        name = "sounds/${language}/${name}.gsm";
+        path = pkgs.writeText "${baseNameOf name}.gsm" "";
+      })
+      names);
+
   checkOf = module:
     configCheckOf (evalConfig [
       base
@@ -133,6 +153,44 @@
     unclosedParenthesis = {
       module.services.asterisk.dialplan.contexts.internal.extensions."413" = ["Dial(PJSIP/101"];
       expect = ["No closing parenthesis found? 'Dial(PJSIP/101'"];
+    };
+    # Background() of a sound that does not exist plays nothing, and the menu
+    # waits for a key
+    ivrPromptMissing = {
+      module = {
+        imports = [pbxPhone];
+        pbx.ivrs.main = {
+          prompt.sound = "custom/main-menu";
+          options."1".extension = "201";
+        };
+      };
+      expect = ["(pbx-ivr-main, s): no sound custom/main-menu"];
+    };
+    # a phone in German hears the English sounds the German ones lack, and a
+    # phone in French hears English throughout
+    soundsMissingInLanguage = {
+      module = {
+        imports = [pbxPhone];
+        pbx = {
+          ivrs.main = {
+            prompt.sound = "basic-pbx-ivr-main";
+            options."1".extension = "201";
+          };
+          conferences.board.number = "800";
+        };
+        services.asterisk = {
+          pjsip.endpoints = {
+            "201".settings.language = "de";
+            "101".settings.language = "fr";
+          };
+          sounds.packages = [(soundsOf "de" ["pbx-invalid"])];
+        };
+      };
+      expect = [
+        "(pbx-ivr-main, s): no sound basic-pbx-ivr-main in language de"
+        "bridge profile default_bridge: no sound conf-onlyperson in language de"
+        "language fr has no sounds"
+      ];
     };
     ipv6AddressWithoutUserNamespaces = {
       module.services.asterisk.pjsip.transports.udp.address = "2001:db8::10";
@@ -573,6 +631,51 @@
       services.asterisk.pjsip.endpoints."101".auth.settings.password_digest = "SHA-256:${
         config.lib.asterisk.secret "/run/secrets/101-digest"
       }";
+    };
+    # the sounds of the pbx layer's menus, hours, ring groups and conferences,
+    # which all exist
+    pbxSounds = {config, ...}: {
+      imports = [pbxPhone];
+      pbx = {
+        ivrs.main = {
+          prompt.text = "For the front desk, press 1.";
+          options."1".extension = "201";
+        };
+        hours.office = {
+          timezone = "UTC";
+          open = [
+            {
+              days = "mon-fri";
+              time = "09:00-17:00";
+            }
+          ];
+          closeEarly = "*28";
+        };
+        ringGroups.front = {
+          members = ["201"];
+          external = ["5559000"];
+          trunk = "provider";
+        };
+        conferences.board.number = "800";
+        voicemailMenu = "*97";
+      };
+      services.asterisk.pjsip.trunks.provider = {
+        host = "sip.provider.example";
+        username = "5551000";
+        password = config.lib.asterisk.secret "/run/secrets/trunk";
+      };
+    };
+    # a sound in each language in use, a dialect that finds its language's
+    # sounds, a sound asked for in a language of its own, and names the check
+    # cannot know before a call
+    soundsInLanguages.services.asterisk = {
+      pjsip.endpoints."101".settings.language = "de_CH";
+      sounds.packages = [(soundsOf "de" ["beep"])];
+      dialplan.contexts.internal.extensions."414" = [
+        "Playback(beep)"
+        "Background(hello-world,,en)"
+        "Playback(\${SOUND}&/var/lib/asterisk/greeting)"
+      ];
     };
   };
 in {

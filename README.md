@@ -94,9 +94,9 @@ A full list of options is in the options reference: `nix build .#docs`.
   sops-nix secrets, and they are read when Asterisk starts (see the [examples](examples/)).
 - **Asterisk checks the configuration before it is deployed.** Building the
   system starts Asterisk with the new configuration in the build sandbox. If
-  Asterisk reports an error or a warning while loading it, or the dialplan uses
-  an application, function or switch that no loaded module provides, the build
-  fails.
+  Asterisk reports an error or a warning while loading it, the dialplan uses
+  an application, function or switch that no loaded module provides, or it
+  plays a sound missing in a language your phones use, the build fails.
   See `checkConfig` in the options reference.
 - **Reload instead of restart.** Changes are applied with a reload where
   possible, so calls stay up. Only changes like a new SIP port

@@ -15,6 +15,9 @@
   voicemail = with' {services.asterisk.voicemail.enable = true;};
   queues = with' {services.asterisk.modules.load = ["app_queue.so"];};
   iceEndpoint = with' {services.asterisk.pjsip.endpoints."101".settings.ice_support = true;};
+  # a language other than the default one: the package has English sounds
+  # only, and the build-time check fails a language without sounds
+  language = "en_US";
   password = secret "/run/secrets/campaign";
 
   # keys each freeform section reads, one per value kind, one no Asterisk
@@ -424,7 +427,7 @@ in
     "services.asterisk.pjsip.endpoints.<name>.settings" = freeform {
       int.rtp_timeout = 30;
       bool.send_pai = true;
-      str.language = "de";
+      str.language = language;
       list.set_var = ["A=1" "B=2"];
       wrong.rtp_timeout = 0.5;
     };
@@ -538,7 +541,7 @@ in
     "services.asterisk.pjsip.trunks.<name>.settings" = freeform {
       int.rtp_timeout = 30;
       bool.send_pai = true;
-      str.language = "de";
+      str.language = language;
     };
     "services.asterisk.pjsip.trunks.<name>.transport" = {
       valid = ["udp"];
@@ -628,7 +631,7 @@ in
         {"modules.conf".modules.load = ["app_system.so" "func_shell.so"];}
         {"pjsip.conf"."endpoint:101".send_pai = true;}
         {"pjsip.conf"."endpoint:101".rtp_timeout = 30;}
-        {"pjsip.conf"."endpoint:101".language = "de";}
+        {"pjsip.conf"."endpoint:101".language = language;}
         {"pjsip.conf"."endpoint:101".set_var = ["A=1" "B=2"];}
         {"pjsip.conf"."auth:101".password = secret "/run/secrets/101-settings";}
         {

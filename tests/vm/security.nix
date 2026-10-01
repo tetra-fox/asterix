@@ -376,10 +376,20 @@ in
           # directory, and that is a link to another directory
           assert "File requires escalated privileges" in ami("admin", "GetConfig", "Filename=pjsip.conf")
 
-          # ARI: read-only users too, the trunk's password among them
-          for name, password in [("201", "pw-201"), ("provider-outbound", "trunk-password")]:
-              objects = json.loads(pbx.succeed(f"curl -sf -u viewer:ari-viewer-pw http://127.0.0.1:8088/ari/asterisk/config/dynamic/res_pjsip/auth/{name}"))
-              assert {"attribute": "password", "value": password} in objects, objects
+          # ARI: no PJSIP password, since /ari/asterisk is not loaded, but
+          # read-only users too read voicemail PINs as a variable of any
+          # channel, here one in the menu at 700
+          status = pbx.succeed("curl -s -o /dev/null -w '%{http_code}' -u viewer:ari-viewer-pw http://127.0.0.1:8088/ari/asterisk/config/dynamic/res_pjsip/auth/201")
+          assert status == "404", status
+          asterisk(pbx, "channel originate Local/700@pbx-internal application Wait 60")
+          pbx.wait_until_succeeds("curl -sf -u viewer:ari-viewer-pw http://127.0.0.1:8088/ari/channels | grep -q '\"id\"'")
+          channel = json.loads(pbx.succeed("curl -sf -u viewer:ari-viewer-pw http://127.0.0.1:8088/ari/channels"))[0]["id"]
+          value = pbx.succeed(
+              f"curl -sf -G -u viewer:ari-viewer-pw --data-urlencode 'variable=VM_INFO(201@default,password)' http://127.0.0.1:8088/ari/channels/{channel}/variable"
+          )
+          assert json.loads(value) == {"value": "-4201"}, value
+          asterisk(pbx, "channel request hangup all")
+          wait_idle(pbx)
 
       with subtest("programs the dialplan starts write only to Asterisk's directories and read nothing of /home or other units' secrets"):
           # the secrets are there to be read

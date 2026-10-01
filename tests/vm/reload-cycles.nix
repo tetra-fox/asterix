@@ -159,7 +159,7 @@ in
         def rotate_credential(cycle):
             pbx.succeed(f"printf ari-{cycle:04d} | systemd-creds encrypt --with-key=host --name=ari-password - /var/lib/test-credentials/ari-password")
             status, output = reload()
-            pbx.succeed(f"curl -sf -u app:ari-{cycle:04d} http://127.0.0.1:8088/ari/asterisk/info > /dev/null")
+            pbx.succeed(f"curl -sf -u app:ari-{cycle:04d} http://127.0.0.1:8088/ari/applications > /dev/null")
             return status, output
 
         def missing_secret(_):

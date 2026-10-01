@@ -508,7 +508,7 @@ pkgs.testers.runNixOSTest {
         assert "Authentication accepted" in answer, answer
         wait_journal(pbx, cursor, "Secret: <redacted from logging>")
         # ARI takes it by HTTP basic authentication
-        pbx.succeed(f"curl -sf -u app:{secrets['ari']} http://127.0.0.1:8088/ari/asterisk/info")
+        pbx.succeed(f"curl -sf -u app:{secrets['ari']} http://127.0.0.1:8088/ari/applications")
         # the caller keys in the voicemail PIN
         phone.call("*98")
         wait_journal(pbx, cursor, "Playing 'vm-password")

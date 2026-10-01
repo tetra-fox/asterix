@@ -908,6 +908,9 @@ in {
           # a dependency of res_ari.so since Asterisk 22.5
           "res_websocket_client.so"
         ];
+        # /ari/asterisk shows every PJSIP password to read-only users too, so
+        # it is loaded only when listed in modules.load
+        asteriskResource = lib.hasInfix "res_ari_asterisk.so" files."modules.conf";
         tls =
           lib.hasInfix "tlsprivatekey = /run/credentials/asterisk.service/http-tls-key"
           files."http.conf";
@@ -923,6 +926,7 @@ in {
           true
           true
         ];
+        asteriskResource = false;
         tls = true;
         credentials = [
           "http-tls-cert:/var/lib/acme/pbx/cert.pem"

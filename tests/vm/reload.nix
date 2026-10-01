@@ -476,8 +476,8 @@ in
             pbx.succeed("systemctl reload asterisk.service")
             assert main_pid() == pid, "asterisk was restarted"
             assert reloads(cursor) == ["module reload res_ari.so"], reloads(cursor)
-            pbx.succeed("curl -sf -u app:rotated-ari http://127.0.0.1:8088/ari/asterisk/info")
-            pbx.fail("curl -sf -u app:ari-secret http://127.0.0.1:8088/ari/asterisk/info")
+            pbx.succeed("curl -sf -u app:rotated-ari http://127.0.0.1:8088/ari/applications")
+            pbx.fail("curl -sf -u app:ari-secret http://127.0.0.1:8088/ari/applications")
 
         with subtest("with checkConfig off, a PJSIP object Asterisk rejects keeps its previous version on a reload, and the journal says so"):
             since, cursor = marks(), journal_cursor(pbx)

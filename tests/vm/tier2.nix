@@ -325,6 +325,8 @@ in
             };
           };
         };
+        # /ari/asterisk, whose info and global variables the tests read and write
+        modules.load = ["res_ari_asterisk.so"];
 
         cdr = {
           csv.enable = true;

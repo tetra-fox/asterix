@@ -37,7 +37,9 @@
     || (lib.versionAtLeast version "20.15" && lib.versionOlder version "21");
 
   # res_ari.so is in `needed`; Asterisk reports a missing dependency of it,
-  # and noload can leave out a resource such as res_ari_recordings.so
+  # and noload can leave out a resource such as res_ari_recordings.so.
+  # res_ari_asterisk.so is left out: its /ari/asterisk/config/dynamic shows
+  # every PJSIP password, to read-only users too
   ariModules =
     [
       "res_http_websocket.so"
@@ -53,7 +55,6 @@
       "app_stasis.so"
       "res_ari_model.so"
       "res_ari_applications.so"
-      "res_ari_asterisk.so"
       "res_ari_bridges.so"
       "res_ari_channels.so"
       "res_ari_device_states.so"
@@ -147,7 +148,23 @@ in {
     };
 
     ari = {
-      enable = lib.mkEnableOption "the Asterisk REST Interface (ARI); requires `http.enable`";
+      enable = mkOption {
+        type = types.bool;
+        default = false;
+        example = true;
+        description = ''
+          Whether to enable the Asterisk REST Interface (ARI); requires
+          `http.enable`. It loads the resources for applications, bridges,
+          channels, device states, endpoints, events, playbacks, recordings
+          and sounds, but not `/ari/asterisk` (res_ari_asterisk.so), with
+          `info`, `ping`, `modules` (loads and unloads modules), `logging`
+          (log channels), `variable` (global variables) and `config/dynamic`,
+          which shows and changes PJSIP objects and shows every PJSIP
+          password, to read-only users too. An application that needs them
+          adds `res_ari_asterisk.so` to
+          {option}`services.asterisk.modules.load`.
+        '';
+      };
 
       users = mkOption {
         type = types.attrsOf (
@@ -161,7 +178,9 @@ in {
                 type = types.bool;
                 default = false;
                 description = ''
-                  Only allow GET requests. These still read every PJSIP
+                  Only allow GET requests. These still read voicemail PINs,
+                  with `VM_INFO(<mailbox>,password)` as a variable of any
+                  channel, and with res_ari_asterisk.so loaded every PJSIP
                   password, at `/ari/asterisk/config/dynamic/res_pjsip/auth/<name>`.
                 '';
               };

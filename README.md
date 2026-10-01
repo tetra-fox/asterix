@@ -134,9 +134,11 @@ Other secret managers work the same way, since `secret` only takes a path.
 
 While Asterisk runs, the secrets it holds can be read by root, by the
 `asterisk` user and the programs the dialplan starts, by members of the
-`asterisk` group through the CLI (`asterisk -rx 'pjsip show auths'`), by every
-ARI user, read-only ones too, and by AMI users with some action classes, which
-`services.asterisk.ami.users.<name>.write` lists.
+`asterisk` group through the CLI (`asterisk -rx 'pjsip show auths'`), and by
+AMI users with some action classes, which
+`services.asterisk.ami.users.<name>.write` lists. ARI users, read-only ones
+too, read voicemail PINs while a call is up, and every PJSIP password when
+`res_ari_asterisk.so` is added to `services.asterisk.modules.load`.
 
 Each secret file reaches Asterisk as a systemd credential, as does each of
 `services.asterisk.credentials`, and systemd holds at most 256 for a service:

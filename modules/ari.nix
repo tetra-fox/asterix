@@ -23,9 +23,24 @@
   acfg = cfg.ari;
   asteriskLib = import ../lib {inherit lib;};
   inherit (asteriskLib) format;
-  inherit (import ./lib.nix {inherit lib;}) toSection;
+  inherit (import ./lib.nix {inherit lib;}) limited secretMaxLengths toSection;
 
   credentialPath = kind: "${cfg.paths.credentials}/http-tls-${kind}";
+
+  # HTTP basic authentication carries 255 bytes of `user:password` (main/http.c
+  # ast_http_get_auth), so a longer password never matches; with
+  # password_format = crypt, ari.conf holds a hash and not what clients send
+  users = builtins.filter (s: (s.type or null) == "user" && lib.toLower (toString (s.password_format or "plain")) != "crypt") (format.resolveInheritance (cfg.settings."ari.conf" or {})).sections;
+  passwords = lib.concatMap (user: let
+    ctx = {
+      file = "ari.conf";
+      section = user.name;
+      key = "password";
+    };
+  in
+    map (password: limited user.name (254 - builtins.stringLength user.name) (format.mkValueString {inherit ctx;} password)) (lib.toList (user.password or [])))
+  users;
+  longPasswords = builtins.filter (password: password.room < 0) passwords;
 
   # res_ari links against res_websocket_client since 20.15.0, 21.10.0 and
   # 22.5.0. With autoload off Asterisk cannot resolve that on its own: the
@@ -172,7 +187,11 @@ in {
             options = {
               password = mkOption {
                 type = format.types.secretOrString;
-                description = "Password, normally a secret reference.";
+                description = ''
+                  Password, normally a secret reference. HTTP basic
+                  authentication carries 255 bytes of `<user>:<password>`, so
+                  it can have 254 bytes less the length of the user's name.
+                '';
               };
               readOnly = mkOption {
                 type = types.bool;
@@ -213,6 +232,21 @@ in {
   };
 
   config = mkIf cfg.enable (mkMerge [
+    # settings."ari.conf" can hold users without the typed options
+    {
+      services.asterisk.secretMaxLengths = secretMaxLengths passwords;
+
+      assertions = [
+        {
+          assertion = longPasswords == [];
+          message = ''
+            services.asterisk: ARI passwords longer than HTTP basic authentication carries, 255 bytes of `user:password`; use shorter ones:
+              ${lib.concatMapStringsSep "\n  " (password: "${password.what}, at most ${toString password.bytes} bytes") longPasswords}
+          '';
+        }
+      ];
+    }
+
     (mkIf hcfg.enable {
       services.asterisk = {
         settings."http.conf".general = mkMerge [

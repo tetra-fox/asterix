@@ -31,7 +31,7 @@
   vcfg = cfg.voicemail;
   asteriskLib = import ../lib {inherit lib;};
   inherit (asteriskLib) format secrets;
-  inherit (import ./lib.nix {inherit lib;}) entryOf splitMailbox toSection voicemailLines voicemailMailboxes voicemailSectionKind;
+  inherit (import ./lib.nix {inherit lib;}) entryOf limited secretMaxLengths splitMailbox toSection voicemailLines voicemailMailboxes voicemailSectionKind;
 
   mailboxType = types.submodule (
     {name, ...}: let
@@ -180,14 +180,6 @@
 
   # secrets in them, which app_voicemail splits at every comma
   mailboxLineSecrets = lib.concatMap (mailbox: secrets.fromText mailbox.line) mailboxLines;
-
-  # a value app_voicemail keeps `bytes` of; `room` is what the secrets in it
-  # may add to its other bytes, where `\;` is one byte
-  limited = what: bytes: text: {
-    inherit what bytes;
-    refs = secrets.fromText text;
-    room = bytes - builtins.stringLength (lib.replaceStrings ["\\;"] [";"] (lib.concatStrings (filter isString (builtins.split secrets.placeholderPattern text))));
-  };
 
   # [general] keys app_voicemail copies into a buffer of fixed size, and the
   # bytes it keeps of them (apps/app_voicemail.c actual_load_config); mailcmd
@@ -481,10 +473,7 @@ in {
     (mkIf cfg.enable {
       services.asterisk = {
         fieldSecrets = mailboxLineSecrets;
-        # a secret in several values has the least room of them
-        secretMaxLengths = lib.zipAttrsWith (_: rooms: lib.foldl' lib.min (builtins.head rooms) rooms) (
-          lib.concatMap (value: map (ref: {${secrets.placeholderOf ref} = value.room;}) value.refs) (filter (value: value.room >= 0) limitedValues)
-        );
+        secretMaxLengths = secretMaxLengths limitedValues;
       };
 
       assertions = [

@@ -924,6 +924,32 @@
       assertion = "ari.enable requires services.asterisk.http.enable";
     };
 
+    # HTTP basic authentication carries 255 bytes of `user:password`; a crypt
+    # hash is not what clients send, and a secret's own length counts when
+    # the service starts
+    ariPasswordsLongerThanBasicAuthentication = {
+      module = {config, ...}: {
+        services.asterisk = {
+          http.enable = true;
+          ari = {
+            enable = true;
+            users = {
+              app.password = lib.strings.replicate 252 "a";
+              b.password = lib.strings.replicate 253 "b";
+              hashed.password = lib.strings.replicate 300 "h";
+              vault.password = "${lib.strings.replicate 250 "v"}${config.lib.asterisk.secret "/run/secrets/ari"}";
+            };
+          };
+          settings."ari.conf"."user:hashed".password_format = "crypt";
+        };
+      };
+      assertion = ''
+        services.asterisk: ARI passwords longer than HTTP basic authentication carries, 255 bytes of `user:password`; use shorter ones:
+          app, at most 251 bytes
+          vault, at most 249 bytes
+      '';
+    };
+
     wssWithoutHttpTls = {
       module.services.asterisk = {
         http.enable = true;

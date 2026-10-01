@@ -1014,13 +1014,19 @@ in {
     };
 
     secretMaxLengths = mkOption {
-      type = types.attrsOf types.ints.unsigned;
+      type = types.attrsOf (lib.mkOptionType {
+        name = "leastLength";
+        description = "unsigned integer, the least of its definitions";
+        inherit (types.ints.unsigned) check;
+        merge = _: defs: lib.foldl' lib.min (builtins.head defs).value (map (def: def.value) defs);
+      });
       default = {};
       internal = true;
       description = ''
-        The most bytes Asterisk keeps of a secret, by its placeholder, from the
-        modules that know the file's format. The service does not start when a
-        secret is longer.
+        The most bytes a secret can have where Asterisk uses it, by its
+        placeholder, from the modules that know the file's format; a secret
+        used in several places gets the least of them. The service does not
+        start or reload when a secret is longer.
       '';
     };
 

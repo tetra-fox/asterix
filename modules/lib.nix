@@ -2,6 +2,7 @@
 # lib or config.lib.asterisk.
 {lib}: let
   format = import ../lib/format.nix {inherit lib;};
+  secrets = import ../lib/secrets.nix {inherit lib;};
 
   # `200` or `200@sales` as the mailbox and its voicemail context
   splitMailbox = mailbox: let
@@ -122,6 +123,19 @@ in {
       in "${ref.box}@${ref.context}") (ofKind "aliases")) (_: true);
       search = format.isTrue (voicemailGeneral lines "searchcontexts");
     };
+
+  # a rendered value Asterisk takes `bytes` of; `room` is what the secrets in
+  # it may add to its other bytes, where `\;` is one byte
+  limited = what: bytes: text: {
+    inherit what bytes;
+    refs = secrets.fromText text;
+    room = bytes - builtins.stringLength (lib.replaceStrings ["\\;"] [";"] (lib.concatStrings (builtins.filter builtins.isString (builtins.split secrets.placeholderPattern text))));
+  };
+
+  # services.asterisk.secretMaxLengths for the secrets of `limited` values
+  # that fit without them
+  secretMaxLengths = values:
+    lib.mkMerge (lib.concatMap (value: map (ref: {${secrets.placeholderOf ref} = value.room;}) value.refs) (builtins.filter (value: value.room >= 0) values));
 
   # typed option values as section keys: scalars become defaults, so settings
   # replace them, lists stay definitions, so settings extend them, and nulls

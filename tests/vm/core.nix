@@ -450,6 +450,19 @@ pkgs.testers.runNixOSTest {
         pbx.succeed("printf 1234 > /run/test-secrets/vm-101")
         pbx.succeed("systemctl reload asterisk.service")
 
+    with subtest("an ARI password as long as basic authentication carries logs in, and a byte more fails the reload"):
+        # 255 bytes of `app:<password>`
+        kept = pbx.succeed("cat /run/test-secrets/ari")
+        pbx.succeed("printf %0252d 0 > /run/test-secrets/ari")
+        pbx.fail("systemctl reload asterisk.service")
+        pbx.succeed("journalctl --sync")
+        pbx.succeed("journalctl -u asterisk.service | grep -F 'secret /run/test-secrets/ari is longer than 251 bytes'")
+        pbx.succeed("printf %0251d 0 > /run/test-secrets/ari")
+        pbx.succeed("systemctl reload asterisk.service")
+        pbx.succeed(f"curl -sf -u app:{'0' * 251} http://127.0.0.1:8088/ari/applications")
+        pbx.succeed(f"printf %s {shlex.quote(kept)} > /run/test-secrets/ari")
+        pbx.succeed("systemctl reload asterisk.service")
+
     with subtest("a secret that makes its line longer than 8190 bytes fails the reload"):
         # Asterisk would skip the line and log how it begins, with part of the
         # secret

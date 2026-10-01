@@ -68,9 +68,9 @@ fails xml "<P34>$(placeholder bell)</P34>" "secret /run/secrets/bell contains a 
 fails xml "<P34>$(placeholder lines)</P34>" "secret /run/secrets/lines contains a control character"
 fails asterisk "x = $(placeholder space)" "secret /run/secrets/space has leading or trailing whitespace"
 fails asterisk "101 => $(placeholder commapin),Sales" "secret /run/secrets/commapin is one field of a comma-separated value, so it cannot contain a comma"
-# the bytes Asterisk keeps of a secret, before `;` becomes `\;`
+# the most bytes a secret can have, before `;` becomes `\;`
 check asterisk "101 => $(placeholder shortpin),Sales" '101 => 12\;4,Sales'
-fails asterisk "101 => $(placeholder longpin),Sales" "secret /run/secrets/longpin is longer than 4 bytes, which is all Asterisk keeps of it"
+fails asterisk "101 => $(placeholder longpin),Sales" "secret /run/secrets/longpin is longer than 4 bytes, the most it can have where Asterisk uses it"
 fails asterisk "x = $(placeholder missing)" "secret /run/secrets/missing (credential secret-missing) is not available"
 fails none "x = $(placeholder unknown)" "no credential for $(placeholder unknown)"
 

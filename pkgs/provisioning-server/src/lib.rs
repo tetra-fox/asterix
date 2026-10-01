@@ -22,8 +22,9 @@ use tokio::sync::Semaphore;
 const CONNECTION_TIMEOUT: Duration = Duration::from_secs(30);
 // requests are a request line and a few headers (hyper's minimum is 8 KiB)
 const MAX_REQUEST_BUFFER: usize = 16 * 1024;
-// well below the default file descriptor limit, so accept() cannot run out
-const MAX_CONNECTIONS: usize = 64;
+// half the soft limit of 1024 file descriptors systemd gives the service, so
+// accept() cannot run out
+const MAX_CONNECTIONS: usize = 512;
 // a phone opens one connection at a time; further ones from the same address
 // are closed at once, so one client cannot hold the connections of all others
 const CONNECTIONS_PER_PEER: usize = 4;
@@ -393,6 +394,18 @@ mod tests {
         let server = server("open.xml\n");
         let _idle: Vec<_> = (0..=MAX_CONNECTIONS)
             .map(|_| connect(server, "127.0.0.22"))
+            .collect();
+        let answer = exchange(server, "127.0.0.21", "GET /open.xml HTTP/1.1");
+        assert_eq!(answer, "HTTP/1.1 200 OK");
+    }
+
+    #[test]
+    fn idle_connections_of_sixteen_clients_do_not_stall_another() {
+        let server = server("open.xml\n");
+        let _idle: Vec<_> = (100..116)
+            .flat_map(|host| {
+                (0..CONNECTIONS_PER_PEER).map(move |_| connect(server, &format!("127.0.0.{host}")))
+            })
             .collect();
         let answer = exchange(server, "127.0.0.21", "GET /open.xml HTTP/1.1");
         assert_eq!(answer, "HTTP/1.1 200 OK");

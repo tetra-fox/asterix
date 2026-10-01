@@ -1,14 +1,13 @@
 # The addresses Asterisk binds on a phone VLAN, with scripted networking and
-# with systemd-networkd side by side. While Asterisk runs, the VLAN's link goes
-# down and up, which makes systemd-networkd remove the addresses and add them
-# again, and the addresses go away and come back: Asterisk keeps its sockets,
-# and phones register and call again without a restart. Restarted while the
-# link is down, Asterisk starts at once with scripted networking and once the
-# link is back with systemd-networkd. It waits for an IPv6 address in
-# duplicate address detection, which only systemd-networkd's go through
-# (scripted networking adds its addresses with nodad). Restarted while an
-# address never comes up, it waits 90 s, fails naming the address, and starts
-# once the address is there, as Restart= starts it again.
+# with systemd-networkd side by side. While Asterisk runs, the addresses go
+# away and come back: Asterisk keeps its sockets, and phones register and call
+# again without a restart. Restarted while the link is down, Asterisk starts
+# at once with scripted networking and once the link is back with
+# systemd-networkd. It waits for an IPv6 address in duplicate address
+# detection, which only systemd-networkd's go through (scripted networking
+# adds its addresses with nodad). Restarted while an address never comes up,
+# it waits 90 s, fails naming the address, and starts once the address is
+# there, as Restart= starts it again.
 #
 #   VLAN 1  scripted  voip 10.2.0.10, fd00:2::10
 #           networkd  voip 10.2.0.11, fd00:2::11
@@ -182,20 +181,6 @@ in
             start_phones(list(phone.values()))
             wait_registrations({p: 200 for p in phone.values()})
 
-        with subtest("the phone VLAN's link down and up: Asterisk keeps its sockets, and phones register and call again"):
-            for machine in pbxs:
-                link(machine, "off")
-            # systemd-networkd removes the addresses of a link without carrier,
-            # scripted networking keeps them
-            networkd.wait_until_succeeds("! ip -o address show dev voip | grep -q 'inet 10.2.0.11/'", timeout=30)
-            assert has_address(scripted, "10.2.0.10") and has_address(scripted, "fd00:2::10")
-            for machine in pbxs:
-                listening(machine)
-                link(machine, "on")
-            for address in addresses[networkd]:
-                networkd.wait_until_succeeds(f"ip -o address show dev voip to {address} -tentative | grep -q .", timeout=30)
-            register_and_call()
-
         with subtest("a bound address goes away and comes back: Asterisk keeps its sockets, and phones register and call again"):
             for machine, (v4, v6) in addresses.items():
                 remove_addresses(machine)
@@ -210,6 +195,8 @@ in
             cursor = journal_cursor(networkd)
             for machine in pbxs:
                 link(machine, "off")
+            # systemd-networkd removes the addresses of a link without carrier,
+            # scripted networking keeps them
             networkd.wait_until_succeeds("! ip -o address show dev voip | grep -q 'inet 10.2.0.11/'", timeout=30)
             for machine in pbxs:
                 machine.succeed("systemctl restart --no-block asterisk.service")

@@ -2049,10 +2049,15 @@
               write = "sys,call";
             };
           };
+          users.lister = {
+            secret = config.lib.asterisk.secret "/run/secrets/ami";
+            settings.read = ["call" "system"];
+          };
         };
       };
       assertion = ''
-        [monitor] read = ",call"
+        [lister] read = ["call","system"]
+          [monitor] read = ",call"
           [monitor] write = "sys,call"
       '';
     };

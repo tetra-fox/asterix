@@ -75,14 +75,19 @@
   # read and write values of the user sections, settings included, that are
   # not classes joined by commas: manager.c takes an item before the last as
   # the start of a class name, so an empty one grants every class and `sys`
-  # grants system (main/manager.c ast_instring)
+  # grants system (main/manager.c ast_instring), and of a list, which renders
+  # a line per item, it keeps the last
   isClassList = value: builtins.isString value && builtins.all (item: builtins.elem item classes) (lib.splitString "," value);
   misreadClasses =
     lib.concatMap (
       user:
         lib.concatMap (
-          key:
-            map (value: "[${user.name}] ${key} = ${builtins.toJSON value}") (builtins.filter (value: !isClassList value) (lib.toList user.${key}))
+          key: let
+            values = lib.toList user.${key};
+          in
+            if builtins.length values > 1
+            then ["[${user.name}] ${key} = ${builtins.toJSON values}"]
+            else map (value: "[${user.name}] ${key} = ${builtins.toJSON value}") (builtins.filter (value: !isClassList value) values)
         ) (builtins.filter (key: builtins.elem (lib.toLower key) ["read" "write"]) (builtins.attrNames user))
     )
     users;
@@ -259,7 +264,7 @@ in {
       {
         assertion = misreadClasses == [];
         message = ''
-          services.asterisk: manager.conf read and write values must be classes joined by commas. Asterisk takes an item before the last as the start of a class name, so an empty one grants every class, and ignores a last item that is no class:
+          services.asterisk: manager.conf read and write values must be one string of classes joined by commas. Asterisk takes an item before the last as the start of a class name, so an empty one grants every class, ignores a last item that is no class, and of several lines keeps the last:
             ${concatStringsSep "\n  " misreadClasses}
         '';
       }

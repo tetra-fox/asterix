@@ -74,6 +74,12 @@ in
             prefixLength = 24;
           }
         ];
+        # the malformed requests make Asterisk log about 10 MB at info, which the
+        # serial console carries only by keeping a vCPU in its interrupt handler
+        services.journald.extraConfig = lib.mkAfter "MaxLevelConsole=notice";
+        # all of it reaches the journal, which the test reads: journald drops a
+        # unit's lines past its default rate
+        services.journald.rateLimitBurst = 0;
 
         pbx = {
           enable = true;

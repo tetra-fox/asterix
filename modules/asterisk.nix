@@ -977,9 +977,15 @@ in {
         card to take one from. Listening on IPv6 addresses or ports below
         1024, or building without the sandbox, needs unprivileged user
         namespaces on the build machine, which some systems (Ubuntu 24.04)
-        forbid. Files outside the Nix store that the configuration names do
-        not exist there. With {option}`services.asterisk.modules.autoload`,
-        the check leaves out the problems of modules only autoload loads.
+        forbid.
+
+        Files outside the Nix store that the configuration names do not
+        exist where the check runs. Asterisk reads asterisk.conf and
+        stasis.conf before its logger starts, so the check does not see a
+        mistake in them; one in stasis.conf makes Asterisk use the defaults
+        of the whole file. With
+        {option}`services.asterisk.modules.autoload`, the check leaves out
+        the problems of modules only autoload loads.
 
         A sound has to exist in every language calls use: the default
         language and those of the PJSIP endpoints in `settings`, where the

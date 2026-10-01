@@ -457,6 +457,10 @@
 
   asteriskBin = "${cfg.package}/bin/asterisk";
 
+  # the unit's, and the table step's in asterisk-config, so master.db gets the
+  # same mode whichever creates it
+  umask = "0027";
+
   # files that name a credential Asterisk reads itself (a TLS key, ...), by
   # credential: a changed credential counts as a change of these files
   credentialFiles =
@@ -476,6 +480,7 @@
       findutils
       gnugrep
       (callPackage ../pkgs/render-secrets/package.nix {})
+      (callPackage ../pkgs/sqlite-tables/package.nix {})
     ];
     text = ''
       umask 0077
@@ -503,6 +508,14 @@
         echo "asterisk-config: unresolved secret placeholder in:" >&2
         grep -rlF '@NIX_ASTERISK_SECRET:' "$new" >&2
         exit 1
+      fi
+      # the tables and columns the new SQLite CDR and CEL files name; a reload
+      # that cannot add them applies nothing, a start goes on without them
+      if ! (umask ${umask} && sqlite-tables ${cfg.paths.log}/master.db "$new"); then
+        if [ "$mode" != start ]; then
+          exit 1
+        fi
+        echo "asterisk-config: starting Asterisk with master.db as it is" >&2
       fi
 
       find "$new" -type f -exec chmod 0400 {} +
@@ -1419,7 +1432,7 @@ in {
             # a list: modules add subdirectories (cdr-csv); Asterisk creates none
             LogsDirectory = ["asterisk"];
             LogsDirectoryMode = "0750";
-            UMask = "0027";
+            UMask = umask;
             LimitNOFILE = 65536;
             # a core dump holds every secret Asterisk read; systemd-coredump
             # keeps none of a process whose RLIMIT_CORE is 0

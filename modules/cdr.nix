@@ -124,7 +124,12 @@
       type = types.bool;
       default = false;
       example = true;
-      description = "Whether to write ${what} records to an SQLite database.${notes}";
+      description = ''
+        Whether to write ${what} records to an SQLite database. Before
+        Asterisk starts and before each reload, the table is created as the
+        module would create it and the columns it lacks are added; none is
+        ever removed, so the records of an older configuration still fit.${notes}
+      '';
     };
     table = mkOption {
       type = types.str;

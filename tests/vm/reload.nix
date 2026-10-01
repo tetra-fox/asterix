@@ -11,16 +11,19 @@
 # astdb). With checkConfig off, a PJSIP object Asterisk rejects keeps its
 # previous version on a reload, until the next restart drops it, and the
 # journal says so both times; a file a module rejects as a whole fails the
-# deploy. Globals and extensions changed at runtime, from the dialplan and the
-# CLI, are back to the configuration after `dialplan reload`, `module reload
-# pbx_config.so` and `core reload`, and after a deploy that changes
-# extensions.conf, which also removes a global the configuration no longer
-# has; a deploy that leaves extensions.conf alone, and a reload with nothing
-# changed, keep them. There is no `dialplan save`; with writeprotect off it
-# cannot write the rendered extensions.conf, and what it saves elsewhere is
-# not loaded. A secret PIN no phone can type fails the reload. With pbx_ael
-# loaded, a deploy of extensions.conf or extensions.ael reloads pbx_config and
-# then pbx_ael, and the globals of the AEL dialplan stay.
+# deploy. A deploy whose SQLite CDR and CEL files name columns or tables
+# master.db lacks adds them first, so the records fill them, and switching
+# back removes none; one that cannot add them fails and applies nothing, and a
+# start goes on without them. Globals and extensions changed at runtime, from
+# the dialplan and the CLI, are back to the configuration after `dialplan
+# reload`, `module reload pbx_config.so` and `core reload`, and after a deploy
+# that changes extensions.conf, which also removes a global the configuration
+# no longer has; a deploy that leaves extensions.conf alone, and a reload with
+# nothing changed, keep them. There is no `dialplan save`; with writeprotect
+# off it cannot write the rendered extensions.conf, and what it saves
+# elsewhere is not loaded. A secret PIN no phone can type fails the reload.
+# With pbx_ael loaded, a deploy of extensions.conf or extensions.ael reloads
+# pbx_config and then pbx_ael, and the globals of the AEL dialplan stay.
 {
   pkgs,
   self,
@@ -301,6 +304,23 @@ in
         modules.configuration = {
           services.asterisk.modules.load = ["app_system.so"];
         };
+        # CDR and CEL columns master.db does not have yet, then other tables
+        columns.configuration = {
+          services.asterisk.settings = {
+            "cdr_sqlite3_custom.conf".master = {
+              columns = "calldate, src, dst, linkedid";
+              values = "'\${CDR(start)}', '\${CDR(src)}', '\${CDR(dst)}', '\${CDR(linkedid)}'";
+            };
+            "cel_sqlite3_custom.conf".master = {
+              columns = "eventtype, exten, eventenum";
+              values = "'\${eventtype}', '\${CHANNEL(exten)}', '\${eventenum}'";
+            };
+          };
+        };
+        tables.configuration = {
+          services.asterisk.cdr.sqlite.table = "calls";
+          services.asterisk.cel.sqlite.table = "events";
+        };
         secret-added.configuration = {config, ...}: {
           sops.secrets.sip-103.reloadUnits = ["asterisk.service"];
           services.asterisk.pjsip.endpoints."103" = {
@@ -442,6 +462,9 @@ in
         def channel_events_recorded():
             """A channel started now runs to its end in master.db's CEL table."""
             wait_row(f"select 1 from cel where exten = '{record_call()}' and eventtype = 'CHAN_END'")
+
+        def columns(table):
+            return pbx.succeed(f"{SQLITE} \"select name from pragma_table_info('{table}')\"").split()
 
         def shown(change):
             return change["shows"] in asterisk(pbx, change["show"])
@@ -665,6 +688,65 @@ in
             alice.hangup()
             wait_idle(pbx)
             assert registers() == registered
+
+        sqlite_reloads = ["module refresh cel_sqlite3_custom.so", "module reload cdr_sqlite3_custom.so"]
+
+        with subtest("a deploy that names CDR and CEL columns master.db lacks adds them, and the records fill them"):
+            # created before Asterisk started, as Asterisk would have created it
+            assert pbx.succeed("stat -c '%U:%G %a' /var/log/asterisk/master.db").strip() == "asterisk:asterisk 640"
+            cursor = journal_cursor(pbx)
+            assert switch("columns") == ["reloading"]
+            assert reloads(cursor) == sqlite_reloads, reloads(cursor)
+            number = record_call()
+            wait_row(f"select 1 from cdr where dst = '{number}' and length(linkedid) > 0")
+            wait_row(f"select 1 from cel where exten = '{number}' and eventenum = 'CHAN_END'")
+
+        with subtest("a deploy that names other tables creates them, and the records go there"):
+            cursor = journal_cursor(pbx)
+            assert switch("tables") == ["reloading"]
+            assert reloads(cursor) == sqlite_reloads, reloads(cursor)
+            number = record_call()
+            wait_row(f"select 1 from calls where dst = '{number}'")
+            wait_row(f"select 1 from events where exten = '{number}' and eventtype = 'CHAN_END'")
+
+        with subtest("switching back keeps every table and column, and the records go to the first tables again"):
+            assert switch() == ["reloading"]
+            number = record_call()
+            wait_row(f"select 1 from cdr where dst = '{number}' and linkedid is null")
+            wait_row(f"select 1 from cel where exten = '{number}' and eventtype = 'CHAN_END' and eventenum is null")
+            assert columns("calls") and columns("events"), (columns("calls"), columns("events"))
+
+        with subtest("a deploy with a column master.db cannot take fails and applies nothing, and a reload applies it once master.db takes it"):
+            pid, cursor = main_pid(), journal_cursor(pbx)
+            pbx.succeed(f"{SQLITE} 'ALTER TABLE cdr DROP COLUMN linkedid' && chmod 0440 /var/log/asterisk/master.db")
+            status, output = pbx.execute(f"{base}/specialisation/columns/bin/switch-to-configuration test 2>&1")
+            assert status == 4 and "Failed to reload asterisk.service" in output, output
+            assert main_pid() == pid, "asterisk was restarted"
+            journal = journal_since(pbx, cursor)
+            assert "sqlite-tables: cannot add the columns that cdr_sqlite3_custom.conf names to cdr in /var/log/asterisk/master.db" in journal, journal
+            assert reloads(cursor) == [], journal
+            pbx.fail("grep -q linkedid /run/asterisk/config/cdr_sqlite3_custom.conf")
+            pbx.succeed("chmod 0640 /var/log/asterisk/master.db")
+            cursor = journal_cursor(pbx)
+            pbx.succeed("systemctl reload asterisk.service")
+            assert reloads(cursor) == sqlite_reloads, reloads(cursor)
+            number = record_call()
+            wait_row(f"select 1 from cdr where dst = '{number}' and length(linkedid) > 0")
+            assert switch() == ["reloading"]
+
+        with subtest("Asterisk starts when master.db cannot take a column it lacks, and the next start adds it"):
+            pid, cursor = main_pid(), journal_cursor(pbx)
+            pbx.succeed(f"{SQLITE} 'ALTER TABLE cel DROP COLUMN peer' && chmod 0440 /var/log/asterisk/master.db")
+            pbx.succeed("systemctl restart asterisk.service")
+            assert main_pid() != pid, "asterisk was not restarted"
+            journal = journal_since(pbx, cursor)
+            assert "sqlite-tables: cannot add the columns that cel_sqlite3_custom.conf names to cel in /var/log/asterisk/master.db" in journal, journal
+            assert "asterisk-config: starting Asterisk with master.db as it is" in journal, journal
+            pbx.succeed("chmod 0640 /var/log/asterisk/master.db")
+            pbx.succeed("systemctl restart asterisk.service")
+            assert "peer" in columns("cel"), columns("cel")
+            channel_events_recorded()
+            registrations_kept(registered)
 
         def dialplan_globals():
             return dict(re.findall(r"^   (\w+)=(.*)$", asterisk(pbx, "dialplan show globals"), re.M))

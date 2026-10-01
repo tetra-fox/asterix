@@ -1,12 +1,13 @@
 # openFirewall on a running system, read from the firewall's ruleset and
 # probed on the wire. One PBX has the iptables firewall and opens, on one
-# interface only, typed UDP, TCP and TLS transports, a UDP port below 1024,
-# freeform ones (a protocol in capitals, one inheriting from a template, an
-# IPv6 one), AMI on a port settings chose and HTTP and HTTPS with their own
-# openFirewall, and its RTP range. The other has the nftables firewall and
-# opens its transports and RTP range on every interface, but neither AMI nor
-# HTTP, which it runs without their openFirewall. The rulesets hold exactly
-# these ports, for IPv4 and IPv6. A prober on both networks finds them open
+# interface only, typed UDP transports with their TCP listeners, TCP and TLS
+# ones, a UDP port below 1024 and its TCP listener, freeform ones (a protocol
+# in capitals, one inheriting from a template, an IPv6 one), AMI on a port
+# settings chose and HTTP and HTTPS with their own openFirewall, and its RTP
+# range. The other has the nftables firewall and opens its transports and RTP
+# range on every interface, but neither AMI nor HTTP, which it runs without
+# their openFirewall. The rulesets hold exactly these ports, for IPv4 and
+# IPv6. A prober on both networks finds them open
 # (answering or refusing) and every other port dropped: every port of each
 # PBX's first address, over TCP and UDP, and the ports of either PBX and
 # their neighbours on the other addresses. Each PBX also relaxes the sandbox
@@ -30,7 +31,7 @@
   opened = {
     iptables = {
       interfaces = ["eth1"];
-      tcp = [5039 5061 5070 5090 5100 8088 8089];
+      tcp = [506 5039 5060 5061 5070 5090 5100 8088 8089];
       udp = [506 5060 5080 5110];
       rtp = {
         from = 10000;
@@ -42,7 +43,7 @@
         "eth1"
         "eth2"
       ];
-      tcp = [5070];
+      tcp = [5060 5070];
       udp = [5060];
       rtp = {
         from = 20000;

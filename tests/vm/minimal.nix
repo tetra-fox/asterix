@@ -1,5 +1,6 @@
 # examples/minimal.nix: two phones register and call each other, with media
-# relayed by Asterisk in both directions.
+# relayed by Asterisk in both directions, also when a phone registered over
+# UDP sends its INVITE of 1300 bytes or more over TCP, as RFC 3261 18.1.1 asks.
 {
   pkgs,
   self,
@@ -29,7 +30,7 @@ pkgs.testers.runNixOSTest {
     };
   };
 
-  testScript =
+  testScript = {nodes, ...}:
     builtins.readFile ./phone.py
     + ''
       start_all()
@@ -53,5 +54,22 @@ pkgs.testers.runNixOSTest {
           bob.call("101")
           print(wait_for_media_both_ways(pbx, [alice, bob]))
           bob.hangup()
+          wait_idle(pbx)
+
+      with subtest("102 calls 101 from a phone that sends its INVITE with credentials over TCP"):
+          # by address: pjsip moves a request to TCP only when the first address
+          # it resolved is IPv4 UDP (sip_util.c), and pbx resolves to IPv6 first
+          bob.stop()
+          carol = Phone(phones, "carol", "102", "secret-102", "${nodes.pbx.networking.primaryIPAddress}", sip_port=5062, cli_port=2302, tcp=True)
+          carol.start()
+          carol.wait_registered()
+          carol.call("101")
+          carol.wait_count("Call [0-9]+ (state changed to CONFIRMED|is DISCONNECTED)", 1)
+          # the INVITE that went over TCP and how the call ended, with their times
+          lines = re.findall(r"^.*(?:Request msg INVITE/\S+ \S+ to TCP |is DISCONNECTED).*$", carol.log_text(), re.M)
+          assert lines and not any("DISCONNECTED" in line for line in lines), lines
+          assert carol.count("exceeds UDP size threshold") >= 1
+          print(wait_for_media_both_ways(pbx, [alice, carol]))
+          carol.hangup()
     '';
 }

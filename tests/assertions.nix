@@ -627,6 +627,90 @@
       assertions = [];
     };
 
+    # the baseline's udp transport listens on TCP 0.0.0.0:5060 too
+    tcpListenerOnATcpTransport = {
+      module.services.asterisk.pjsip.transports.tcp.protocol = "tcp";
+      assertion = "udp-tcp (0.0.0.0:5060) and tcp (tcp, 0.0.0.0:5060): set pjsip.transports.udp.tcp = false to keep tcp, or remove tcp to let udp-tcp take TCP there with the settings of udp";
+    };
+
+    tcpListenerTurnedOff = {
+      module.services.asterisk.pjsip.transports = {
+        udp.tcp = false;
+        tcp.protocol = "tcp";
+      };
+      assertions = [];
+    };
+
+    # a family's wildcard address takes the port on its other addresses, and
+    # freeform transports count with their protocol in any case
+    tcpListenerUnderAWildcard = {
+      module.services.asterisk = {
+        pjsip.transports = {
+          udp.tcp = false;
+          lan = {
+            address = "10.0.20.10";
+            port = 5070;
+          };
+          v6.address = "2001:db8::10";
+        };
+        settings."pjsip.conf" = {
+          stream = {
+            type = "transport";
+            protocol = "TCP";
+            bind = "0.0.0.0:5070";
+          };
+          stream6 = {
+            type = "transport";
+            protocol = "tcp";
+            bind = "[::]";
+          };
+        };
+      };
+      assertions = [
+        ''
+          services.asterisk: a udp transport's TCP listener (pjsip.transports.<name>.tcp) and another transport would listen on the same TCP port, which only one of them gets:
+            lan-tcp (10.0.20.10:5070) and stream (tcp, 0.0.0.0:5070): set pjsip.transports.lan.tcp = false to keep stream, or remove stream to let lan-tcp take TCP there with the settings of lan
+            v6-tcp ([2001:db8::10]:5060) and stream6 (tcp, [::]:5060): set pjsip.transports.v6.tcp = false to keep stream6, or remove stream6 to let v6-tcp take TCP there with the settings of v6
+        ''
+      ];
+    };
+
+    # another family, another port or another address
+    tcpListenerBesideTcpTransports = {
+      module.services.asterisk.pjsip.transports = {
+        tcp6 = {
+          protocol = "tcp";
+          address = "::";
+        };
+        tcp = {
+          protocol = "tcp";
+          port = 5070;
+        };
+        lan = {
+          address = "10.0.20.10";
+          port = 5080;
+        };
+        lan2 = {
+          protocol = "tcp";
+          address = "10.0.20.11";
+          port = 5080;
+        };
+      };
+      assertions = [];
+    };
+
+    tcpOnATlsTransport = {
+      module.services.asterisk.pjsip.transports.tls = {
+        protocol = "tls";
+        tls = {
+          certFile = "/var/lib/acme/pbx/cert.pem";
+          keyFile = "/var/lib/acme/pbx/key.pem";
+        };
+        tcp = true;
+      };
+      assertions = ["services.asterisk: only a udp transport takes `tcp`, which gives it a TCP listener; remove `tcp = true` from pjsip.transports.tls."];
+    };
+
     rtpRangeInverted = {
       module.services.asterisk.rtp.portRange = {
         from = 20000;
@@ -1836,8 +1920,9 @@
 
     # Asterisk hands each phone of a call with direct media the address the
     # other gave: 211 gives a private one, 203 one of a network that 201 and
-    # 202 may have no route to; 212 is pinned to no transport and 213 to one
-    # on every address, so their network is unknown
+    # 202, pinned to lan1's TCP listener, may have no route to; 212 is pinned
+    # to no transport and 213 to one on every address, so their network is
+    # unknown
     directMediaThatMayNotReach = {
       module = {config, ...}: let
         phone = extension: settings:
@@ -1852,10 +1937,6 @@
           pjsip = {
             transports = {
               lan1.address = "10.3.1.10";
-              lan1-tcp = {
-                protocol = "tcp";
-                address = "10.3.1.10";
-              };
               lan2.address = "10.3.2.10";
             };
             endpoints = {

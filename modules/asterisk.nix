@@ -32,6 +32,7 @@
   asteriskLib = import ../lib {inherit lib;};
   inherit (asteriskLib) format secrets;
   moduleLib = import ./lib.nix {inherit lib;};
+  inherit (moduleLib) bindHost parseBindPort;
 
   paths = {
     template = "/etc/asterisk";
@@ -677,31 +678,7 @@
   '';
 
   # Ports derived from the (typed or freeform) configuration.
-  parseBindPort = bind: default: let
-    bracketed = builtins.match "[[].*[]]:([0-9]+)" bind;
-    plain = builtins.match "[^:]*:([0-9]+)" bind;
-  in
-    if bracketed != null
-    then lib.toInt (builtins.head bracketed)
-    else if plain != null
-    then lib.toInt (builtins.head plain)
-    else default;
-
-  transportPorts =
-    map (
-      t: let
-        # Asterisk reads the protocol in any case (res_pjsip/config_transport.c)
-        protocol = lib.toLower (t.protocol or "udp");
-      in {
-        inherit protocol;
-        port = parseBindPort (toString (t.bind or "0.0.0.0")) (
-          if protocol == "tls"
-          then 5061
-          else 5060
-        );
-      }
-    )
-    pjsipTransports;
+  transportPorts = map moduleLib.transportListener pjsipTransports;
 
   toPort = v:
     if builtins.isString v
@@ -736,25 +713,16 @@
   lowPort = port: port < 1024;
   needsLowPorts = builtins.any lowPort listenPorts;
 
-  # Specific addresses Asterisk binds (not wildcard or loopback). With
-  # scripted networking, static addresses of interfaces other than the default
-  # gateway's are not ordered before network-online.target, and a transport
-  # that fails to bind at startup stays down: the service waits for them.
-  bindHost = bind: let
-    bracketed = builtins.match "[[]([^]]+)[]](:[0-9]+)?" bind;
-    ipv4 = builtins.match "([0-9.]+)(:[0-9]+)?" bind;
-  in
-    if bracketed != null
-    then builtins.head bracketed
-    else if ipv4 != null
-    then builtins.head ipv4
-    else bind;
   # an IPv4 address is four parts of 0 to 255; the check gives each one a
   # loopback address of its own, which would hide a value that is no address
   isAddress = a: let
     part = "(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])";
   in
     builtins.match "${part}([.]${part}){3}" a != null || lib.hasInfix ":" a;
+  # Specific addresses Asterisk binds (not wildcard or loopback). With
+  # scripted networking, static addresses of interfaces other than the default
+  # gateway's are not ordered before network-online.target, and a transport
+  # that fails to bind at startup stays down: the service waits for them.
   bindAddresses = unique (
     filter
     (
@@ -770,7 +738,7 @@
         ])
     )
     (
-      map (t: bindHost (toString (t.bind or "0.0.0.0"))) pjsipTransports
+      map (t: t.host) transportPorts
       ++ optional (format.isTrue (httpGeneral.enabled or false)) (toString (httpGeneral.bindaddr or "0.0.0.0"))
       ++ optional (format.isTrue (httpGeneral.tlsenable or false)) (
         bindHost (toString (httpGeneral.tlsbindaddr or "0.0.0.0"))
@@ -1082,7 +1050,9 @@ in {
       default = false;
       description = ''
         Open the ports Asterisk is configured to use: PJSIP transports (UDP
-        for `udp`, TCP for `tcp`/`tls`), the RTP port range and any ports
+        for `udp`, TCP for `tcp`/`tls` and for the TCP listener of a `udp`
+        one, see {option}`services.asterisk.pjsip.transports.<name>.tcp`),
+        the RTP port range and any ports
         typed modules add (for example AMI or HTTP when their own
         `openFirewall` is set). Transports come from `settings`, where the
         typed options write them; those written in `extraConfig` or in

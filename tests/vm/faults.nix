@@ -112,10 +112,8 @@ in
             sqlite.enable = true;
           };
           pjsip = {
-            transports = {
-              udp = {};
-              tcp.protocol = "tcp";
-            };
+            # with its TCP listener, which the TCP phones connect to
+            transports.udp = {};
             # the TCP phones SIPp plays; they share an auth user, since SIPp
             # takes the digest's user from its command line
             endpoints = lib.genAttrs tcpPhones (_: {

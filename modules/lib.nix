@@ -86,8 +86,31 @@
       else if aliases != "" && lower == aliases
       then "aliases"
       else "context";
+
+  # the host of a `bind` or `tlsbindaddr` value: `host`, `host:port` or
+  # `[host]:port`
+  bindHost = bind: let
+    bracketed = builtins.match "[[]([^]]+)[]](:[0-9]+)?" bind;
+    ipv4 = builtins.match "([0-9.]+)(:[0-9]+)?" bind;
+  in
+    if bracketed != null
+    then builtins.head bracketed
+    else if ipv4 != null
+    then builtins.head ipv4
+    else bind;
+
+  # the port of such a value, or `default` when it names none
+  parseBindPort = bind: default: let
+    bracketed = builtins.match "[[].*[]]:([0-9]+)" bind;
+    plain = builtins.match "[^:]*:([0-9]+)" bind;
+  in
+    if bracketed != null
+    then lib.toInt (builtins.head bracketed)
+    else if plain != null
+    then lib.toInt (builtins.head plain)
+    else default;
 in {
-  inherit splitMailbox voicemailLines entryOf voicemailSectionKind;
+  inherit splitMailbox voicemailLines entryOf voicemailSectionKind bindHost parseBindPort;
 
   # the mailboxes of voicemail.conf, as { contexts.<context>.<box> = true;
   # aliases."<box>@<context>" = true; search; }, raw text included, or null
@@ -171,6 +194,23 @@ in {
     if interfaces == []
     then ports
     else {interfaces = lib.genAttrs interfaces (_: ports);};
+
+  # the name of a transport section of the final pjsip.conf, its protocol and
+  # the host and port it binds
+  transportListener = section: let
+    # Asterisk reads the protocol in any case (res_pjsip/config_transport.c)
+    protocol = lib.toLower (section.protocol or "udp");
+    bind = toString (section.bind or "0.0.0.0");
+  in {
+    inherit (section) name;
+    inherit protocol;
+    host = bindHost bind;
+    port = parseBindPort bind (
+      if protocol == "tls"
+      then 5061
+      else 5060
+    );
+  };
 
   # the names in `interfaces` that Linux refuses for an interface: it takes 1
   # to 15 bytes without /, : or whitespace, other than . and .. (net/core/dev.c

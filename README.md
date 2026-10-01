@@ -75,7 +75,8 @@ in
 ```
 
 Phones register as user `101`/`102` with the password from `secrets.yaml`, at
-the host's address on port 5060. `asterisk -rx "pjsip show endpoints"` shows them.
+the host's address on port 5060, over UDP or TCP.
+`asterisk -rx "pjsip show endpoints"` shows them.
 
 `openFirewall` opens SIP and RTP on every interface. On a host with a public
 address, limit it with `firewallInterfaces` and a SIP ACL (`pjsip.acls`), as
@@ -184,7 +185,8 @@ services.asterisk.settings."followme.conf"."101".number = [ "5551234,30" ];
 
 `settings` also changes what the options generate. Those sections have ids:
 `endpoint:<name>`, `auth:<name>`, `aor:<name>`, `identify:<name>`,
-`registration:<name>`, `transport:<name>` and `acl:<name>` in pjsip.conf,
+`registration:<name>`, `transport:<name>`, `tcp-transport:<name>` (the TCP
+listener of a UDP transport) and `acl:<name>` in pjsip.conf,
 `bridge:<name>`, `user:<name>` and `menu:<name>` in confbridge.conf, and the
 context name in extensions.conf.
 

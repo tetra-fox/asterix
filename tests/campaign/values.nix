@@ -492,6 +492,12 @@ in
       int.cos = 3;
       bool.symmetric_transport = true;
     };
+    # the campaign's transport is a tcp one, and only a udp one takes a TCP
+    # listener
+    "services.asterisk.pjsip.transports.<name>.tcp" = {
+      valid = [(with' {services.asterisk.pjsip.transports.lan.protocol = lib.mkForce "udp";} true)];
+      invalid = [true];
+    };
     "services.asterisk.pjsip.transports.<name>.tls.caListFile".valid = ["/var/lib/acme/pbx/chain.pem"];
     # a tls transport needs both
     "services.asterisk.pjsip.transports.<name>.tls.certFile" = {

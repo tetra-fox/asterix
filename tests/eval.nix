@@ -47,6 +47,11 @@ in {
           bind = 0.0.0.0:5060
           protocol = udp
 
+          [udp-tcp]
+          type = transport
+          bind = 0.0.0.0:5060
+          protocol = tcp
+
           [101]
           type = aor
           max_contacts = 1
@@ -460,6 +465,66 @@ in {
       expected = true;
     };
 
+    # a udp transport takes TCP on its address and port too, through a tcp
+    # transport with its external addresses, local networks and settings,
+    # which the firewall opens; `tcp = false` leaves it out
+    testUdpTransportTakesTcpToo = {
+      expr =
+        map (tcp: let
+          config = evalConfig [
+            phone
+            {
+              services.asterisk = {
+                openFirewall = true;
+                pjsip.transports.udp = {
+                  address = "10.0.20.10";
+                  externalSignalingAddress = "203.0.113.1";
+                  externalMediaAddress = "203.0.113.1";
+                  localNet = ["10.0.0.0/8"];
+                  allowReload = true;
+                  settings.tos = "cs3";
+                  inherit tcp;
+                };
+              };
+            }
+          ];
+          pjsip = config.services.asterisk.renderedFiles."pjsip.conf";
+        in {
+          named = lib.hasInfix "[udp-tcp]" pjsip;
+          listener =
+            lib.hasInfix ''
+              [udp-tcp]
+              type = transport
+              allow_reload = yes
+              bind = 10.0.20.10:5060
+              external_media_address = 203.0.113.1
+              external_signaling_address = 203.0.113.1
+              local_net = 10.0.0.0/8
+              protocol = tcp
+              tos = cs3
+            ''
+            pjsip;
+          inherit (config.networking.firewall) allowedTCPPorts allowedUDPPorts;
+        }) [
+          true
+          false
+        ];
+      expected = [
+        {
+          named = true;
+          listener = true;
+          allowedTCPPorts = [5060];
+          allowedUDPPorts = [5060];
+        }
+        {
+          named = false;
+          listener = false;
+          allowedTCPPorts = [];
+          allowedUDPPorts = [5060];
+        }
+      ];
+    };
+
     testFirewallPerInterface = {
       expr = let
         config = evalConfig [
@@ -488,7 +553,10 @@ in {
       };
       expected = {
         voip = {
-          allowedTCPPorts = [5061];
+          allowedTCPPorts = [
+            5060
+            5061
+          ];
           allowedTCPPortRanges = [];
           allowedUDPPorts = [5060];
           allowedUDPPortRanges = [
@@ -537,6 +605,7 @@ in {
       };
       expected = {
         allowedTCPPorts = [
+          5060
           5061
           5070
         ];
@@ -595,13 +664,20 @@ in {
           }
         ];
       expected = [
-        [5039]
-        [8000]
         [
+          5039
+          5060
+        ]
+        [
+          5060
+          8000
+        ]
+        [
+          5060
           8088
           8443
         ]
-        []
+        [5060]
       ];
     };
 

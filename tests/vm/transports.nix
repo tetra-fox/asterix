@@ -1,20 +1,22 @@
 # Phones on UDP, TCP and TLS over IPv4 from a dual-stack machine and over
 # IPv6 from a machine without IPv4, and on WebSocket (ws, wss) over both
-# families, to a PBX that offers every transport on both families: its UDP,
-# TCP and TLS transports come in pairs, one per family, and its HTTP server,
-# which carries WebSocket, listens on `::` for both. The IPv6 UDP transport is
-# bound to the PBX's address, which Asterisk can only bind once duplicate
-# address detection is done with it. Some phones' endpoints are pinned to
-# their transport. Every phone registers on its transport and family. The UDP,
-# TCP and TLS phones each call a phone of the other family and are called by
-# another, hear each other and are only given PBX addresses of their own
-# family. The WebSocket phones are baresip, as pjsua has no WebSocket
+# families, to a PBX that offers every transport on both families: its UDP
+# and TLS transports come in pairs, one per family, each UDP one with its TCP
+# listener, and its HTTP server, which carries WebSocket, listens on `::` for
+# both. The IPv6 UDP transport and its TCP listener are bound to the PBX's
+# address, which Asterisk can only bind once duplicate address detection is
+# done with it. Some phones' endpoints are pinned to their transport, one of
+# them to a TCP listener. Every phone registers on its transport and family.
+# The UDP, TCP and TLS phones each call a phone of the other family and are
+# called by another, hear each other and are only given PBX addresses of their
+# own family. The WebSocket phones are baresip, as pjsua has no WebSocket
 # transport, and only register: over WebSocket, Asterisk offers the address
 # of its default route in SDP, here QEMU's user network, and IPv4 to IPv6
 # phones too. A request Asterisk sends that is over 1300 bytes, an INVITE with
 # every codec, reaches a UDP phone over UDP, whether the phone listens on TCP
-# or not, and a UDP phone that sends its requests of 1300 bytes or more over
-# TCP, as RFC 3261 18.1.1 asks, calls through the TCP transport.
+# or not, and a UDP phone whose endpoint names the UDP transport, and which
+# sends its requests of 1300 bytes or more over TCP, as RFC 3261 18.1.1 asks,
+# calls through that transport's TCP listener and gets Asterisk's BYE over UDP.
 #
 #   VLAN 1  pbx      192.168.1.1, 2001:db8:1::1
 #           phones   192.168.1.2  401 UDP, 402 TCP, 405 TLS, 407 ws, 409 wss,
@@ -32,10 +34,11 @@
   # extension -> the transport its endpoint is pinned to; the others have
   # none, so Asterisk picks the one that matches the contact
   pinned = {
-    "404" = "tcp6";
+    "404" = "udp6-tcp";
     "406" = "tls6";
     "408" = "ws";
     "409" = "wss";
+    "413" = "udp";
   };
 in
   pkgs.testers.runNixOSTest {
@@ -75,11 +78,6 @@ in
             in {
               udp = {};
               udp6.address = "2001:db8:1::1";
-              tcp.protocol = "tcp";
-              tcp6 = {
-                protocol = "tcp";
-                address = "::";
-              };
               tls = {
                 protocol = "tls";
                 inherit tls;
@@ -161,11 +159,12 @@ in
         }
 
         with subtest("asterisk listens on every transport and family"):
-            udp = pbx.succeed("ss -Hlun 'sport = :5060'")
-            assert "0.0.0.0:5060" in udp and "[2001:db8:1::1]:5060" in udp, udp
-            for port in [5060, 5061]:
-                tcp = pbx.succeed(f"ss -Hltn 'sport = :{port}'")
-                assert f"0.0.0.0:{port}" in tcp and f"[::]:{port}" in tcp, tcp
+            # each UDP transport, and its TCP listener, on its address
+            for flags in ["-Hlun", "-Hltn"]:
+                sockets = pbx.succeed(f"ss {flags} 'sport = :5060'")
+                assert "0.0.0.0:5060" in sockets and "[2001:db8:1::1]:5060" in sockets, sockets
+            tls = pbx.succeed("ss -Hltn 'sport = :5061'")
+            assert "0.0.0.0:5061" in tls and "[::]:5061" in tls, tls
             # the HTTP server's sockets take both families
             for port in [8088, 8089]:
                 http = pbx.succeed(f"ss -Hltn 'sport = :{port}'")
@@ -269,7 +268,7 @@ in
             cli_parallel([(pjsua[caller], "call hangup_all") for caller, _ in pairs])
             wait_idle(pbx)
 
-        with subtest("a UDP phone that sends its requests of 1300 bytes or more over TCP, as RFC 3261 18.1.1 asks, calls through the TCP transport"):
+        with subtest("a UDP phone whose endpoint names the UDP transport, and which sends its requests of 1300 bytes or more over TCP, as RFC 3261 18.1.1 asks, calls through that transport's TCP listener"):
             switcher = pjsua["413"]
             switcher.call("401")
             wait_bridged(pbx, "413", "401")
@@ -278,7 +277,10 @@ in
             assert switcher.count(r"TX [0-9]+ bytes Request msg INVITE/\S+ \S+ to TCP ") >= 1, "no INVITE over TCP"
             wait_hears(pjsua["401"], [switcher.tone])
             wait_hears(switcher, [pjsua["401"].tone])
-            switcher.hangup()
+            # Asterisk ends the call over the UDP transport the endpoint names
+            pjsua["401"].hangup()
             wait_idle(pbx)
+            byes = re.findall(r"RX \d+ bytes Request msg BYE/\S+ \S+ from (\w+) ", switcher.log_text())
+            assert byes == ["UDP"], byes
       '';
   }

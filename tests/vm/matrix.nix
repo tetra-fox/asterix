@@ -312,12 +312,12 @@
         tls = tls // {enable = true;};
       };
 
-      # every transport of the pbx's families; the IPv6 UDP transport is
-      # bound to the pbx's address, which the IPv4 one on 0.0.0.0 leaves free
+      # every transport of the pbx's families, TCP through the UDP ones'
+      # listeners; the IPv6 UDP transport is bound to the pbx's address, which
+      # the IPv4 one on 0.0.0.0 leaves free
       pjsip.transports =
         lib.optionalAttrs (has pbx "v4") {
           udp = nat "v4";
-          tcp = {protocol = "tcp";} // nat "v4";
           tls =
             {
               protocol = "tls";
@@ -327,12 +327,6 @@
         }
         // lib.optionalAttrs (has pbx "v6") {
           udp6 = {address = (own pbx).v6;} // nat "v6";
-          tcp6 =
-            {
-              protocol = "tcp";
-              address = "::";
-            }
-            // nat "v6";
           tls6 =
             {
               protocol = "tls";

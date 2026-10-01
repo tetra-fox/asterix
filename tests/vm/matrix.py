@@ -221,7 +221,7 @@ with subtest("each pbx listens on every transport of its families"):
             # bound to the pbx's own address once duplicate address detection is
             # done, which Asterisk waits for
             assert f"[{pbx['address']['v6']}]:5060" in udp, udp
-            assert "[::]:5060" in tcp[5060] and "[::]:5061" in tcp[5061], tcp
+            assert f"[{pbx['address']['v6']}]:5060" in tcp[5060] and "[::]:5061" in tcp[5061], tcp
         # the HTTP server, which carries ws and wss, on :: takes both families
         http = "*" if "v6" in pbx["families"] else "0.0.0.0"
         assert f"{http}:8088" in tcp[8088] and f"{http}:8089" in tcp[8089], tcp

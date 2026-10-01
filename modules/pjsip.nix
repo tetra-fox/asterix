@@ -3,6 +3,7 @@
 # extended or overridden through `settings."pjsip.conf"`:
 #
 #   transports.<n>  -> "transport:<n>"                     [<n>]  type=transport
+#                      "tcp-transport:<n>" (tcp)           [<n>-tcp] type=transport
 #   acls.<n>        -> "acl:<n>"                           [<n>]  type=acl
 #   endpoints.<n>   -> "endpoint:<n>"                      [<n>]  type=endpoint
 #                      "auth:<n>"          (auth)          [<n>]  type=auth
@@ -51,7 +52,7 @@
   inherit (asteriskLib) format;
   inherit (format) hostPort;
   inherit (format.types) secretOrString;
-  inherit (import ./lib.nix {inherit lib;}) settingsOption toSection;
+  inherit (import ./lib.nix {inherit lib;}) settingsOption toSection transportListener;
 
   section = {
     name,
@@ -417,7 +418,14 @@
             description = ''
               Provider SIP port. Without it, Asterisk looks up the host's
               NAPTR and SRV records, which can name another host and port, and
-              falls back to the transport's standard port.
+              falls back to the transport's standard port. It follows the
+              records of the transports it has, and SRV records for TLS first,
+              then TCP, then UDP, so a provider that publishes TCP records is
+              reached over TCP once a transport takes TCP, as the TCP listener
+              of a `udp` transport does
+              ({option}`services.asterisk.pjsip.transports.<name>.tcp`). With
+              `transport` set, it follows the records of that transport's
+              protocol alone.
             '';
           };
           username = mkOption {
@@ -570,6 +578,32 @@
             else 5060;
           defaultText = lib.literalExpression "5061 for tls, else 5060";
           description = "Local port to bind.";
+        };
+        tcp = mkOption {
+          type = types.bool;
+          default = config.protocol == "udp";
+          defaultText = lib.literalExpression ''protocol == "udp"'';
+          description = ''
+            Take SIP over TCP on this `udp` transport's address and port too,
+            through a `tcp` transport named `<name>-tcp` that has this one's
+            external addresses, local networks, `allowReload` and `settings`.
+            Phones built on pjsip, and others that follow RFC 3261 18.1.1, send
+            a request of 1300 bytes or more over TCP to the address and port
+            they reach over UDP, often an INVITE with its credentials; without
+            a TCP listener there the call fails after 32 seconds, and Asterisk
+            logs nothing. Asterisk takes such requests from phones whose
+            endpoint names this transport as well, and sends its own requests
+            to a UDP contact over UDP, whatever their size.
+
+            {option}`services.asterisk.openFirewall` also opens its TCP port,
+            and its connections count towards the ones Asterisk takes over
+            `tcp` and `tls`, which `protocol` says one host can fill. A trunk
+            without `port` may then reach its provider over TCP
+            ({option}`services.asterisk.pjsip.trunks.<name>.port`).
+
+            Turn it off for a transport that takes UDP alone, or to leave its
+            address and port to a `tcp` or `tls` transport of your own.
+          '';
         };
         externalMediaAddress = mkOption {
           type = types.nullOr types.str;
@@ -727,6 +761,26 @@
   credentialName = transport: kind: "pjsip-${transport}-${kind}";
   credentialPath = transport: kind: "${cfg.paths.credentials}/${credentialName transport kind}";
 
+  # the keys of a transport that apply over every protocol, which the TCP
+  # listener of a udp transport takes too
+  sharedTransportValues = t: {
+    bind = hostPort t.address t.port;
+    external_media_address = t.externalMediaAddress;
+    external_signaling_address = t.externalSignalingAddress;
+    external_signaling_port = t.externalSignalingPort;
+    local_net = t.localNet;
+    allow_reload =
+      if t.allowReload
+      then true
+      else null;
+  };
+
+  udpWithTcp = filterAttrs (_: t: t.tcp && t.protocol == "udp") pcfg.transports;
+
+  # the typed transports by the names an endpoint's `transport` can give, a
+  # TCP listener with the options of its udp transport, whose addresses it has
+  pinnable = pcfg.transports // mapAttrs' (name: t: nameValuePair "${name}-tcp" t) udpWithTcp;
+
   transportSections =
     mapAttrs' (
       name: t:
@@ -734,55 +788,61 @@
           inherit name;
           type = "transport";
           order = 100;
-          values = {
-            inherit (t) protocol;
-            bind = hostPort t.address t.port;
-            external_media_address = t.externalMediaAddress;
-            external_signaling_address = t.externalSignalingAddress;
-            external_signaling_port = t.externalSignalingPort;
-            local_net = t.localNet;
-            cert_file =
-              if t.tls.certFile != null
-              then credentialPath name "cert"
-              else null;
-            priv_key_file =
-              if t.tls.keyFile != null
-              then credentialPath name "key"
-              else null;
-            # without a CA list, pjproject logs an error for every TLS connection
-            # it accepts
-            ca_list_file =
-              if t.tls.caListFile != null
-              then credentialPath name "ca"
-              else if t.protocol == "tls"
-              then config.security.pki.caBundle
-              else null;
-            method =
-              if t.protocol == "tls"
-              then t.tls.method
-              else null;
-            verify_client =
-              if t.protocol == "tls"
-              then t.tls.verifyClient
-              else null;
-            # verify_client only checks a certificate the client presents
-            require_client_cert =
-              if t.protocol == "tls"
-              then t.tls.verifyClient
-              else null;
-            verify_server =
-              if t.protocol == "tls"
-              then t.tls.verifyServer
-              else null;
-            allow_reload =
-              if t.allowReload
-              then true
-              else null;
-          };
+          values =
+            sharedTransportValues t
+            // {
+              inherit (t) protocol;
+              cert_file =
+                if t.tls.certFile != null
+                then credentialPath name "cert"
+                else null;
+              priv_key_file =
+                if t.tls.keyFile != null
+                then credentialPath name "key"
+                else null;
+              # without a CA list, pjproject logs an error for every TLS connection
+              # it accepts
+              ca_list_file =
+                if t.tls.caListFile != null
+                then credentialPath name "ca"
+                else if t.protocol == "tls"
+                then config.security.pki.caBundle
+                else null;
+              method =
+                if t.protocol == "tls"
+                then t.tls.method
+                else null;
+              verify_client =
+                if t.protocol == "tls"
+                then t.tls.verifyClient
+                else null;
+              # verify_client only checks a certificate the client presents
+              require_client_cert =
+                if t.protocol == "tls"
+                then t.tls.verifyClient
+                else null;
+              verify_server =
+                if t.protocol == "tls"
+                then t.tls.verifyServer
+                else null;
+            };
           extra = t.settings;
         })
     )
-    pcfg.transports;
+    pcfg.transports
+    // mapAttrs' (
+      name: t:
+        nameValuePair "tcp-transport:${name}" (section {
+          name = "${name}-tcp";
+          type = "transport";
+          # below the transports; its id alone would sort it above them
+          order = 101;
+          values = sharedTransportValues t // {protocol = "tcp";};
+          # a protocol there is the udp transport's own
+          extra = removeAttrs t.settings ["protocol"];
+        })
+    )
+    udpWithTcp;
 
   transportCredentials = concatLists (
     mapAttrsToList (
@@ -925,7 +985,7 @@
   endpointSectionsFor = name: e: let
     transport =
       if e.transport != null
-      then pcfg.transports.${e.transport} or null
+      then pinnable.${e.transport} or null
       else null;
   in
     endpointSections name e {
@@ -1240,10 +1300,10 @@
     filter (s: builtins.any (key: format.isTrue (s.${key} or false)) ["rtp_symmetric" "force_rport" "rewrite_contact"]) directMediaObjects
   );
   # by the address of the typed transport they are pinned to, unless it binds them all
-  directMediaNetworks = builtins.groupBy (s: pcfg.transports.${s.transport}.address) (
+  directMediaNetworks = builtins.groupBy (s: pinnable.${s.transport}.address) (
     filter (
       s: let
-        transport = pcfg.transports.${toString (s.transport or "")} or null;
+        transport = pinnable.${toString (s.transport or "")} or null;
       in
         transport != null && !(builtins.elem transport.address ["0.0.0.0" "::"])
     )
@@ -1271,6 +1331,27 @@
           && !(identified ? ${name})
           && builtins.any (aor: takesRegistrations (aors.${aor} or {})) (refList (s.aors or null))
       ) (filter (name: endpoints ? ${name}) (attrNames pcfg.endpoints));
+
+  # a udp transport's TCP listener with each tcp or tls transport Linux would
+  # not let listen beside it: one port, and one address or a wildcard one
+  tcpListenerClashes = let
+    family = host:
+      if lib.hasInfix ":" host
+      then "v6"
+      else "v4";
+    wildcard = host: builtins.elem host ["0.0.0.0" "::"];
+    overlap = a: b: a.port == b.port && family a.host == family b.host && (a.host == b.host || wildcard a.host || wildcard b.host);
+    transportOf = mapAttrs' (name: _: nameValuePair "${name}-tcp" name) udpWithTcp;
+    onTcp = filter (l: builtins.elem l.protocol ["tcp" "tls"]) (map transportListener (ofType "transport"));
+  in
+    lib.concatMap (listener:
+      map (other: {
+        inherit listener other;
+        transport = transportOf.${listener.name};
+      }) (filter (other: !(transportOf ? ${other.name}) && overlap listener other) onTcp))
+    (filter (l: transportOf ? ${l.name}) onTcp);
+
+  tcpOnOtherProtocols = attrNames (filterAttrs (_: t: t.tcp && t.protocol != "udp") pcfg.transports);
 
   missingContexts = filter (s: !(builtins.elem s.context cfg.dialplan.knownContexts)) (
     filter (s: (s.type or null) == "endpoint" && isString (s.context or null)) objects
@@ -1413,14 +1494,9 @@ in {
       description = ''
         PJSIP transports. Changing a transport restarts Asterisk, since
         transports are not reloadable. The firewall ports are derived from
-        these (see {option}`services.asterisk.openFirewall`).
-
-        Asterisk sends its requests to a UDP contact over UDP, whatever their
-        size. Phones built on pjsip, and others that follow RFC 3261 18.1.1,
-        send their requests of 1300 bytes or more over TCP to the same address
-        and port, often an INVITE with its credentials; they need a `tcp`
-        transport on that port too, or the firewall drops the connection and
-        the call fails after 32 seconds.
+        these (see {option}`services.asterisk.openFirewall`). A `udp`
+        transport takes TCP on its address and port too, as
+        {option}`services.asterisk.pjsip.transports.<name>.tcp` describes.
       '';
     };
 
@@ -1561,6 +1637,17 @@ in {
       {
         assertion = openEndpoints == [];
         message = "services.asterisk: PJSIP endpoint(s) ${concatStringsSep ", " openEndpoints} have neither auth nor identify and their aor takes registrations, so anyone who reaches the SIP port can register as them. Give each a password (pjsip.endpoints.<name>.auth.password), an identify for a device known by its address, or aor.maxContacts = 0 if it never registers, or set open = true where anyone may register on purpose.";
+      }
+      {
+        assertion = tcpListenerClashes == [];
+        message = ''
+          services.asterisk: a udp transport's TCP listener (pjsip.transports.<name>.tcp) and another transport would listen on the same TCP port, which only one of them gets:
+            ${concatStringsSep "\n  " (map (c: "${c.listener.name} (${hostPort c.listener.host c.listener.port}) and ${c.other.name} (${c.other.protocol}, ${hostPort c.other.host c.other.port}): set pjsip.transports.${c.transport}.tcp = false to keep ${c.other.name}, or remove ${c.other.name} to let ${c.listener.name} take TCP there with the settings of ${c.transport}") tcpListenerClashes)}
+        '';
+      }
+      {
+        assertion = tcpOnOtherProtocols == [];
+        message = "services.asterisk: only a udp transport takes `tcp`, which gives it a TCP listener; remove `tcp = true` from ${lib.concatMapStringsSep ", " (name: "pjsip.transports.${name}") tcpOnOtherProtocols}.";
       }
       {
         assertion = longCallerIds == [];

@@ -333,8 +333,10 @@
             description = ''
               Credentials the device must present (an auth section named like
               the endpoint). The user name defaults to the endpoint name.
-              Without them, Asterisk takes the endpoint's requests from anyone
-              (see `open`).
+              Without them, Asterisk challenges none of the endpoint's
+              requests: it takes them from anyone, or with `identify` and
+              without `open` from the identify's addresses alone (see
+              `identify`).
             '';
           };
           open = mkOption {
@@ -343,8 +345,10 @@
             description = ''
               Let anyone who reaches the SIP port register as this endpoint
               and call from its context, without a password or a known
-              address. An endpoint with neither `auth` nor `identify` whose
-              aor takes registrations does not evaluate unless this is set.
+              address; with `identify`, it still takes requests that name it
+              from any address. An endpoint with neither `auth` nor `identify`
+              whose aor takes registrations does not evaluate unless this is
+              set.
             '';
           };
           identify = mkOption {
@@ -353,7 +357,14 @@
               trunk = false;
             });
             default = null;
-            description = "Identify requests from these addresses as this endpoint (an identify section).";
+            description = ''
+              Identify requests from these addresses as this endpoint (an
+              identify section). Asterisk also takes a request whose From
+              names the endpoint as its, from any address, unless the endpoint
+              has neither `auth` nor `open`: then it takes requests from these
+              addresses alone, through its own ACL (`deny` and `permit`), as
+              long as none is a host name, which an ACL cannot hold.
+            '';
           };
           aor = mkOption {
             type = types.nullOr (aorType name);
@@ -904,6 +915,9 @@
       };
     };
 
+  # an address or network, which an ACL takes, unlike a host name
+  isAddress = match: builtins.match "[0-9.]+(/[0-9.]+)?" match != null || lib.hasInfix ":" match;
+
   endpointSectionsFor = name: e: let
     transport =
       if e.transport != null
@@ -912,11 +926,22 @@
   in
     endpointSections name e {
       inherit (e) aor auth mailboxes;
-      # without from_domain, Asterisk names the address it sends from in From,
-      # never the transport's external one (res_pjsip/pjsip_message_filter.c:319-329)
-      extraValues = optionalAttrs (transport != null && transport.externalSignalingAddress != null) {
-        from_domain = hostPort transport.externalSignalingAddress null;
-      };
+      extraValues =
+        # without from_domain, Asterisk names the address it sends from in From,
+        # never the transport's external one (res_pjsip/pjsip_message_filter.c:319-329)
+        optionalAttrs (transport != null && transport.externalSignalingAddress != null) {
+          from_domain = hostPort transport.externalSignalingAddress null;
+        }
+        # an endpoint without auth takes a request whose From names it from anywhere
+        # (res/res_pjsip/pjsip_configuration.c:2253); its ACL keeps others out, as identify_by = ip
+        # would keep its registrations from finding the aor (res_pjsip_registrar.c:1184-1237)
+        // optionalAttrs (e.identify != null && e.auth == null && !e.open && builtins.all isAddress e.identify.match) {
+          deny = [
+            "0.0.0.0/0.0.0.0"
+            "::/0"
+          ];
+          permit = e.identify.match;
+        };
     };
 
   trunkSectionsFor = name: t: let
@@ -1531,7 +1556,7 @@ in {
       }
       {
         assertion = openEndpoints == [];
-        message = "services.asterisk: PJSIP endpoint(s) ${concatStringsSep ", " openEndpoints} have neither auth nor identify and their aor takes registrations, so anyone who reaches the SIP port can register as them. Give each a password (pjsip.endpoints.<name>.auth.password), or for a device known by its address an identify with settings.identify_by = \"ip\", or aor.maxContacts = 0 if it never registers, or set open = true where anyone may register on purpose.";
+        message = "services.asterisk: PJSIP endpoint(s) ${concatStringsSep ", " openEndpoints} have neither auth nor identify and their aor takes registrations, so anyone who reaches the SIP port can register as them. Give each a password (pjsip.endpoints.<name>.auth.password), an identify for a device known by its address, or aor.maxContacts = 0 if it never registers, or set open = true where anyone may register on purpose.";
       }
       {
         assertion = longCallerIds == [];

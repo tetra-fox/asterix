@@ -1,4 +1,4 @@
-# sip-probe SERVER METHOD USER [PASSWORD] [--to NUMBER]
+# sip-probe SERVER METHOD USER [PASSWORD] [--to NUMBER] [--source ADDRESS]
 #
 # Sends one OPTIONS, REGISTER, INVITE or SUBSCRIBE over UDP as USER, to USER
 # at SERVER or to NUMBER (REGISTER goes to SERVER itself), and prints each
@@ -7,7 +7,8 @@
 # final response is acknowledged, and a call it set up is ended with BYE. A
 # SUBSCRIBE asks for the dialog state of NUMBER, as a busy lamp key does, and
 # each NOTIFY that follows is answered with 200 and printed as a line of JSON
-# with its body, until one ends the subscription.
+# with its body, until one ends the subscription. With ADDRESS it sends from
+# that address of the machine.
 import argparse
 import hashlib
 import json
@@ -21,11 +22,14 @@ parser.add_argument("method")
 parser.add_argument("user")
 parser.add_argument("password", nargs="?")
 parser.add_argument("--to")
+parser.add_argument("--source")
 args = parser.parse_args()
 server, method, user, password = args.server, args.method, args.user, args.password
 target = args.to or user
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+if args.source:
+    sock.bind((args.source, 0))
 sock.connect((server, 5060))
 sock.settimeout(5)
 local, port = sock.getsockname()

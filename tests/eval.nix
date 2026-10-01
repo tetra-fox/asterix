@@ -401,6 +401,55 @@ in {
       ];
     };
 
+    # Asterisk takes a request whose From names an endpoint from any address,
+    # and challenges none of one without auth: 102 takes requests from its
+    # identify's addresses alone, while 101 and 103 have auth, 104 is open on
+    # purpose and 105 is known by a host name, which an ACL cannot hold
+    testIdentifyWithoutAuthTakesRequestsFromItsAddressesAlone = {
+      expr = let
+        sections =
+          (evalConfig [
+            phone
+            ({config, ...}: {
+              services.asterisk.pjsip.endpoints = {
+                "101".identify.match = ["10.0.0.1"];
+                "102" = {
+                  context = "internal";
+                  identify.match = ["10.0.0.2" "10.0.2.0/24" "2001:db8::2"];
+                };
+                "103" = {
+                  context = "internal";
+                  identify.match = ["10.0.0.3"];
+                  auth.password = config.lib.asterisk.secret "/run/secrets/103";
+                };
+                "104" = {
+                  context = "internal";
+                  identify.match = ["10.0.0.4"];
+                  open = true;
+                };
+                "105" = {
+                  context = "internal";
+                  identify.match = ["10.0.0.5" "gate.example.org"];
+                };
+              };
+            })
+          ]).services.asterisk.settings."pjsip.conf";
+      in
+        map (extension: let
+          section = sections."endpoint:${extension}";
+        in [(section.deny or null) (section.permit or null)]) ["101" "102" "103" "104" "105"];
+      expected = [
+        [null null]
+        [
+          ["0.0.0.0/0.0.0.0" "::/0"]
+          ["10.0.0.2" "10.0.2.0/24" "2001:db8::2"]
+        ]
+        [null null]
+        [null null]
+        [null null]
+      ];
+    };
+
     testTypedSettingsOptionReachesSection = {
       expr =
         lib.hasInfix "rtp_timeout = 30"

@@ -1,16 +1,18 @@
 # What an intruder on the phone network, dialplan code and local users can
 # reach on a pbx: requests for extensions that exist and don't get the same
-# answers, every wrong password is logged in a form fail2ban's asterisk
-# filter matches, malformed SIP and SDP leave Asterisk running without its
-# memory growing, the principals that can read secrets are the ones the
-# README names, programs the dialplan starts, which run in Asterisk's sandbox,
-# write only to Asterisk's directories and read nothing of /home or other
-# units' secrets, and calls over the trunk, from its address or with its line,
-# reach none of the numbers that go out when a phone dials them (SEC-03).
+# answers, requests in the name of a door phone known by its address and
+# without a password count only from that address, every wrong password is
+# logged in a form fail2ban's asterisk filter matches, malformed SIP and SDP
+# leave Asterisk running without its memory growing, the principals that can
+# read secrets are the ones the README names, programs the dialplan starts,
+# which run in Asterisk's sandbox, write only to Asterisk's directories and
+# read nothing of /home or other units' secrets, and calls over the trunk,
+# from its address or with its line, reach none of the numbers that go out
+# when a phone dials them (SEC-03).
 #
 #   pbx       10.3.0.10
-#   intruder  10.3.0.66, and 10.3.0.67, which the pbx's SIP ACL denies, and
-#             10.3.0.5, the trunk's provider
+#   intruder  10.3.0.66, and 10.3.0.67, which the pbx's SIP ACL denies,
+#             10.3.0.5, the trunk's provider, and 10.3.0.21, the door phone
 {
   pkgs,
   self,
@@ -140,10 +142,19 @@ in
               # registers, and with that has a line, though nobody answers
               qualifyFrequency = 0;
             };
-            # a phone that sends offers no phone sends; its calls are busy
-            endpoints.sipp = {
-              context = "offers";
-              auth.password = secret "sip-sipp";
+            endpoints = {
+              # a phone that sends offers no phone sends; its calls are busy
+              sipp = {
+                context = "offers";
+                auth.password = secret "sip-sipp";
+              };
+              # a door phone without a password, known by its address
+              door = {
+                context = "offers";
+                identify.match = ["10.3.0.21"];
+                # sip-probe takes no requests but NOTIFY
+                aor.qualifyFrequency = 0;
+              };
             };
           };
           modules.load = [
@@ -256,6 +267,10 @@ in
             address = "10.3.0.5";
             prefixLength = 24;
           }
+          {
+            address = "10.3.0.21";
+            prefixLength = 24;
+          }
         ];
       };
     };
@@ -268,9 +283,10 @@ in
       pbx.wait_for_unit("neighbor.service")
       intruder.wait_for_unit("multi-user.target")
 
-      def probe(method, user, password=None, to=None):
-          """The responses to one request the intruder sends as `user`."""
-          command = f"sip-probe 10.3.0.10 {method} {user}" + (f" {password}" if password else "") + (f" --to {to}" if to else "")
+      def probe(method, user, password=None, to=None, source=None):
+          """The responses to one request the intruder sends as `user`, from
+          `source` if given."""
+          command = f"sip-probe 10.3.0.10 {method} {user}" + (f" {password}" if password else "") + (f" --to {to}" if to else "") + (f" --source {source}" if source else "")
           return [json.loads(line) for line in intruder.succeed(command).splitlines()]
 
       def statuses(responses):
@@ -305,6 +321,17 @@ in
               assert all(answer == answers["201"] for answer in answers.values()), (method, answers)
           # nor does the trunk's name call in
           assert statuses(probe("INVITE", "provider", to="5551000")) == [401]
+
+      with subtest("requests in the name of the door phone, known by its address and without a password, are challenged from elsewhere and taken from its address"):
+          # from the intruder's address, as for a name nobody has
+          for method in ["REGISTER", "INVITE"]:
+              responses = probe(method, "door", to="201" if method == "INVITE" else None)
+              assert statuses(responses) == [401], responses
+          assert " door/" not in asterisk(pbx, "pjsip show contacts")
+          responses = probe("REGISTER", "door", source="10.3.0.21")
+          assert statuses(responses) == [200], responses
+          contacts = asterisk(pbx, "pjsip show contacts")
+          assert re.search(r" door/sip:door@10\.3\.0\.21:\d+ ", contacts), contacts
 
       with subtest("each wrong password is logged with the intruder's address, and fail2ban's asterisk filter finds each"):
           def found():

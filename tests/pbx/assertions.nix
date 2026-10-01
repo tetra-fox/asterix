@@ -1085,7 +1085,7 @@
       assertions = [
         "pbx.phones.grandstream.ht801.devices.299: endpoint `299` must exist in pjsip.endpoints, have `auth` set and an `aor` named like the endpoint, since the adapter registers with one user name for both."
         "pbx.phones.grandstream.ht801.devices.kitchen: endpoint `kitchen` must exist in pjsip.endpoints, have `auth` set and an `aor` named like the endpoint, since the adapter registers with one user name for both."
-        "services.asterisk: PJSIP endpoint(s) kitchen have neither auth nor identify and their aor takes registrations, so anyone who reaches the SIP port can register as them. Give each a password (pjsip.endpoints.<name>.auth.password), or for a device known by its address an identify with settings.identify_by = \"ip\", or aor.maxContacts = 0 if it never registers, or set open = true where anyone may register on purpose."
+        "services.asterisk: PJSIP endpoint(s) kitchen have neither auth nor identify and their aor takes registrations, so anyone who reaches the SIP port can register as them. Give each a password (pjsip.endpoints.<name>.auth.password), an identify for a device known by its address, or aor.maxContacts = 0 if it never registers, or set open = true where anyone may register on purpose."
       ];
     };
 

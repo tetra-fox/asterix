@@ -615,7 +615,7 @@
           };
         };
       };
-      assertions = ["services.asterisk: PJSIP endpoint(s) 102, 103 have neither auth nor identify and their aor takes registrations, so anyone who reaches the SIP port can register as them. Give each a password (pjsip.endpoints.<name>.auth.password), or for a device known by its address an identify with settings.identify_by = \"ip\", or aor.maxContacts = 0 if it never registers, or set open = true where anyone may register on purpose."];
+      assertions = ["services.asterisk: PJSIP endpoint(s) 102, 103 have neither auth nor identify and their aor takes registrations, so anyone who reaches the SIP port can register as them. Give each a password (pjsip.endpoints.<name>.auth.password), an identify for a device known by its address, or aor.maxContacts = 0 if it never registers, or set open = true where anyone may register on purpose."];
     };
 
     # an included file can hold an identify or an aor of any endpoint

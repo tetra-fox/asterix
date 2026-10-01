@@ -112,6 +112,8 @@ in
         # without the hours and the support queue, with the HTTP server and a
         # queue rule, whose modules stay loaded
         specialisation.changed.configuration = {
+          # the context that reads the hours goes with them
+          services.asterisk.dialplan.contexts.hourstest.extensions = lib.mkForce {};
           pbx = {
             hours = lib.mkForce {};
             inbound."5551000" = lib.mkForce {

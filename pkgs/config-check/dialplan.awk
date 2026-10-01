@@ -1,6 +1,7 @@
 # reports what the dialplan names that Asterisk does not have, see
 # package.nix: an application, function or switch no loaded module provides,
-# and a sound no language has, or one that a language calls use lacks
+# a sound no language has, or one that a language calls use lacks, and a
+# Goto() or Gosub() target that does not exist
 #
 #   gawk -v applications=FILE -v functions=FILE -v switches=FILE \
 #     -v settings=FILE -v formats=FILE -v languages=FILE \
@@ -211,12 +212,170 @@ function sq(s) {
     return "'" s "'"
 }
 
+# whether LINE of `dialplan show` is a priority, `N. App(data)` after the
+# extension or a label if any; P gets its number, label and what follows
+function priority(line, p,    m) {
+    delete p
+    if (!match(line, /^ *('[^']*' => +)?(\[([^]]*)\] +)? *([0-9]+)\. /, m))
+        return 0
+    p["number"] = m[4] + 0
+    p["label"] = m[3]
+    p["rest"] = substr(line, RLENGTH + 1)
+    return 1
+}
+
+# the position of the first CHARACTER of DATA outside parentheses, brackets
+# and braces, which keep ${...}, $[...] and the arguments of a Gosub whole,
+# or 0
+function top(data, character,    depth, k, c) {
+    for (k = 1; k <= length(data); k++) {
+        c = substr(data, k, 1)
+        if (c ~ /[([{]/)
+            depth++
+        else if (c ~ /[])}]/ && depth > 0)
+            depth--
+        else if (c == character && depth == 0)
+            return k
+    }
+    return 0
+}
+
+# a target of Goto() or Gosub(), [[context,]extension,]priority, which
+# Asterisk splits at commas, and a Gosub's at the ( of its arguments
+# (main/pbx.c pbx_parseable_goto, apps/app_stack.c gosub_exec); a field left
+# out or empty is the call's own (ast_explicit_goto). One from a variable is
+# only known during a call, and a priority after + or - counts from the
+# current one
+function add_target(target, gosub,    n, f) {
+    if (gosub)
+        sub(/\(.*/, "", target)
+    if (target ~ /\$/)
+        return
+    n = split(target, f, ",")
+    if (n == 1) {
+        f[3] = f[1]
+        f[1] = f[2] = ""
+    } else if (n == 2) {
+        f[3] = f[2]
+        f[2] = f[1]
+        f[1] = ""
+    }
+    if (f[3] == "" || f[3] ~ /^[+-]/)
+        return
+    target_count++
+    target_site[target_count] = site
+    target_context[target_count] = f[1] == "" ? context : f[1]
+    target_extension[target_count] = f[2] == "" ? extension : f[2]
+    target_priority[target_count] = f[3]
+}
+
+# the targets of GotoIf(), GotoIfTime() and GosubIf(): after the first ?,
+# the second after the first : that follows (main/pbx_builtins.c
+# pbx_builtin_gotoif and pbx_builtin_gotoiftime, apps/app_stack.c
+# gosubif_exec); an empty one goes on with the next priority
+function add_branches(data, gosub,    q, branches, c) {
+    q = top(data, "?")
+    if (!q)
+        return
+    branches = substr(data, q + 1)
+    c = top(branches, ":")
+    if (!c)
+        c = length(branches) + 1
+    if (c > 1)
+        add_target(substr(branches, 1, c - 1), gosub)
+    if (c < length(branches))
+        add_target(substr(branches, c + 1), gosub)
+}
+
+# whether a call in CONTEXT can reach extensions that `dialplan show` does
+# not see: through a switch, or through an include with a time, which it
+# looks up as a context of that whole name (main/pbx.c show_dialplan_helper)
+function open_ended(c, seen,    k) {
+    if (c in seen)
+        return 0
+    seen[c] = 1
+    if (c in switched)
+        return 1
+    for (k = 1; k <= include_count[c]; k++)
+        if (included[c, k] ~ /[,|]/ || open_ended(included[c, k], seen))
+            return 1
+    return 0
+}
+
+# whether `dialplan show E@C`, which matches patterns and follows includes as
+# a call does, finds extension E, with the numbers and labels of what it
+# shows in shown_priority and shown_label
+function look_up(c, e,    command, line, p) {
+    if ((c, e) in looked_up)
+        return looked_up[c, e]
+    looked_up[c, e] = 1
+    command = sq(asterisk) " -C " sq(config) " -rx " sq("dialplan show " e "@" c)
+    while ((command | getline line) > 0)
+        if (line ~ /^There is no existence of /)
+            looked_up[c, e] = 0
+        else if (priority(line, p)) {
+            shown_priority[c, e, p["number"]] = 1
+            if (p["label"] != "")
+                shown_label[c, e, p["label"]] = 1
+        }
+    close(command)
+    return looked_up[c, e]
+}
+
+# an extension the dump shows in the target's own context is the one a call
+# finds; any other is looked up, unless the CLI cannot take its name or a
+# switch or timed include may have it
+function check_target(i,    c, e, target, number, where) {
+    c = target_context[i]
+    e = target_extension[i]
+    target = target_priority[i]
+    # spaces around a number do not make it a label (main/pbx.c
+    # pbx_parse_location)
+    number = target ~ /^[[:space:]]*[0-9]+[[:space:]]*$/
+    # a call goes on in the context and extension its channel keeps, 79 bytes
+    # of each (main/channel_internal_api.c ast_channel_context_set), while a
+    # label is looked up by the whole names
+    if (number) {
+        c = substr(c, 1, 79)
+        e = substr(e, 1, 79)
+    }
+    where = target_site[i] ": "
+    if (!(c in has_context)) {
+        print_once(where "no context " c)
+        return
+    }
+    if ((c, e) in has_extension) {
+        if (number ? ((c, e, target + 0) in has_priority) : ((c, e, target) in has_label))
+            return
+    } else if ((c e) ~ /[[:space:]]/ || e ~ /@/ || open_ended(c))
+        return
+    else if (!look_up(c, e)) {
+        # a call to a missing extension goes on at the i or e extension of the
+        # context, if it has one (main/pbx.c __ast_pbx_run)
+        if (!look_up(c, "i") && !look_up(c, "e"))
+            print_once(where "no extension " e " in context " c)
+        return
+    } else if (number ? ((c, e, target + 0) in shown_priority) : ((c, e, target) in shown_label))
+        return
+    print_once(where "no " (number ? "priority " : "label ") target " in extension " e " of context " c)
+}
+
 match($0, /^\[ Context '([^']*)'/, m) {
     context = m[1]
+    has_context[context] = 1
 }
 
 match($0, /^ *'([^']*)' =>/, m) {
     extension = m[1]
+    has_extension[context, extension] = 1
+}
+
+match($0, /^  Include => +'([^']*)'/, m) {
+    included[context, ++include_count[context]] = m[1]
+}
+
+/^  Alt\. Switch => / {
+    switched[context] = 1
 }
 
 # a switch, `Alt. Switch => 'Name/data'`, which Asterisk passes over on every
@@ -226,10 +385,12 @@ match($0, /^  Alt\. Switch => +'([^'\/]*)/, m) && !(tolower(m[1]) in has_switch)
     missing++
 }
 
-# a priority: `N. App(data)`, after the extension or a label if any, and
-# where it was defined, such as [extensions.conf:12]
-match($0, /^ *('[^']*' => +)?(\[[^]]*\] +)? *[0-9]+\. /) {
-    rest = substr($0, RLENGTH + 1)
+# a priority, and where it was defined, such as [extensions.conf:12]
+priority($0, p) {
+    has_priority[context, extension, p["number"]] = 1
+    if (p["label"] != "")
+        has_label[context, extension, p["label"]] = 1
+    rest = p["rest"]
     if (!match(rest, /^[A-Za-z0-9_]+\(/))
         next
     app = substr(rest, 1, RLENGTH - 1)
@@ -262,7 +423,14 @@ match($0, /^ *('[^']*' => +)?(\[[^]]*\] +)? *[0-9]+\. /) {
         profile = field(data, 2)
         if (profile !~ /\$/)
             bridge_profiles[profile == "" ? "default_bridge" : profile] = 1
-    }
+    } else if (app == "goto")
+        add_target(data, 0)
+    else if (app == "gosub")
+        add_target(data, 1)
+    else if (app == "gotoif" || app == "gotoiftime")
+        add_branches(data, 0)
+    else if (app == "gosubif")
+        add_branches(data, 1)
 }
 
 END {
@@ -282,5 +450,7 @@ END {
         }
     for (i = 1; i <= sound_count; i++)
         check_sound(i)
+    for (i = 1; i <= target_count; i++)
+        check_target(i)
     exit (missing > 0)
 }

@@ -15,6 +15,8 @@
       {
         services.asterisk = {
           enable = true;
+          # the context of a Goto that the build-time check cannot look up
+          dialplan.globals.NOWHERE = "nowhere";
           dialplan.contexts.test.extensions = {
             callerid = [
               "NoOp(\${CALLERID(name)}|\${CALLERID(num)})"
@@ -43,7 +45,7 @@
             ];
             # no device to dial
             unavailable = ["Dial(&)"];
-            dangling = ["Goto(nowhere,s,1)"];
+            dangling = ["Goto(\${NOWHERE},s,1)"];
             forever = [
               "Answer()"
               "Wait(30)"

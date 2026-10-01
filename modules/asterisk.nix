@@ -935,9 +935,10 @@ in {
       description = ''
         Start Asterisk with the generated configuration when the system is
         built, and fail the build if Asterisk logs an error or a warning
-        while loading it, if the dialplan uses an application, function or
-        switch that no loaded module provides, or if it plays a sound Asterisk
-        cannot find. Secrets are replaced by zeros, credentials by a
+        while loading it, or if the dialplan uses an application, function or
+        switch that no loaded module provides, plays a sound Asterisk cannot
+        find, or sends calls to a context, extension, priority or label that
+        does not exist. Secrets are replaced by zeros, credentials by a
         throwaway certificate and IPv4 listen addresses by loopback ones, so
         a sandboxed build needs no privileges. Listening on IPv6 addresses or
         ports below 1024, or building without the sandbox, needs unprivileged
@@ -954,6 +955,14 @@ in {
         the dialplan, and those of the bridge profiles ConfBridge() uses, but
         not a sound named by a variable or an absolute path, the prompts of
         other applications, or a language the dialplan sets during a call.
+
+        Calls are sent by Goto(), GotoIf(), GotoIfTime(), Gosub() and
+        GosubIf(), whose targets the check looks up through patterns and
+        includes as a call does; a missing extension counts only where no
+        `i` or `e` extension of its context takes the call instead. It leaves
+        out a target named by a variable, a priority counted from the current
+        one such as +1, and an extension of a context that a switch or an
+        include with a time can provide.
 
         Without the check, what Asterisk rejects only shows in its log. A
         reload that cannot create a PJSIP object still succeeds and keeps the

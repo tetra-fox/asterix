@@ -3,7 +3,47 @@
 # rejects, since the gate boots valid values only. options.py writes this
 # file to OUT/known.nix.
 {
+  "pbx.extensions.<name>.busy.context.priority = 2147483647" = "rejected by asterisk-config-check";
+  "pbx.extensions.<name>.busy.context.priority = 2147483648" = "rejected by asterisk-config-check";
+  "pbx.extensions.<name>.busy.context.priority = 4294967296" = "rejected by asterisk-config-check";
+  "pbx.extensions.<name>.busy.context.priority = 9223372036854775807" = "rejected by asterisk-config-check";
+  "pbx.extensions.<name>.noAnswer.context.priority = 2147483647" = "rejected by asterisk-config-check";
+  "pbx.extensions.<name>.noAnswer.context.priority = 2147483648" = "rejected by asterisk-config-check";
+  "pbx.extensions.<name>.noAnswer.context.priority = 4294967296" = "rejected by asterisk-config-check";
+  "pbx.extensions.<name>.noAnswer.context.priority = 9223372036854775807" = "rejected by asterisk-config-check";
   "pbx.hours.<name>.timezone = \"Mars/Olympus_Mons\"" = "rejected by pbx-hours-timezones";
+  "pbx.inbound.<name>.closed.context.priority = 2147483647" = "rejected by asterisk-config-check";
+  "pbx.inbound.<name>.closed.context.priority = 2147483648" = "rejected by asterisk-config-check";
+  "pbx.inbound.<name>.closed.context.priority = 4294967296" = "rejected by asterisk-config-check";
+  "pbx.inbound.<name>.closed.context.priority = 9223372036854775807" = "rejected by asterisk-config-check";
+  "pbx.inbound.<name>.destination.context.priority = 2147483647" = "rejected by asterisk-config-check";
+  "pbx.inbound.<name>.destination.context.priority = 2147483648" = "rejected by asterisk-config-check";
+  "pbx.inbound.<name>.destination.context.priority = 4294967296" = "rejected by asterisk-config-check";
+  "pbx.inbound.<name>.destination.context.priority = 9223372036854775807" = "rejected by asterisk-config-check";
+  "pbx.inbound.<name>.open.context.priority = 2147483647" = "rejected by asterisk-config-check";
+  "pbx.inbound.<name>.open.context.priority = 2147483648" = "rejected by asterisk-config-check";
+  "pbx.inbound.<name>.open.context.priority = 4294967296" = "rejected by asterisk-config-check";
+  "pbx.inbound.<name>.open.context.priority = 9223372036854775807" = "rejected by asterisk-config-check";
+  "pbx.ivrs.<name>.invalid.context.priority = 2147483647" = "rejected by asterisk-config-check";
+  "pbx.ivrs.<name>.invalid.context.priority = 2147483648" = "rejected by asterisk-config-check";
+  "pbx.ivrs.<name>.invalid.context.priority = 4294967296" = "rejected by asterisk-config-check";
+  "pbx.ivrs.<name>.invalid.context.priority = 9223372036854775807" = "rejected by asterisk-config-check";
+  "pbx.ivrs.<name>.noInput.context.priority = 2147483647" = "rejected by asterisk-config-check";
+  "pbx.ivrs.<name>.noInput.context.priority = 2147483648" = "rejected by asterisk-config-check";
+  "pbx.ivrs.<name>.noInput.context.priority = 4294967296" = "rejected by asterisk-config-check";
+  "pbx.ivrs.<name>.noInput.context.priority = 9223372036854775807" = "rejected by asterisk-config-check";
+  "pbx.ivrs.<name>.options.<name>.context.priority = 2147483647" = "rejected by asterisk-config-check";
+  "pbx.ivrs.<name>.options.<name>.context.priority = 2147483648" = "rejected by asterisk-config-check";
+  "pbx.ivrs.<name>.options.<name>.context.priority = 4294967296" = "rejected by asterisk-config-check";
+  "pbx.ivrs.<name>.options.<name>.context.priority = 9223372036854775807" = "rejected by asterisk-config-check";
+  "pbx.queues.<name>.noAnswer.context.priority = 2147483647" = "rejected by asterisk-config-check";
+  "pbx.queues.<name>.noAnswer.context.priority = 2147483648" = "rejected by asterisk-config-check";
+  "pbx.queues.<name>.noAnswer.context.priority = 4294967296" = "rejected by asterisk-config-check";
+  "pbx.queues.<name>.noAnswer.context.priority = 9223372036854775807" = "rejected by asterisk-config-check";
+  "pbx.ringGroups.<name>.noAnswer.context.priority = 2147483647" = "rejected by asterisk-config-check";
+  "pbx.ringGroups.<name>.noAnswer.context.priority = 2147483648" = "rejected by asterisk-config-check";
+  "pbx.ringGroups.<name>.noAnswer.context.priority = 4294967296" = "rejected by asterisk-config-check";
+  "pbx.ringGroups.<name>.noAnswer.context.priority = 9223372036854775807" = "rejected by asterisk-config-check";
   "services.asterisk.ami.address = \"127.0.0.1:5038\"" = "rejected by asterisk-config-check";
   "services.asterisk.ami.address = \"300.0.0.1\"" = "rejected by asterisk-config-check";
   "services.asterisk.ami.address = \"pbx\"" = "rejected by asterisk-config-check";

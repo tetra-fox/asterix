@@ -102,6 +102,12 @@
             "200".pin = secret "/run/secrets/vm-200";
             "200@sales".pin = secret "/run/secrets/vm-200-sales";
           };
+          # dialplan of one's own that context destinations send calls to,
+          # with the s extension they go to when they name none
+          dialplan.contexts.hand.extensions = {
+            s = ["NoOp(hand s)" "Hangup()"];
+            "201" = ["NoOp(hand 201)" "Hangup()"];
+          };
         };
       };
     };
@@ -319,7 +325,7 @@
   # a destination's tags that are submodules
   slotTagAnchors = {
     context = {
-      context = "pbx-internal";
+      context = "hand";
       extension = "201";
     };
     voicemail.mailbox = "201";

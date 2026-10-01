@@ -94,9 +94,10 @@ A full list of options is in the options reference: `nix build .#docs`.
   sops-nix secrets, and they are read when Asterisk starts (see the [examples](examples/)).
 - **Asterisk checks the configuration before it is deployed.** Building the
   system starts Asterisk with the new configuration in the build sandbox. If
-  Asterisk reports an error or a warning while loading it, the dialplan uses
-  an application, function or switch that no loaded module provides, or it
-  plays a sound missing in a language your phones use, the build fails.
+  Asterisk reports an error or a warning while loading it, or the dialplan
+  uses an application, function or switch that no loaded module provides,
+  plays a sound missing in a language your phones use, or sends calls to an
+  extension or label that does not exist, the build fails.
   See `checkConfig` in the options reference.
 - **Reload instead of restart.** Changes are applied with a reload where
   possible, so calls stay up. Only changes like a new SIP port
@@ -304,7 +305,10 @@ Each object becomes a context of its own, `pbx-<kind>-<name>`, with a comment
 saying which option it came from, and phones dial from `pbx-internal`. The
 layer only writes core options, as defaults, so anything it generates can be
 changed with the core options or `settings`. Evaluation fails when a number
-has two owners or a destination, trunk or member does not exist.
+has two owners, or a trunk, member or destination does not exist. Of a
+`context` destination, which leads into dialplan of your own, evaluation
+checks at most the context; building the system checks the context,
+extension and priority.
 
 A voice menu plays a prompt, a recorded sound or text spoken by flite when
 the system is built, and sends each key to a destination. A paging group

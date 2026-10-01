@@ -192,6 +192,40 @@
         "language fr has no sounds"
       ];
     };
+    # Asterisk hangs up a call sent to a context, extension, priority or label
+    # that does not exist; evaluation checks only the context of a context
+    # destination
+    gotoTargetsMissing = {
+      module = {
+        imports = [pbxPhone];
+        pbx.extensions."201" = {
+          busy.context = {
+            context = "internal";
+            extension = "nope";
+          };
+          noAnswer.context = {
+            context = "internal";
+            extension = "101";
+            priority = "nolabel";
+          };
+        };
+        services.asterisk.dialplan.contexts = {
+          internal.extensions = {
+            "414" = ["Goto(nowhere,s,1)"];
+            "415" = ["GotoIf($[\${A} = 1]?416,1:416,2)"];
+            "416" = ["Gosub(sub,s,start(1))"];
+          };
+          sub.extensions.s = ["Return()"];
+        };
+      };
+      expect = [
+        "(pbx-extension-201, s): no extension nope in context internal"
+        "(pbx-extension-201, s): no label nolabel in extension 101 of context internal"
+        "(internal, 414): no context nowhere"
+        "(internal, 415): no priority 2 in extension 416 of context internal"
+        "(internal, 416): no label start in extension s of context sub"
+      ];
+    };
     ipv6AddressWithoutUserNamespaces = {
       module.services.asterisk.pjsip.transports.udp.address = "2001:db8::10";
       withoutUserNamespaces = true;
@@ -676,6 +710,41 @@
         "Background(hello-world,,en)"
         "Playback(\${SOUND}&/var/lib/asterisk/greeting)"
       ];
+    };
+    # targets that exist through a pattern, an include or a label, relative
+    # ones, both branches of the conditional applications, one in a context
+    # whose switch can have any extension, a missing extension that the i
+    # extension takes, and a context whose name the channel cuts to 79 bytes
+    gotoTargets.services.asterisk.dialplan.contexts = {
+      internal.extensions = {
+        "414" = ["Goto(internal,105,1)"];
+        "415" = ["Goto(lobby,105,1)"];
+        "416" = ["GotoIfTime(09:00-17:00,mon-fri,*,*?menu,s,again:menu,1,1)"];
+        "417" = ["Goto(remote,999,1)"];
+        "418" = [
+          "Gosub(menu,s,1(a,b))"
+          "GosubIf($[\${A} = 1]?menu,s,again(c):menu,1,1)"
+        ];
+        "419" = ["Goto(menu,nope,1)"];
+        "420" = ["Goto(${lib.strings.replicate 85 "l"},s,1)"];
+      };
+      ${lib.strings.replicate 85 "l"}.extensions.s = ["Hangup()"];
+      lobby.includes = ["internal"];
+      menu.extensions = {
+        s = [
+          "Answer()"
+          {
+            app = "Playback";
+            args = ["beep"];
+            label = "again";
+          }
+          "GotoIf($[\${B} = 1]?again)"
+          "Return()"
+        ];
+        "1" = ["Goto(s,again)"];
+        i = ["Hangup()"];
+      };
+      remote.switches = ["Realtime/default@extensions"];
     };
   };
 in {

@@ -77,7 +77,12 @@
       invalid = ["nowhere"];
     };
     "context.extension".valid = ["201"];
-    "context.priority".valid = [1];
+    # the type takes any positive number, and the build-time check a
+    # priority the extension has
+    "context.priority" = {
+      valid = [1];
+      invalid = [2147483647 2147483648 4294967296 9223372036854775807];
+    };
   };
   slots = [
     "pbx.extensions.<name>.busy"

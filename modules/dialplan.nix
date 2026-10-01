@@ -37,7 +37,7 @@
   dcfg = cfg.dialplan;
   asteriskLib = import ../lib {inherit lib;};
   inherit (asteriskLib) format;
-  inherit (import ./lib.nix {inherit lib;}) toSection;
+  inherit (import ./lib.nix {inherit lib;}) moduleLoaded toSection;
 
   stepType =
     types.either types.str (
@@ -224,13 +224,7 @@
     if builtins.isList v
     then v
     else [v];
-  modulesConf = cfg.settings."modules.conf".modules or {};
-  loaded = module:
-    !(builtins.elem module (toList (modulesConf.noload or [])))
-    && (
-      format.isTrue (modulesConf.autoload or false)
-      || builtins.elem module (toList (modulesConf.load or []) ++ toList (modulesConf.preload or []))
-    );
+  loaded = moduleLoaded cfg;
   parkingLots = filter (lot: lot.name != "general") (attrValues (cfg.settings."res_parking.conf" or {}));
   parkingContexts =
     map (lot: lot.context or "parkedcalls") parkingLots

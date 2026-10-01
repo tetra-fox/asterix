@@ -124,6 +124,14 @@ in {
       search = format.isTrue (voicemailGeneral lines "searchcontexts");
     };
 
+  # whether the final modules.conf of `core` loads `module`: listed in load or
+  # preload, or found by autoload, and not listed in noload
+  moduleLoaded = core: module: let
+    modules = core.settings."modules.conf".modules or {};
+    listed = key: builtins.elem module (lib.toList (modules.${key} or []));
+  in
+    !(listed "noload") && (format.isTrue (modules.autoload or false) || listed "load" || listed "preload");
+
   # a rendered value Asterisk takes `bytes` of; `room` is what the secrets in
   # it may add to its other bytes, where `\;` is one byte
   limited = what: bytes: text: {

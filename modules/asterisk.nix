@@ -359,11 +359,18 @@
     )
   );
 
-  # Files whose change is applied by a targeted reload; any other file falls
-  # back to `core reload`. Only `module reload` reports a result, so every
-  # targeted reload is one.
+  # with clearglobalvars, which the dialplan options set, pbx_config's reload
+  # clears every global (pbx/pbx_config.c:2179-2180), and pbx_ael sets the
+  # globals of extensions.ael only when it reads that file (res/ael/pval.c:4432),
+  # so with pbx_ael loaded a change to either file reloads both, pbx_ael last
+  dialplanReloads = ["module reload pbx_config.so"] ++ optional (moduleLib.moduleLoaded cfg "pbx_ael.so") "module reload pbx_ael.so";
+
+  # Files whose change is applied by targeted reloads, a command or a list run
+  # in its order; any other file falls back to `core reload`. Only `module
+  # reload` reports a result, so every targeted reload is one.
   reloadCommands = {
-    "extensions.conf" = "module reload pbx_config.so";
+    "extensions.conf" = dialplanReloads;
+    "extensions.ael" = dialplanReloads;
     "pjsip.conf" = "module reload res_pjsip.so";
     "pjsip_notify.conf" = "module reload res_pjsip_notify.so";
     "rtp.conf" = "module reload res_rtp_asterisk.so";
@@ -487,27 +494,38 @@
           mkdir -p ${lib.escapeShellArgs (map (dir: "${cfg.paths.state}/${dir}") stateDirectories)}
           ;;
         reload)
-          declare -A commands=()
+          # the commands of the changed files, each once, in the order a
+          # file lists them
+          commands=()
+          declare -A queued=()
+          queue() {
+            for command in "$@"; do
+              if [ -z "''${queued["$command"]:-}" ]; then
+                queued["$command"]=1
+                commands+=("$command")
+              fi
+            done
+          }
           for file in "''${changed[@]}"; do
             case $file in
               ${concatStringsSep "\n          " (
         mapAttrsToList (
-          file: command: "${lib.escapeShellArg file}) commands[${lib.escapeShellArg command}]=1 ;;"
+          file: commands: "${lib.escapeShellArg file}) queue ${lib.escapeShellArgs (lib.toList commands)} ;;"
         )
         reloadCommands
       )}
               ${concatStringsSep " | " (map lib.escapeShellArg restartOnlyFiles)})
                 echo "asterisk-config: $file changed; restart Asterisk to apply it" >&2 ;;
-              *) commands["core reload"]=1 ;;
+              *) queue "core reload" ;;
             esac
           done
-          if [ -n "''${commands[core reload]:-}" ]; then
-            commands=(["core reload"]=1)
+          if [ -n "''${queued["core reload"]:-}" ]; then
+            commands=("core reload")
           fi
           # asterisk -rx exits 0 whatever the command did; module reload says
           # whether the reload failed as a whole, core reload says nothing
           failed=0
-          for command in "''${!commands[@]}"; do
+          for command in "''${commands[@]}"; do
             echo "asterisk-config: $command"
             output=$(${asteriskBin} -C "$current/asterisk.conf" -rx "$command")
             case $command in

@@ -18,7 +18,9 @@
 # extensions.conf alone, and a reload with nothing changed, keep them. There
 # is no `dialplan save`; with writeprotect off it cannot write the rendered
 # extensions.conf, and what it saves elsewhere is not loaded. A secret PIN no
-# phone can type fails the reload.
+# phone can type fails the reload. With pbx_ael loaded, a deploy of
+# extensions.conf or extensions.ael reloads pbx_config and then pbx_ael, and
+# the globals of the AEL dialplan stay.
 {
   pkgs,
   self,
@@ -338,12 +340,58 @@ in
       };
     };
 
+    # an AEL dialplan next to extensions.conf, each with a global
+    nodes.ael = {lib, ...}: {
+      imports = [
+        self.nixosModules.default
+        ./common.nix
+      ];
+
+      services.asterisk = {
+        enable = true;
+        modules.load = [
+          "res_ael_share.so"
+          "pbx_ael.so"
+        ];
+        dialplan = {
+          globals.CONF = "conf";
+          contexts.plain.extensions.s = ["NoOp()"];
+        };
+        extraConfig."extensions.ael" = ''
+          globals {
+            AEL=ael;
+          };
+          context from-ael {
+            s => {
+              NoOp(''${AEL});
+            };
+          };
+        '';
+      };
+
+      specialisation = {
+        conf.configuration = {
+          services.asterisk.dialplan.contexts.plain.extensions."1" = ["NoOp()"];
+        };
+        ael.configuration = {
+          services.asterisk.extraConfig."extensions.ael" = lib.mkAfter ''
+            context more-ael {
+              s => {
+                NoOp();
+              };
+            };
+          '';
+        };
+      };
+    };
+
     extraPythonPackages = p: [p.numpy];
 
     testScript =
       builtins.readFile ./phone.py
       + builtins.readFile ./tones.py
       + ''
+        start_all()
         pbx.wait_for_unit("asterisk.service")
         base = pbx.succeed("readlink -f /run/current-system").strip()
         changes = json.load(open("${changesFile}"))
@@ -670,5 +718,23 @@ in
             assert switch() == ["reloading"]
             output = asterisk(pbx, "dialplan save")
             assert "I can't save dialplan now" in output, output
+
+        with subtest("with pbx_ael loaded, a deploy of extensions.conf or extensions.ael reloads pbx_config and then pbx_ael, and the AEL globals stay"):
+            # pbx_config's reload clears every global, and pbx_ael sets its own
+            # when it loads extensions.ael
+            ael.wait_for_unit("asterisk.service")
+            ael_base = ael.succeed("readlink -f /run/current-system").strip()
+            both = {"AEL": "ael", "CONF": "conf"}
+            for specialisation, more in (("conf", False), (None, False), ("ael", True), (None, False)):
+                cursor = journal_cursor(ael)
+                target = f"{ael_base}/specialisation/{specialisation}" if specialisation else ael_base
+                print(ael.succeed(f"{target}/bin/switch-to-configuration test 2>&1"))
+                journal = journal_since(ael, cursor)
+                assert not re.search(r"asterisk-config: .* failed", journal), journal
+                commands = re.findall(r"asterisk-config: (module reload \S+|core reload)$", journal, re.M)
+                assert commands == ["module reload pbx_config.so", "module reload pbx_ael.so"], (specialisation, commands)
+                found = dict(re.findall(r"^   (\w+)=(.*)$", asterisk(ael, "dialplan show globals"), re.M))
+                assert found == both, (specialisation, found)
+                assert ("Context 'more-ael'" in asterisk(ael, "dialplan show more-ael")) == more, specialisation
       '';
   }

@@ -12,7 +12,7 @@
   cfg = config.pbx;
   core = config.services.asterisk;
   asteriskLib = import ../../lib {inherit lib;};
-  objects = ["extensions" "ringGroups" "queues" "conferences" "ivrs" "paging" "hours" "inbound" "outbound" "emergency" "voicemailMenu"];
+  objects = ["extensions" "ringGroups" "queues" "conferences" "ivrs" "paging" "hours" "inbound" "outbound" "emergency" "voicemailMenu" "tieLines"];
 
   # the steps the pbx modules write, by context and extension, read from
   # their own definitions of the contexts: those of the files in this
@@ -95,7 +95,7 @@ in {
       ];
     })
     {
-      warnings = lib.optional (!cfg.enable && builtins.any (name: !(builtins.elem cfg.${name} [{} null])) objects) "pbx objects are defined, but pbx.enable is not set, so they do nothing.";
+      warnings = lib.optional (!cfg.enable && builtins.any (name: !(builtins.elem cfg.${name} [{} [] null])) objects) "pbx objects are defined, but pbx.enable is not set, so they do nothing.";
     }
   ];
 }

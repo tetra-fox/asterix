@@ -802,6 +802,64 @@
       assertions = ["pbx.inbound: the trunk(s) provider have a context of their own, so their calls do not reach pbx.inbound; remove it."];
     };
 
+    # calls from these trunks start where the outbound pattern can be
+    # dialled: in pbx-internal, which includes pbx-outbound, in a context that
+    # includes it at some hours, and in one set in settings
+    trunksReachingOutbound = {
+      module = {config, ...}: let
+        trunk = context: {
+          host = "sip.branch.example";
+          username = "5552000";
+          password = config.lib.asterisk.secret "/run/secrets/branch";
+          inherit context;
+        };
+      in {
+        services.asterisk = {
+          pjsip.trunks = {
+            branch = trunk "pbx-internal";
+            lobby = trunk "from-lobby";
+            annex = trunk "from-annex";
+          };
+          dialplan.contexts = {
+            from-lobby.includes = ["pbx-internal,08:00-18:00,*,*,*"];
+            from-annex.extensions.s = ["Hangup()"];
+          };
+          settings."pjsip.conf"."endpoint:annex".context = "pbx-outbound";
+        };
+      };
+      assertions = [
+        "pbx: calls from the trunk(s) annex (pbx-outbound), branch (pbx-internal), lobby (from-lobby) start in a context that reaches pbx-outbound, so anyone who can call in through them can dial out, emergency numbers included. Give such a trunk a context without that, such as the pbx-inbound-<trunk> pbx gives it, or list it in pbx.tieLines if it connects another PBX whose callers may dial out."
+      ];
+    };
+
+    # a tie line may, and a menu between the trunk and the phones' numbers
+    # takes a key press first
+    trunksOnPurpose = {
+      module = {config, ...}: let
+        trunk = context: {
+          host = "sip.branch.example";
+          username = "5552000";
+          password = config.lib.asterisk.secret "/run/secrets/branch";
+          inherit context;
+        };
+      in {
+        pbx.tieLines = ["branch"];
+        services.asterisk = {
+          pjsip.trunks = {
+            branch = trunk "pbx-internal";
+            lobby = trunk "from-lobby";
+          };
+          dialplan.contexts.from-lobby.extensions.s = ["Goto(pbx-ivr-main,s,1)"];
+        };
+      };
+      assertions = [];
+    };
+
+    unknownTieLine = {
+      module.pbx.tieLines = ["brnach"];
+      assertion = "pbx.tieLines: brnach";
+    };
+
     notifyIsNoExtension = {
       module.pbx.emergency.notify = lib.mkForce ["299"];
       assertion = "pbx.emergency.notify: 299 are not extensions of pbx.extensions";

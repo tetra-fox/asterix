@@ -264,20 +264,11 @@
     || (cfg.extraConfig."extensions.conf" or "") != ""
     || (cfg.includes."extensions.conf" or []) != [];
 
-  # an include names its context up to a |, or else a comma, after which the
-  # time it applies comes (main/pbx_include.c include_alloc)
-  includedContext = include:
-    lib.head (lib.splitString (
-        if lib.hasInfix "|" include
-        then "|"
-        else ","
-      )
-      include);
   danglingIncludes = lib.concatMap (
     s:
       map (target: "[${s.name}] include => ${target}") (
         filter (
-          target: isString target && !(builtins.elem (includedContext target) knownContexts)
+          target: isString target && !(builtins.elem (format.includedContext target) knownContexts)
         ) (toList (s.include or []))
       )
   ) (attrValues dialplan);
@@ -286,7 +277,7 @@
   # TODO: drop this once pbx_find_extension compares the contexts it searched with case
   includers = lib.foldl' (acc: s:
     lib.foldl' (acc: target: acc // {${target} = (acc.${target} or []) ++ [s.name];}) acc (
-      map includedContext (filter isString (toList (s.include or [])))
+      map format.includedContext (filter isString (toList (s.include or [])))
     )) {} (attrValues dialplan);
   # a context and every context whose includes reach it
   reachedFrom = name: let

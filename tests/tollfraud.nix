@@ -47,11 +47,14 @@
   # finding, or null for a named one
   cases = {
     # calls from the trunk start where the phones dial from, which takes 9
-    # and any number, and 911
+    # and any number, and 911; pbx takes that only from a tie line
     trunkInPhoneContext = {
       modules = [
         office
-        {services.asterisk.pjsip.trunks.provider.context = "pbx-internal";}
+        {
+          pbx.tieLines = ["provider"];
+          services.asterisk.pjsip.trunks.provider.context = "pbx-internal";
+        }
       ];
       paths = [
         ["provider" "provider" "911" "a number the configuration does not name"]

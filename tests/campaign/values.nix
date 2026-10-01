@@ -987,6 +987,10 @@ in
       valid = ["provider"];
       invalid = ["nope"];
     };
+    "pbx.tieLines" = {
+      valid = [["provider"]];
+      invalid = [["nope"]];
+    };
     "pbx.voicemailMenu" = {
       valid = ["*97"];
       invalid = ["97a" "*8"];

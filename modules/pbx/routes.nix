@@ -238,7 +238,12 @@
       })
       route.trunk)
     cfg.inbound)
-    ++ outboundTrunkUses;
+    ++ outboundTrunkUses
+    ++ map (trunk: {
+      where = "pbx.tieLines";
+      inherit trunk;
+    })
+    cfg.tieLines;
   unknownTrunks = builtins.filter (use: !(trunks ? ${use.trunk})) trunkUses;
   # trunks pbx dials as PJSIP/<number>@<trunk>; a ring group without a trunk
   # of its own uses pbx.outbound's
@@ -261,6 +266,19 @@
     builtins.filter (s: (s.type or null) == "endpoint") (format.resolveInheritance (config.services.asterisk.settings."pjsip.conf" or {})).sections
   ));
   foreignContexts = builtins.filter (trunk: trunks ? ${trunk} && (endpointContexts.${trunk} or null) != pbxLib.objectContext "inbound" trunk) inboundTrunks;
+
+  # the contexts a context includes in the final extensions.conf, where
+  # sections of one name are one context; raw text can add more
+  sections = lib.groupBy (s: s.name) (builtins.attrValues (config.services.asterisk.settings."extensions.conf" or {}));
+  includesOf = context: lib.concatMap (s: map format.includedContext (builtins.filter builtins.isString (lib.toList (s.include or [])))) (sections.${context} or []);
+  reachesOutbound = context:
+    builtins.any (c: c.key == "pbx-outbound") (builtins.genericClosure {
+      startSet = [{key = context;}];
+      operator = c: map (key: {inherit key;}) (includesOf c.key);
+    });
+  # trunks whose callers can dial out through pbx.outbound with no menu in
+  # between, as from pbx-internal, which includes pbx-outbound
+  dialOut = builtins.filter (trunk: !(builtins.elem trunk cfg.tieLines) && endpointContexts ? ${trunk} && endpointContexts.${trunk} != null && reachesOutbound endpointContexts.${trunk}) (builtins.attrNames trunks);
 in {
   # a default in each trunk rather than trunks.<name>.context, which would
   # create a trunk for a misspelt name
@@ -342,6 +360,19 @@ in {
         {option}`pbx.outbound`.
       '';
     };
+
+    tieLines = mkOption {
+      type = types.listOf types.str;
+      default = [];
+      description = ''
+        Trunks of {option}`services.asterisk.pjsip.trunks` that connect
+        another PBX, whose callers may dial out through
+        {option}`pbx.outbound`. pbx refuses any other trunk whose calls start
+        in a context that reaches `pbx-outbound`, as `pbx-internal` does,
+        since anyone who can call in through it could dial out, emergency
+        numbers included.
+      '';
+    };
   };
 
   config = mkIf cfg.enable (mkMerge [
@@ -418,6 +449,13 @@ in {
           setCallerId cfg.outbound.callerId
           ++ dialTrunk (["PJSIP/${numberAfterPrefix}@${cfg.outbound.trunk}"] ++ callerIdArguments cfg.outbound.callerId cfg.outbound.trunk);
       };
+
+      assertions = [
+        {
+          assertion = dialOut == [];
+          message = "pbx: calls from the trunk(s) ${concatMapStringsSep ", " (trunk: "${trunk} (${endpointContexts.${trunk}})") dialOut} start in a context that reaches pbx-outbound, so anyone who can call in through them can dial out, emergency numbers included. Give such a trunk a context without that, such as the pbx-inbound-<trunk> pbx gives it, or list it in pbx.tieLines if it connects another PBX whose callers may dial out.";
+        }
+      ];
     })
 
     (mkIf (cfg.emergency != null) {

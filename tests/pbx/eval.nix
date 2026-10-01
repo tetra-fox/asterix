@@ -444,7 +444,7 @@ in {
           ; from pbx.ringGroups.front
           [pbx-ringgroup-front]
           exten => 5559000,1,Set(CALLERID(num)=5551000)
-           same => n,Dial(PJSIP/''${EXTEN}@provider,20,U(pbx-confirm))
+           same => n,Dial(PJSIP/''${EXTEN}@provider,20,U(pbx-confirm)b(pbx-caller-id^s^1(sip.provider.example)))
            same => n,Hangup()
           exten => s,1,Dial(''${PJSIP_DIAL_CONTACTS(201)}&''${PJSIP_DIAL_CONTACTS(202)}&Local/5559000@pbx-ringgroup-front/n,20,b(pbx-confirm^leg^1))
            same => n,VoiceMail(201@default,b)
@@ -570,6 +570,74 @@ in {
         exten => 5551001,1,Hangup()'';
     };
 
+    # a trunk's From names its account, so the calls pbx gives a caller ID
+    # carry it in P-Asserted-Identity, in the trunk's From domain, and other
+    # calls nothing new; emergency calls take pbx.outbound's without their own
+    testCallerIdReachesTheProvider = let
+      module = {config, ...}: {
+        pbx = {
+          outbound = {
+            prefix = "9";
+            trunk = "provider";
+            callerId = "5551000";
+          };
+          emergency = {
+            numbers = ["911"];
+            trunk = "emergency";
+          };
+          ringGroups.cell = {
+            number = "630";
+            external = ["5559000"];
+            trunk = "mobile";
+          };
+        };
+        services.asterisk.pjsip.trunks = {
+          emergency = {
+            host = "2001:db8::5";
+            username = "5551000";
+            password = config.lib.asterisk.secret "/run/secrets/trunk";
+          };
+          mobile = {
+            host = "sip.mobile.example";
+            fromDomain = "mobile.example";
+            username = "5551000";
+            password = config.lib.asterisk.secret "/run/secrets/trunk";
+          };
+        };
+      };
+      dials = name: module: builtins.filter (lib.hasInfix "Dial(PJSIP/") (lib.splitString "\n" (context name module));
+    in {
+      expr = {
+        outbound = dials "pbx-outbound" module;
+        emergency = dials "pbx-emergency" module;
+        cell = dials "pbx-ringgroup-cell" module;
+        routine = context "pbx-caller-id" module;
+        withoutCallerId = {
+          outbound = dials "pbx-outbound" {
+            pbx.outbound = {
+              prefix = "9";
+              trunk = "provider";
+            };
+          };
+          routine = context "pbx-caller-id" {};
+        };
+      };
+      expected = {
+        outbound = [" same => n,Dial(PJSIP/\${EXTEN:1}@provider,,b(pbx-caller-id^s^1(sip.provider.example)))"];
+        emergency = [" same => n,Dial(PJSIP/911@emergency,,b(pbx-caller-id^s^1([2001:db8::5])))"];
+        cell = [" same => n,Dial(PJSIP/\${EXTEN}@mobile,20,U(pbx-confirm)b(pbx-caller-id^s^1(mobile.example)))"];
+        routine = ''
+          ; from pbx.outbound and pbx.emergency: their caller ID in P-Asserted-Identity
+          [pbx-caller-id]
+          exten => s,1,Set(PJSIP_HEADER(add,P-Asserted-Identity)=<sip:''${CONNECTEDLINE(num)}@''${ARG1}>)
+           same => n,Return()'';
+        withoutCallerId = {
+          outbound = ["exten => _9X.,1,Dial(PJSIP/\${EXTEN:1}@provider)"];
+          routine = null;
+        };
+      };
+    };
+
     # the prefix comes off however long it is
     testOutboundPrefixes = {
       expr =
@@ -675,12 +743,12 @@ in {
           exten => 112,1,Originate(Local/201@pbx-emergency-notify,app,SayDigits,''${CALLERID(num)},,30,acn)
            same => n,Originate(Local/202@pbx-emergency-notify,app,SayDigits,''${CALLERID(num)},,30,acn)
            same => n,Set(CALLERID(num)=5551000)
-           same => n,Dial(PJSIP/112@provider)
+           same => n,Dial(PJSIP/112@provider,,b(pbx-caller-id^s^1(sip.provider.example)))
            same => n,Hangup()
           exten => 911,1,Originate(Local/201@pbx-emergency-notify,app,SayDigits,''${CALLERID(num)},,30,acn)
            same => n,Originate(Local/202@pbx-emergency-notify,app,SayDigits,''${CALLERID(num)},,30,acn)
            same => n,Set(CALLERID(num)=5551000)
-           same => n,Dial(PJSIP/911@provider)
+           same => n,Dial(PJSIP/911@provider,,b(pbx-caller-id^s^1(sip.provider.example)))
            same => n,Hangup()'';
         notify = ''
           ; from pbx.emergency.notify

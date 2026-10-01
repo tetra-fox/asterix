@@ -154,7 +154,9 @@ def configurations(draw, fast=False, wide=False, vm=False):
         if not dialled & taken and PICKUP not in dialled:
             taken.update(dialled)
             m["emergency"] = {"numbers": numbers, "trunk": draw(st.sampled_from(m["trunks"]))}
-            if draw(st.booleans()):
+            # pbx warns about emergency calls without a caller ID of their own
+            # or pbx.outbound's
+            if "callerId" not in (m["outbound"] or {}) or draw(st.booleans()):
                 m["emergency"]["callerId"] = draw(st.text("0123456789", min_size=3, max_size=10))
 
     numbers = draw(st.lists(st.sampled_from(POOL), min_size=1, max_size=4, unique=True)) if vm else [fresh_number() for _ in range(draw(st.integers(1, 5)))]

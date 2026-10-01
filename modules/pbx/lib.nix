@@ -3,6 +3,7 @@
 {lib}: let
   inherit (lib) mkOption types;
   inherit (import ../lib.nix {inherit lib;}) splitMailbox;
+  inherit ((import ../../lib {inherit lib;}).format) hostPort;
 
   mailboxType = types.submodule {
     options = {
@@ -104,6 +105,15 @@ in rec {
   # dial string that calls every contact of an extension; PJSIP/<number>
   # calls only the first reachable one
   devices = number: "\${PJSIP_DIAL_CONTACTS(${number})}";
+
+  # Dial's option that has pbx-caller-id put the caller ID pbx set in the
+  # P-Asserted-Identity of the call to `trunk`, whose From names its account
+  callerIdOption = trunk: let
+    domain =
+      if trunk.fromDomain != null
+      then trunk.fromDomain
+      else trunk.host;
+  in "b(pbx-caller-id^s^1(${hostPort domain null}))";
 
   # dialplan steps a destination turns into; the call never comes back
   steps = dest:

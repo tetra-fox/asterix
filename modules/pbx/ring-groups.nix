@@ -25,6 +25,7 @@
 
   cfg = config.pbx;
   pbxLib = import ./lib.nix {inherit lib;};
+  trunks = config.services.asterisk.pjsip.trunks;
 
   groupType = types.submodule {
     options = {
@@ -98,9 +99,12 @@
         [(concatStringsSep "&" channels) group.ringTime]
         ++ optional withLocal "b(pbx-confirm^leg^1)"
       );
-    outsideCallerId = optional (cfg.outbound != null && cfg.outbound.callerId != null) (
+    withCallerId = cfg.outbound != null && cfg.outbound.callerId != null;
+    outsideCallerId = optional withCallerId (
       pbxLib.app "Set" ["CALLERID(num)=${cfg.outbound.callerId}"]
     );
+    # an assertion below reports a trunk that does not exist
+    callerIdOption = lib.optionalString (withCallerId && trunks ? ${trunkOf group}) (pbxLib.callerIdOption trunks.${trunkOf group});
   in {
     comment = mkDefault "from pbx.ringGroups.${name}";
     extensions =
@@ -120,7 +124,7 @@
           (pbxLib.app "Dial" [
             "PJSIP/\${EXTEN}@${trunkOf group}"
             group.ringTime
-            "U(pbx-confirm)"
+            "U(pbx-confirm)${callerIdOption}"
           ])
           (pbxLib.app "Hangup" [])
         ]);
@@ -132,7 +136,7 @@
   badNames = builtins.filter (name: pbxLib.breaksContext name || pbxLib.breaksArgument name || (withExternal ? ${name} && hasInfix "&" name)) (builtins.attrNames cfg.ringGroups);
   # a group without a trunk uses pbx.outbound's, which routes.nix checks
   unknownTrunks = builtins.attrNames (
-    filterAttrs (_: group: group.trunk != null && !(config.services.asterisk.pjsip.trunks ? ${group.trunk})) cfg.ringGroups
+    filterAttrs (_: group: group.trunk != null && !(trunks ? ${group.trunk})) cfg.ringGroups
   );
 in {
   options.pbx.ringGroups = mkOption {

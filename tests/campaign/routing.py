@@ -269,7 +269,8 @@ class Oracle:
                 path.last = "VoiceMailMain"
                 path.long = True
             elif kind == "emergency":
-                path.apps.append(["Dial", f"PJSIP/{name}@{self.m['emergency']['trunk']}"])
+                # the options after the dial string carry a caller ID
+                path.apps.append(["Dial", {"first": f"PJSIP/{name}@{self.m['emergency']['trunk']}"}])
                 # the extensions of notify are called at the same moment
                 path.legs += [["Dial", "", e] for e in self.m["emergency"].get("notify", [])]
                 # how a call outside ends is the far end's
@@ -279,7 +280,7 @@ class Oracle:
             return path
         outside = self.outside(number)
         if outside is not None:
-            path.apps.append(["Dial", f"PJSIP/{outside}@{self.m['outbound']['trunk']}"])
+            path.apps.append(["Dial", {"first": f"PJSIP/{outside}@{self.m['outbound']['trunk']}"}])
             path.answered = None
             return path
         path.rejected = True

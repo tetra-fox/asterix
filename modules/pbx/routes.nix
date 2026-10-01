@@ -82,7 +82,14 @@
         type = types.nullOr types.str;
         default = null;
         example = "5551000";
-        description = "Number presented to the called party; the trunk decides without it.";
+        description = ''
+          Number presented to the called party, on calls out and to the
+          external numbers of ring groups. The trunk's From header keeps
+          naming its account, so pbx sends this number in the
+          P-Asserted-Identity header of these calls; a provider that ignores
+          that header shows the account's number. Without it, the trunk
+          decides.
+        '';
       };
     };
   };
@@ -104,7 +111,12 @@
       callerId = mkOption {
         type = types.nullOr types.str;
         default = null;
-        description = "Number presented to the emergency service, usually the one the site's address is registered with.";
+        description = ''
+          Number presented to the emergency service, usually the one the
+          site's address is registered with, sent in P-Asserted-Identity as
+          {option}`pbx.outbound.callerId` is; without it, emergency calls
+          present that one.
+        '';
       };
       notify = mkOption {
         type = types.listOf types.str;
@@ -146,6 +158,22 @@
 
   setCallerId = callerId: optional (callerId != null) (pbxLib.app "Set" ["CALLERID(num)=${callerId}"]);
 
+  # an emergency call presents the site's number, not the caller's extension
+  emergencyCallerId =
+    if cfg.emergency.callerId != null
+    then cfg.emergency.callerId
+    else if cfg.outbound != null
+    then cfg.outbound.callerId
+    else null;
+
+  # Dial's arguments after the dial string for a call that presents
+  # `callerId`; an assertion below reports a trunk that does not exist
+  callerIdArguments = callerId: trunk:
+    lib.optionals (callerId != null && trunks ? ${trunk}) [
+      ""
+      (pbxLib.callerIdOption trunks.${trunk})
+    ];
+
   # Originate() calls one channel, so a Local channel into
   # pbx-emergency-notify rings every device of the extension
   emergencySteps = e: number:
@@ -160,9 +188,9 @@
         "acn"
       ])
     e.notify
-    ++ setCallerId e.callerId
+    ++ setCallerId emergencyCallerId
     ++ [
-      (pbxLib.app "Dial" ["PJSIP/${number}@${e.trunk}"])
+      (pbxLib.app "Dial" (["PJSIP/${number}@${e.trunk}"] ++ callerIdArguments emergencyCallerId e.trunk))
       (pbxLib.app "Hangup" [])
     ];
 
@@ -309,13 +337,25 @@ in {
       ];
     }
 
+    # Dial's b() option runs it on the call to the trunk before the INVITE
+    # goes out, where the connected line is the caller ID Dial was given
+    (mkIf (cfg.outbound != null && cfg.outbound.callerId != null || cfg.emergency != null && emergencyCallerId != null) {
+      services.asterisk.dialplan.contexts.pbx-caller-id = {
+        comment = mkDefault "from pbx.outbound and pbx.emergency: their caller ID in P-Asserted-Identity";
+        extensions.s = [
+          (pbxLib.app "Set" ["PJSIP_HEADER(add,P-Asserted-Identity)=<sip:\${CONNECTEDLINE(num)}@\${ARG1}>"])
+          (pbxLib.app "Return" [])
+        ];
+      };
+    })
+
     (mkIf (cfg.outbound != null) {
       services.asterisk.dialplan.contexts.pbx-outbound = {
         comment = mkDefault "from pbx.outbound";
         extensions."_${prefix}X." =
           setCallerId cfg.outbound.callerId
           ++ [
-            (pbxLib.app "Dial" ["PJSIP/${numberAfterPrefix}@${cfg.outbound.trunk}"])
+            (pbxLib.app "Dial" (["PJSIP/${numberAfterPrefix}@${cfg.outbound.trunk}"] ++ callerIdArguments cfg.outbound.callerId cfg.outbound.trunk))
             (pbxLib.app "Hangup" [])
           ];
       };
@@ -344,6 +384,8 @@ in {
           message = "pbx.emergency.notify: ${concatStringsSep ", " unknownNotify} are not extensions of pbx.extensions.";
         }
       ];
+
+      warnings = optional (emergencyCallerId == null) "pbx.emergency: neither pbx.emergency.callerId nor pbx.outbound.callerId is set, so the provider decides which number emergency calls present. Set pbx.emergency.callerId to the number the site's address is registered with.";
     })
   ]);
 }

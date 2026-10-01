@@ -1,10 +1,11 @@
 # Numbers outside dialled through the probe (tests/campaign/probe.nix), with
 # each kind of pbx.outbound.prefix: none, a digit, a star code and #, and
 # with and without pbx.outbound.callerId. The trunk gets the number without
-# the prefix, after the caller ID is set where one is configured; a number
-# too short for the pattern reaches nothing; a pbx number that starts with
-# the prefix reaches the pbx; and the emergency number works with and without
-# the prefix.
+# the prefix, after the caller ID is set where one is configured, which then
+# goes in P-Asserted-Identity; a number too short for the pattern reaches
+# nothing; a pbx number that starts with the prefix reaches the pbx; and the
+# emergency number works with and without the prefix, with pbx.outbound's
+# caller ID, as pbx.emergency sets none.
 {
   pkgs,
   self,
@@ -82,23 +83,32 @@
   # "no such extension" for a number pbx-internal lacks
   samples = c: let
     outside = "${c.prefix}5559999";
+    setCallerId = lib.optional (c.callerId != null) "Set(CALLERID(num)=${c.callerId})";
+    # the caller ID goes in P-Asserted-Identity
+    dial = number:
+      "Dial(PJSIP/${number}@provider"
+      + lib.optionalString (c.callerId != null) ",,b(pbx-caller-id^s^1(sip.provider.example))"
+      + ")";
     emergency = dialled: {
       extension = dialled;
       steps =
         numbered "pbx-internal" dialled ["Goto(pbx-emergency,911,1)"]
-        ++ numbered "pbx-emergency" "911" [
-          "Dial(PJSIP/911@provider)"
-          "Hangup()"
-        ];
+        ++ numbered "pbx-emergency" "911" (
+          setCallerId
+          ++ [
+            (dial "911")
+            "Hangup()"
+          ]
+        );
     };
   in
     [
       {
         extension = outside;
         steps = numbered "pbx-internal" outside (
-          lib.optional (c.callerId != null) "Set(CALLERID(num)=${c.callerId})"
+          setCallerId
           ++ [
-            "Dial(PJSIP/5559999@provider)"
+            (dial "5559999")
             "Hangup()"
           ]
         );

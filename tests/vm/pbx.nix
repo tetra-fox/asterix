@@ -8,7 +8,9 @@
 # leave out the caller and members in a call. Wherever an extension is
 # called, all of its devices ring, and its busy lamp shows it ringing and free
 # again within 2 s. A second Asterisk plays the SIP provider and the mobile
-# phone of the external member.
+# phone of the external member, and sees pbx.outbound's caller ID on calls to
+# the member and on emergency calls, which have none of their own, although
+# the trunk's account is not the office's number.
 #
 #   pbx       10.2.0.10, clock set by the test
 #   provider  10.2.0.5
@@ -160,10 +162,11 @@ in
             };
           };
 
+          # without a callerId of its own, emergency calls present
+          # pbx.outbound.callerId
           emergency = {
             numbers = ["911"];
             trunk = "provider";
-            callerId = "5551000";
             notify = [
               "201"
               "202"
@@ -190,7 +193,9 @@ in
             };
             trunks.provider = {
               host = "10.2.0.5";
-              username = "5551000";
+              # not the office's number, so the provider cannot take the
+              # caller ID from the account
+              username = "office";
               password = secret "sip-trunk";
               allow = [
                 "alaw"
@@ -247,13 +252,16 @@ in
           pjsip = {
             transports.udp = {};
             # the office's account; the endpoint name is its user name
-            endpoints."5551000" = {
+            endpoints.office = {
               context = "carrier";
               auth.password = config.lib.asterisk.secret "/run/test-secrets/customer";
               allow = [
                 "alaw"
                 "ulaw"
               ];
+              # the caller ID the office asserts (P-Asserted-Identity or
+              # Remote-Party-ID), otherwise the From header's
+              settings.trust_id_inbound = true;
             };
           };
           dialplan.contexts = {
@@ -371,7 +379,7 @@ in
             within(2, answered(boss), lamp("*28", "On the phone"))
             assert hours() == "closed"
             before = {p.name: p.requests("INVITE") for p in (reception, sales)}
-            provider.succeed("asterisk -rx 'channel originate PJSIP/5551000 extension s@feed'")
+            provider.succeed("asterisk -rx 'channel originate PJSIP/office extension s@feed'")
             pbx.wait_until_succeeds("test -f /var/lib/asterisk/spool/voicemail/default/200/INBOX/msg0000.txt", timeout=120)
             assert {p.name: p.requests("INVITE") for p in (reception, sales)} == before, "the ring group rang while closed"
             wait_idle(pbx)
@@ -398,7 +406,7 @@ in
             within(2, answered(boss), lamp("*28", "Ready"))
             assert hours() == "open"
             before = {p.name: p.requests("INVITE") for p in (reception, sales, sales_mobile, boss)}
-            provider.succeed("asterisk -rx 'channel originate PJSIP/5551000 extension s@feed'")
+            provider.succeed("asterisk -rx 'channel originate PJSIP/office extension s@feed'")
             for phone in (reception, sales, sales_mobile):
                 phone.wait_request("INVITE", after=before[phone.name], timeout=60)
             assert boss.requests("INVITE") == before["203"], "203 is not in the ring group"
@@ -425,7 +433,8 @@ in
             provider.succeed("asterisk -rx 'database put cell press 1'")
             boss.call("630")
             wait_bridged(pbx, "203", "5559000@pbx-ringgroup-cell", timeout=60)
-            assert db(provider, "calls", "cell") == "5551000", "the mobile does not see the office number"
+            cell = db(provider, "calls", "cell")
+            assert cell == "5551000", f"the mobile sees {cell}, not the office number"
             boss.hangup()
             wait_idle(pbx)
 
@@ -443,7 +452,13 @@ in
         with subtest("an emergency call goes out at once and notifies two extensions"):
             invites = {p.name: p.requests("INVITE") for p in (reception, sales, sales_mobile)}
             boss.call("911")
-            provider.wait_until_succeeds("asterisk -rx 'database get calls last' | grep -q 'Value: 5551000:911$'", timeout=60)
+            provider.wait_until_succeeds("asterisk -rx 'database get calls last' | grep -q ':911$'", timeout=60)
+            last = db(provider, "calls", "last")
+            assert last == "5551000:911", f"the emergency service sees {last}, not the office number"
+            # the number goes in P-Asserted-Identity, and From keeps the account
+            invite = [m["text"] for m in sip_messages(pbx) if m["text"].startswith("INVITE sip:911@10.2.0.5")][-1]
+            assert re.search(r"^P-Asserted-Identity: .*<sip:5551000@", invite, re.M), invite
+            assert re.search(r"^From: <sip:office@", invite, re.M), invite
             for phone in (reception, sales, sales_mobile):
                 phone.wait_request("INVITE", after=invites[phone.name], timeout=30)
                 invite = phone.received("INVITE")[-1]

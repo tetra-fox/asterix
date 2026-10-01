@@ -63,6 +63,7 @@
       outbound = {
         prefix = "9";
         trunk = "provider";
+        callerId = "5551000";
       };
       emergency = {
         numbers = ["911"];
@@ -627,6 +628,14 @@
     notifyIsNoExtension = {
       module.pbx.emergency.notify = lib.mkForce ["299"];
       assertion = "pbx.emergency.notify: 299 are not extensions of pbx.extensions";
+    };
+
+    # with neither callerId, the provider decides which number an emergency
+    # call presents
+    emergencyWithoutCallerIdWarns = {
+      module.pbx.outbound.callerId = lib.mkForce null;
+      assertions = [];
+      warning = "pbx.emergency.callerId";
     };
 
     # emergency numbers take digits only; * and # come with the outbound

@@ -3,6 +3,7 @@
 
 use std::collections::HashMap;
 use std::convert::Infallible;
+use std::io::ErrorKind;
 use std::net::IpAddr;
 use std::path::Path;
 use std::sync::Arc;
@@ -163,9 +164,16 @@ pub async fn serve(listener: std::net::TcpListener, files: Arc<Files>) -> Result
             .expect("the semaphore is never closed");
         let (stream, peer) = match listener.accept().await {
             Ok((stream, peer)) => (stream, peer.ip()),
-            // a connection that failed before it was accepted: only that client is affected
+            // a connection that closed before it was accepted: only that client is affected
+            Err(e) if e.kind() == ErrorKind::ConnectionAborted => {
+                eprintln!("accept: {e}");
+                continue;
+            }
+            // other errors, such as running out of file descriptors, leave the
+            // connection queued, so accepting again at once fails the same way
             Err(e) => {
                 eprintln!("accept: {e}");
+                tokio::time::sleep(Duration::from_secs(1)).await;
                 continue;
             }
         };

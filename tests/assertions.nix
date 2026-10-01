@@ -581,6 +581,7 @@
             "app_voicemail.so"
             "app_queue"
             "app_confbridge.so"
+            "bridge_softmix"
             "res_musiconhold.so"
             "res_parking.so"
             "bridge_builtin_features.so"
@@ -620,7 +621,7 @@
             cdr_csv.so for services.asterisk.cdr.csv
             cdr_sqlite3_custom.so for services.asterisk.cdr.sqlite
             cel_sqlite3_custom.so for services.asterisk.cel.sqlite
-            app_confbridge.so for services.asterisk.confbridge
+            app_confbridge.so, bridge_softmix.so for services.asterisk.confbridge
             bridge_builtin_features.so, app_mixmonitor.so for services.asterisk.features.featureMap.automixmon
             bridge_builtin_features.so for services.asterisk.features.featureMap.disconnect
             res_parking.so for services.asterisk.features.featureMap.parkcall

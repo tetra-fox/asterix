@@ -1365,6 +1365,7 @@ in {
       ));
       expected = [
         "load => app_confbridge.so"
+        "load => bridge_softmix.so"
         "load => chan_pjsip.so"
         "load => pbx_config.so"
         "load => res_musiconhold.so"

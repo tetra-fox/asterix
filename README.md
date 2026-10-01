@@ -100,7 +100,12 @@ A full list of options is in the options reference: `nix build .#docs`.
   See `checkConfig` in the options reference.
 - **Reload instead of restart.** Changes are applied with a reload where
   possible, so calls stay up. Only changes like a new SIP port
-  restart it, and phones stay registered across a restart.
+  restart it, and phones stay registered across a restart. A deploy reloads
+  only the modules whose files changed (`core reload` for a file without a
+  reload of its own), so dialplan globals and extensions changed at runtime
+  stay until the dialplan is read again: on a deploy that changes
+  extensions.conf or extensions.ael or reloads everything, a reload from the
+  CLI or a restart.
 - **`openFirewall` opens only what your configuration uses:** the SIP ports and
   the RTP range, and AMI or HTTP only if you ask for them.
 - **Several networks.** Give each network its own SIP transport and pin phones

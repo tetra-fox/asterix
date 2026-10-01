@@ -1171,6 +1171,25 @@
       assertions = [];
     };
 
+    # the modules write to the table of the name's first 79 bytes, which would
+    # never get the columns sqlite-tables adds to the whole name's
+    sqliteTableNameOver79Bytes = {
+      module.services.asterisk = {
+        cdr.sqlite = {
+          enable = true;
+          table = lib.strings.replicate 80 "c";
+        };
+        cel = {
+          enable = true;
+          sqlite = {
+            enable = true;
+            table = lib.strings.replicate 79 "e";
+          };
+        };
+      };
+      assertions = ["services.asterisk: SQLite table names longer than the 79 bytes that cdr_sqlite3_custom and cel_sqlite3_custom keep of them: cdr_sqlite3_custom.conf (${lib.strings.replicate 80 "c"})."];
+    };
+
     trunkEndpointNameClash = {
       module = {config, ...}: {
         services.asterisk.pjsip.trunks."101" = {

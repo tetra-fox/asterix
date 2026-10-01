@@ -128,6 +128,17 @@
     valueCounts
   );
 
+  sqliteFiles = builtins.attrNames valueCounts;
+
+  # each module keeps the first 79 bytes of its table name
+  # (cdr/cdr_sqlite3_custom.c:62, cel/cel_sqlite3_custom.c:61), while
+  # sqlite-tables would add columns to the table of the whole name
+  longTables = lib.concatMap (file: let
+    table = cfg.settings.${file}.master.table or null;
+  in
+    lib.optional (builtins.isString table && builtins.stringLength table > 79) "${file} (${table})")
+  sqliteFiles;
+
   sqliteOptions = what: defaultTable: notes: {
     enable = mkOption {
       type = types.bool;
@@ -144,7 +155,7 @@
     table = mkOption {
       type = types.str;
       default = defaultTable;
-      description = "Table name. The database is {file}`/var/log/asterisk/master.db`.";
+      description = "Table name, of up to 79 bytes. The database is {file}`/var/log/asterisk/master.db`.";
     };
   };
 in {
@@ -253,6 +264,10 @@ in {
               ${concatStringsSep "\n  " sqliteMismatches}
           '';
         }
+        {
+          assertion = longTables == [];
+          message = "services.asterisk: SQLite table names longer than the 79 bytes that cdr_sqlite3_custom and cel_sqlite3_custom keep of them: ${concatStringsSep ", " longTables}.";
+        }
       ];
     }
 
@@ -285,11 +300,7 @@ in {
     {
       # cdr_sqlite3_custom.conf and cel_sqlite3_custom.conf use `key => value`
       services.asterisk.syntax =
-        lib.genAttrs
-        [
-          "cdr_sqlite3_custom.conf"
-          "cel_sqlite3_custom.conf"
-        ]
+        lib.genAttrs sqliteFiles
         (_: {
           arrowSections = ["master"];
         });

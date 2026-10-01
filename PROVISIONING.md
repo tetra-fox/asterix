@@ -100,7 +100,7 @@ versions (`config-template.zip` from grandstream.com/support/tools: ht80x
 Caveats and known issues:
 
 - Not tested on a real HT801 yet, only against a simulated device in a VM test.
-  Try one adapter first; step 2 of [VALIDATION.md](VALIDATION.md) covers it.
+  Try one adapter first.
 - P1414 is left alone. The HT80x templates only call it "Auto Provision", and
   turning it off might stop the adapter from fetching its file.
 - The web interface password of V2 hardware must be 4 to 30 characters.

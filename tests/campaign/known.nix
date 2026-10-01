@@ -108,9 +108,6 @@
   "services.asterisk.queues.queues.<name>.members.*.interface = \"q7member\"" = "rejected by asterisk-config-check";
   "services.asterisk.queues.queues.<name>.settings = {\"q7unknown\":\"x\"}" = "rejected by asterisk-config-check";
   "services.asterisk.rtp.portRange.from = 10001" = "P2: does not load";
-  "services.asterisk.rtp.portRange.to = 1 with services.asterisk.rtp.portRange.from" = "P2: does not load";
-  "services.asterisk.rtp.portRange.to = 1023 with services.asterisk.rtp.portRange.from" = "P2: does not load";
-  "services.asterisk.rtp.portRange.to = 1024 with services.asterisk.rtp.portRange.from" = "P2: does not load";
   "services.asterisk.rtp.settings = {\"q7unknown\":\"x\"}" = "P3: loads";
   "services.asterisk.rtp.stunServer = \"q7 host\"" = "rejected by asterisk-config-check";
   "services.asterisk.settings = {\"acl.conf\":{\"office\":{\"q7unknown\":true}}}" = "rejected by asterisk-config-check";

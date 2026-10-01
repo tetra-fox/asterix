@@ -638,15 +638,12 @@
     from = toPort (rtpGeneral.rtpstart or 5000);
     to = toPort (rtpGeneral.rtpend or 31000);
   };
-  # Asterisk raises either end below 1024 to 1024 (res_rtp_asterisk.c,
-  # MINIMUM_RTP_PORT). RTP takes even ports up to the end, the end included,
-  # and RTCP the port above each, so an even end has its RTCP one past it.
-  rtpPorts = let
-    raised = lib.mapAttrs (_: lib.max 1024) rtpRange;
-  in
-    raised
+  # RTP takes even ports up to the end, the end included, and RTCP the port
+  # above each, so an even end has its RTCP one past it
+  rtpPorts =
+    rtpRange
     // {
-      to = raised.to + 1 - lib.mod raised.to 2;
+      to = rtpRange.to + 1 - lib.mod rtpRange.to 2;
     };
 
   # Ports Asterisk binds at startup (not only the ones opened in the
@@ -1159,6 +1156,12 @@ in {
             # otherwise res_rtp_asterisk uses 5000-31000, which the firewall does not open
             assertion = rtpRange.from < rtpRange.to;
             message = "services.asterisk.rtp.portRange (rtpstart and rtpend in rtp.conf): `from` (${toString rtpRange.from}) must be lower than `to` (${toString rtpRange.to}).";
+          }
+          {
+            # the range the types of rtp.portRange take, for rtpstart and rtpend
+            # from settings
+            assertion = builtins.all (port: port >= 1024 && port <= 65535) [rtpRange.from rtpRange.to];
+            message = "services.asterisk.rtp.portRange (rtpstart and rtpend in rtp.conf): Asterisk takes ports from 1024 to 65535 and moves others into that range; `from` is ${toString rtpRange.from} and `to` ${toString rtpRange.to}.";
           }
           {
             assertion = credentialCount <= 256;

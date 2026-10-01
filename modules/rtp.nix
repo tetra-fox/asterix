@@ -17,14 +17,16 @@
   inherit (import ./lib.nix {inherit lib;}) toSection;
 in {
   options.services.asterisk.rtp = {
+    # Asterisk moves a port outside 1024-65535 into that range without a word
+    # (res/res_rtp_asterisk.c:10080-10093)
     portRange = {
       from = mkOption {
-        type = types.port;
+        type = types.ints.between 1024 65535;
         default = 10000;
-        description = "First UDP port for RTP and RTCP. Asterisk raises a port below 1024 to 1024.";
+        description = "First UDP port for RTP and RTCP.";
       };
       to = mkOption {
-        type = types.port;
+        type = types.ints.between 1024 65535;
         default = 20000;
         description = ''
           Last UDP port for RTP. Each call leg takes an even port for RTP and

@@ -493,6 +493,21 @@
       assertion = "`from` (10000) must be lower than `to` (10000)";
     };
 
+    # Asterisk moves an RTP port below 1024 up to 1024, and one above 65535
+    # down to it, without a word
+    rtpRangeBelow1024Throws = {
+      module.services.asterisk.rtp.portRange.from = 1000;
+      throws = true;
+    };
+
+    rtpRangeOutside1024To65535FromSettings = {
+      module.services.asterisk.settings."rtp.conf".general = {
+        rtpstart = 1000;
+        rtpend = 70000;
+      };
+      assertion = "Asterisk takes ports from 1024 to 65535 and moves others into that range; `from` is 1000 and `to` 70000.";
+    };
+
     chanSip = {
       module.services.asterisk.modules.load = ["chan_sip"];
       assertion = "chan_sip.so is not supported";

@@ -569,18 +569,14 @@ in
       str.joinempty = "paused,invalid";
       bool.ringinuse = false;
     };
-    # rtpstart must stay below rtpend
+    # rtpstart must stay below rtpend, and both from 1024 to 65535
     "services.asterisk.rtp.portRange.from" = {
-      valid = [(with' {services.asterisk.rtp.portRange.to = 65535;} 65534) 10001];
-      invalid = [65535];
+      valid = [(with' {services.asterisk.rtp.portRange.to = 65535;} 65534) 10001 1024];
+      invalid = [65535 1023];
     };
     "services.asterisk.rtp.portRange.to" = {
-      valid = [
-        (with' {services.asterisk.rtp.portRange.from = 0;} 1)
-        (with' {services.asterisk.rtp.portRange.from = 1022;} 1023)
-        (with' {services.asterisk.rtp.portRange.from = 1023;} 1024)
-      ];
-      invalid = [0 10000];
+      valid = [(with' {services.asterisk.rtp.portRange.from = 1024;} 1025)];
+      invalid = [1023 10000];
     };
     "services.asterisk.rtp.settings" = freeform {
       int.rtcpinterval = 5000;

@@ -16,6 +16,8 @@ import json
 import socket
 import sys
 
+WINDOW = 64
+
 
 def connect(source="127.0.0.1"):
     connection = socket.create_connection(
@@ -99,10 +101,15 @@ def main(command, user, secret, *rest):
         times = int(rest[1])
         rest = rest[2:]
     action, headers = rest[0], [header.split("=", 1) for header in rest[1:]]
-    for i in range(times):
-        send(stream, action, headers + [["ActionID", str(i)]])
-    responses = 0
+    sent = responses = 0
     while responses < times:
+        # at most WINDOW actions wait for their response: Asterisk closes
+        # a session it could not write to for writetimeout (send_string in
+        # main/manager.c)
+        if sent < times and sent - responses < WINDOW:
+            send(stream, action, headers + [["ActionID", str(sent)]])
+            sent += 1
+            continue
         message = receive(stream)
         if message is None:
             break

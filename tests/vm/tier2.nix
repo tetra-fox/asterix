@@ -11,7 +11,8 @@
 # read-only user's POST and runs a Stasis application that answers, plays a
 # sound and hangs up; CDR records in CSV and SQLite and CEL records of blind
 # and attended transfers, a conference, a queue, a ring group and a call
-# nobody answered; ConfBridge profiles, queues and music on hold from a
+# nobody answered, with a transfer's target and a hangup's cause and dial
+# status in eventextra; ConfBridge profiles, queues and music on hold from a
 # Nix-built directory.
 {
   pkgs,
@@ -653,6 +654,12 @@ in
         def who(events, kind):
             return sorted(endpoint for event, endpoint in events if event == kind)
 
+        def extra(since, kind, endpoint):
+            """The eventextra of the one `kind` event of `endpoint`'s channel since the position `since`"""
+            rows = table(f"select eventextra from cel where rowid > {since[2]} and eventtype = '{kind}' and channame like 'PJSIP/{endpoint}-%'")
+            assert len(rows) == 1, rows
+            return json.loads(rows[0][0])
+
         position = marker()
 
         with subtest("CDR and CEL: a blind transfer"):
@@ -675,6 +682,8 @@ in
             ), cdrs
             assert legs(events) == expected_legs(["101", "102", "103"]), events
             assert who(events, "BLINDTRANSFER") == ["102"] and len(who(events, "LINKEDID_END")) == 1, events
+            transfer = extra(before, "BLINDTRANSFER", "102")
+            assert (transfer["extension"], transfer["context"]) == ("103", "internal"), transfer
             # the columns hold what they are named after: the caller's channel starts the call's linkedid
             caller_start, callee_start = table(
                 f"select exten, context, channame, uniqueid, linkedid from cel where eventtype = 'CHAN_START' and rowid > {before[2]} order by rowid limit 2"
@@ -737,6 +746,7 @@ in
             assert len(who(events, "LINKEDID_END")) == 1, events
 
         with subtest("CDR and CEL: a ring group"):
+            before = position
             target.call("901")
             wait_bridged(pbx, "103", "102")
             target.hangup()
@@ -746,8 +756,11 @@ in
             assert cdrs == [("103", "901", "103", "102", "Dial", "ANSWERED"), ("103", "901", "103", "104", "Dial", "NO ANSWER")], cdrs
             assert legs(events) == expected_legs(["102", "103"], unanswered=["104"]), events
             assert len(who(events, "LINKEDID_END")) == 1, events
+            hangup = extra(before, "HANGUP", "103")
+            assert (hangup["hangupcause"], hangup["dialstatus"]) == (16, "ANSWER"), hangup
 
         with subtest("CDR and CEL: an unanswered call that reaches no phone"):
+            before = position
             ended = target.disconnects()
             target.call("904")
             target.wait_disconnected(after=ended)
@@ -756,6 +769,8 @@ in
             # unanswered is off
             assert cdrs == [], cdrs
             assert legs(events) == expected_legs([], unanswered=["103"]), events
+            hangup = extra(before, "HANGUP", "103")
+            assert (hangup["hangupcause"], hangup["dialstatus"]) == (16, ""), hangup
 
         with subtest("AMI users receive every event of 128 calls at once"):
             ami_listen(pbx, "ami-secret", "calls", "everything")

@@ -48,6 +48,9 @@
   celColumns = {
     eventtype = var "eventtype";
     eventtime = var "eventtime";
+    # JSON with what the event type adds, such as a hangup's cause and dial
+    # status or a blind transfer's target (main/cel.c)
+    eventextra = var "eventextra";
     cidname = var "CALLERID(name)";
     cidnum = var "CALLERID(num)";
     exten = var "CHANNEL(exten)";

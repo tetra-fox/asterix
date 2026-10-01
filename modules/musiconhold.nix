@@ -111,7 +111,15 @@
       application = mkOption {
         type = types.nullOr types.str;
         default = null;
-        description = "Command producing signed linear audio in `custom` mode. Asterisk runs the program without searching `PATH`, so give its full path, such as `\${pkgs.mpg123}/bin/mpg123`.";
+        description = ''
+          Command producing signed linear audio in `custom` mode. Asterisk
+          runs the program without searching `PATH`, so give its full path,
+          such as `''${pkgs.mpg123}/bin/mpg123`. Asterisk starts a program that
+          ends again, but while one has ended, Asterisk can crash when it stops
+          or when a deploy that changes music on hold reloads it. A program
+          that keeps running, such as a script that plays a clip in a loop,
+          avoids that.
+        '';
       };
       settings = mkOption {
         type = types.attrsOf format.types.value;

@@ -191,7 +191,8 @@
   # (res/res_pjsip_sdp_rtp.c rtp_check_timeout), which larger values overflow
   rtpTimeoutType = types.ints.between 0 2147483;
 
-  commonEndpointOptions = name: {
+  # `endpoint` is the submodule's own config
+  commonEndpointOptions = name: endpoint: {
     context = mkOption {
       type = types.str;
       description = "Dialplan context calls from this endpoint start in.";
@@ -208,11 +209,18 @@
     };
     allow = mkOption {
       type = types.nonEmptyListOf types.str;
-      default = [
-        "g722"
-        "ulaw"
-        "alaw"
-      ];
+      default =
+        if endpoint.dtmfMode == "inband"
+        then [
+          "ulaw"
+          "alaw"
+        ]
+        else [
+          "g722"
+          "ulaw"
+          "alaw"
+        ];
+      defaultText = lib.literalMD ''`[ "g722" "ulaw" "alaw" ]`, without `g722` when `dtmfMode` is `inband`'';
       description = ''
         Allowed codecs in order of preference (`disallow = all` is rendered
         first). Asterisk translates ulaw, alaw, g722, gsm and opus with the
@@ -286,8 +294,8 @@
       description = ''
         DTMF mode; Asterisk's default is `rfc4733`. Asterisk hears keys sent
         as tones (`inband`, and `auto` for a device that offers no RFC 4733)
-        only in ulaw and alaw calls, so give an `inband` endpoint
-        `allow = [ "ulaw" "alaw" ]`: in a g722 call its keys are lost.
+        only in ulaw and alaw calls, so with `inband` the default `allow`
+        leaves out g722, in whose calls the keys are lost.
       '';
     };
     behindNat = mkOption {
@@ -311,9 +319,13 @@
   };
 
   endpointType = types.submodule (
-    {name, ...}: {
+    {
+      name,
+      config,
+      ...
+    }: {
       options =
-        commonEndpointOptions name
+        commonEndpointOptions name config
         // {
           auth = mkOption {
             type = types.nullOr (inboundAuthType name);
@@ -377,7 +389,7 @@
       ...
     }: {
       options =
-        commonEndpointOptions name
+        commonEndpointOptions name config
         // {
           host = mkOption {
             type = types.str;

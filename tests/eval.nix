@@ -72,6 +72,53 @@ in {
         '';
     };
 
+    # Asterisk hears inband DTMF in ulaw and alaw calls only
+    testInbandDtmfLeavesOutG722 = {
+      expr = let
+        files = rendered [
+          phone
+          {
+            services.asterisk.pjsip = {
+              endpoints."102" = {
+                context = "internal";
+                dtmfMode = "inband";
+              };
+              trunks.provider = {
+                host = "sip.provider.example";
+                username = "5551000";
+                password = "unused";
+                context = "internal";
+                dtmfMode = "inband";
+              };
+            };
+          }
+        ];
+        allowed = name:
+          lib.pipe files."pjsip.conf" [
+            (lib.splitString "\n\n")
+            (lib.filter (lib.hasPrefix "[${name}]\ntype = endpoint\n"))
+            (lib.concatMap (lib.splitString "\n"))
+            (lib.filter (lib.hasPrefix "allow = "))
+          ];
+      in
+        map allowed ["101" "102" "provider"];
+      expected = [
+        [
+          "allow = g722"
+          "allow = ulaw"
+          "allow = alaw"
+        ]
+        [
+          "allow = ulaw"
+          "allow = alaw"
+        ]
+        [
+          "allow = ulaw"
+          "allow = alaw"
+        ]
+      ];
+    };
+
     # a definition replaces the built-in max_initial_qualify_time without
     # mkForce, through the typed option and through settings
     testMaxInitialQualifyTimeIsReplaceable = {

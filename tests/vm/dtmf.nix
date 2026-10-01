@@ -5,11 +5,10 @@
 # to a G.722 one and back; and over a trunk in each mode to a second Asterisk,
 # into the confirmation of a ring group's outside member and both ways once
 # the call is up, where auto falls back to inband and auto_info to SIP INFO
-# for an Asterisk that offers no RFC 4733. The inband phone allows ulaw and
-# alaw only, as the evaluation warning about it asks; one with the default
-# codecs gets a g722 call, and no key of it reaches the menu. Phones send RFC
-# 4733 and SIP INFO with pjsua's commands and inband keys as a WAV file of
-# tones, and the keys a phone gets are read from its log, or from its
+# for an Asterisk that offers no RFC 4733. The inband phone has the default
+# codecs, which leave out g722, in whose calls Asterisk hears no tones. Phones
+# send RFC 4733 and SIP INFO with pjsua's commands and inband keys as a WAV
+# file of tones, and the keys a phone gets are read from its log, or from its
 # recording when they come as tones.
 #
 #   pbx       10.3.0.10
@@ -22,7 +21,7 @@
 }: let
   inherit (pkgs) lib;
 
-  # extension -> dtmfMode of its endpoint; 307 keeps the default codecs
+  # extension -> dtmfMode of its endpoint
   modes = {
     "301" = "rfc4733";
     "302" = "info";
@@ -30,7 +29,6 @@
     "304" = "auto";
     "305" = "auto_info";
     "306" = "rfc4733";
-    "307" = "inband";
   };
 
   # trunk -> its dtmfMode, the provider's for its account, and the number of
@@ -189,10 +187,6 @@ in
               {
                 "301".allow = ["ulaw"];
                 "302".allow = ["g722"];
-                "303".allow = [
-                  "ulaw"
-                  "alaw"
-                ];
               }
             ];
             trunks =
@@ -330,11 +324,11 @@ in
             for i, number in enumerate(MODES)
         }
 
-        def keypad(name, wav, sip_port, user="303"):
-            """A phone of the inband extension `user` that presses the keys of
+        def keypad(name, wav, sip_port):
+            """A phone of the inband extension 303 that presses the keys of
             `wav` as tones from the start of the call it places."""
             pad = Phone(
-                phones, name, user, f"pw-{user}", "10.3.0.10", sip_port=sip_port, cli_port=sip_port - 2700,
+                phones, name, "303", "pw-303", "10.3.0.10", sip_port=sip_port, cli_port=sip_port - 2700,
                 tone=f"{KEYPADS}/{wav}", register=False,
             )
             pad.start()
@@ -380,16 +374,14 @@ in
             for trunk in TRUNKS:
                 pbx.wait_until_succeeds(f"asterisk -rx 'pjsip show contacts' | grep -qE '^ *Contact: +{trunk}/sip:.* Avail'", timeout=60)
 
-        with subtest("a voice menu gets every key once and in order from a phone in each mode, and no key sent as tones in a g722 call"):
+        with subtest("a voice menu gets every key once and in order from a phone in each mode, inband with the default codecs"):
             pad = keypad("303-menu", "keys.wav", 5090)
-            # 307 allows the default codecs, and Asterisk picks g722
-            lost = keypad("307-menu", "keys.wav", 5096, user="307")
             callers = [phone[number] for number in ("301", "302", "304", "305")] + [pad]
-            for p in callers + [lost]:
+            for p in callers:
                 asterisk(pbx, f"database del test keys-{p.user}")
             ended = {p.name: p.disconnects() for p in callers}
             cursor = journal_cursor(pbx)
-            cli_parallel([(p, f"call new {p.uri('700')}") for p in callers + [lost]])
+            cli_parallel([(p, f"call new {p.uri('700')}") for p in callers])
             # the menu reads keys from the start of its prompt, which lasts
             # 0.5 s, then while it waits
             for p in callers[:-1]:
@@ -399,14 +391,7 @@ in
             for p in callers:
                 p.wait_disconnected(after=ended[p.name])
                 assert db(pbx, "test", f"keys-{p.user}") == KEYS[:-1], f"{p.name}: {db(pbx, 'test', f'keys-{p.user}')}"
-            # the menu plays its prompt again after 5 s without a key, by when
-            # 307's keypad sent all of its keys, and Asterisk read none of them
-            wait_journal(pbx, cursor, r"<PJSIP/307-[0-9a-f]+> Playing 'test/keys\.", count=2)
-            wait_journal(pbx, cursor, r"\(g722 not supported\)")
-            assert db(pbx, "test", "keys-307") is None, db(pbx, "test", "keys-307")
-            lost.hangup()
-            for p in (pad, lost):
-                p.stop()
+            pad.stop()
             wait_idle(pbx)
 
         with subtest("a voicemail PIN arrives by SIP INFO and inband"):

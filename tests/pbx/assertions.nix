@@ -305,6 +305,38 @@
       assertions = [];
     };
 
+    # every context the pbx writes is guarded the same way, before or after
+    # its steps
+    stepsAddedToGeneratedContexts = {
+      module.services.asterisk.dialplan.contexts = {
+        pbx-extension-201.extensions.s = ["NoOp(extra)"];
+        pbx-ringgroup-front.extensions.s = lib.mkBefore ["NoOp(first)"];
+        pbx-inbound-provider.extensions."5551000" = ["NoOp(extra)"];
+        pbx-outbound.extensions."_9X." = ["NoOp(extra)"];
+        pbx-emergency.extensions."911" = lib.mkBefore ["NoOp(first)"];
+      };
+      assertions = [
+        "pbx: steps were added to pbx-emergency/911, pbx-extension-201/s, pbx-inbound-provider/5551000, pbx-outbound/_9X., pbx-ringgroup-front/s from elsewhere, so they run before or after the pbx's own. Change these through the pbx options, or replace their steps with lib.mkForce; steps of your own can go in the context's extraConfig, which is written as it is, or in a context of your own that a `context` destination names."
+      ];
+    };
+
+    stepsAddedToGeneratedContextsThroughSettings = {
+      module.services.asterisk.settings."extensions.conf".pbx-queue-support.exten = ["s,4,NoOp(extra)"];
+      assertions = [
+        ''pbx: steps were added to pbx-queue-support/s from elsewhere, as lines of services.asterisk.settings."extensions.conf". Change these through the pbx options; steps of your own can go in the context's extraConfig, which is written as it is, or in a context of your own that a `context` destination names.''
+      ];
+    };
+
+    # replaced steps, an extension of its own and raw lines are the user's
+    generatedContextsChangedOnPurpose = {
+      module.services.asterisk.dialplan.contexts = {
+        pbx-extension-201.extensions.s = lib.mkForce ["Dial(PJSIP/201)"];
+        pbx-ringgroup-front.extensions.h = ["NoOp(hung up)"];
+        pbx-ivr-main.extraConfig = "exten => s,n,NoOp(extra)";
+      };
+      assertions = [];
+    };
+
     # hangup takes only true; nothing else may hang up quietly
     hangupFalseThrows = {
       module.pbx.ringGroups.front.noAnswer = {hangup = false;};

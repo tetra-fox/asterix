@@ -27,9 +27,7 @@
   cfg = config.pbx;
   core = config.services.asterisk;
   pbxLib = import ./lib.nix {inherit lib;};
-  asteriskLib = import ../../lib {inherit lib;};
-  inherit (asteriskLib) format;
-  inherit (asteriskLib.dialplan) app;
+  inherit (import ../../lib {inherit lib;}) format;
 
   gotoAt = context: extension: pbxLib.app "Goto" [context extension "1"];
 
@@ -109,39 +107,6 @@
   ));
 
   generated = listToAttrs (map (n: nameValuePair n.number n.steps) numbers);
-
-  # Nix concatenates the lists of several definitions, so steps defined for a
-  # pbx number elsewhere end up before or after the pbx's own. Compared as
-  # dialplan text, since merged steps carry defaults the generated ones lack.
-  stepText = step:
-    if builtins.isString step
-    then step
-    else "${
-      if (step.label or null) == null
-      then ""
-      else step.label
-    }:${app step.app step.args}";
-  merged = config.services.asterisk.dialplan.contexts.pbx-internal.extensions;
-  extended = filter (
-    number: let
-      own = map stepText generated.${number};
-      all = map stepText (merged.${number} or []);
-      n = length own;
-    in
-      length all > n && (lib.take n all == own || lib.drop (length all - n) all == own)
-  ) (builtins.attrNames generated);
-  # each step is one line of extensions.conf, so a number with more lines than
-  # steps has lines from settings
-  settingsLines = concatMap (s: lib.toList (s.exten or [])) (
-    filter (s: s.name == "pbx-internal") (builtins.attrValues (core.settings."extensions.conf" or {}))
-  );
-  linesOf = number:
-    length (filter (line: let
-      exten = format.splitExten (toString line);
-    in
-      exten != null && exten.extension == number && exten.priority != "hint")
-    settingsLines);
-  extendedInSettings = filter (number: linesOf number > length (merged.${number} or [])) (builtins.attrNames generated);
 in {
   config = mkIf cfg.enable {
     services.asterisk.dialplan.contexts.pbx-internal = {
@@ -171,14 +136,6 @@ in {
       {
         assertion = pickedUp == [];
         message = "pbx: chan_pjsip takes a call to ${pickupExten}, the pickupexten of features.conf, as a call pickup before the dialplan runs, so it never reaches ${concatStringsSep ", " pickedUp}. Use another number, or change services.asterisk.features.general.pickupexten.";
-      }
-      {
-        assertion = extended == [];
-        message = "pbx: steps were added to pbx-internal/${concatStringsSep ", " extended} from elsewhere. Change these numbers through the pbx options, or replace their steps with lib.mkForce.";
-      }
-      {
-        assertion = extendedInSettings == [];
-        message = "pbx: steps were added to pbx-internal/${concatStringsSep ", " extendedInSettings} from elsewhere, as lines of services.asterisk.settings.\"extensions.conf\". Change these numbers through the pbx options.";
       }
     ];
   };

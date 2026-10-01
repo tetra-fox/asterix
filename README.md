@@ -132,6 +132,15 @@ service does not start when a secret in it contains one.
 
 Other secret managers work the same way, since `secret` only takes a path.
 
+Keep secrets out of the arguments of dialplan steps. Asterisk splits a secret
+there at its commas, like any argument, and prints the arguments of every step
+it runs: in its verbose output from level 3, in `core show channels`, in call
+records (CDR `lastdata`, CEL `appdata`) and in AMI's `Newexten` events. To
+check a PIN in the dialplan, `Authenticate(/run/credentials/asterisk.service/<name>)`
+reads it from a file, here the credential `<name>` of
+`services.asterisk.credentials` (with `app_authenticate.so` in
+`services.asterisk.modules.load`).
+
 While Asterisk runs, the secrets it holds can be read by root, by the
 `asterisk` user and the programs the dialplan starts, by members of the
 `asterisk` group through the CLI (`asterisk -rx 'pjsip show auths'`), and by

@@ -182,13 +182,24 @@
       (pbxLib.callerIdOption trunks.${trunk})
     ];
 
+  # a call the trunk does not put through, as to a provider that does not
+  # answer, ends with congestion (503), which phones play as a fast busy; a
+  # busy one keeps the busy cause Dial left on the channel (486)
+  dialTrunk = arguments: [
+    (pbxLib.app "Dial" arguments)
+    (pbxLib.app "GotoIf" [''$["''${DIALSTATUS}" = "BUSY"]?busy''])
+    (pbxLib.app "Congestion" [])
+    {
+      app = "Hangup";
+      args = [];
+      label = "busy";
+    }
+  ];
+
   emergencySteps = e: number:
     map (extension: pbxLib.app "Gosub" ["notify" "1(${extension})"]) e.notify
     ++ setCallerId emergencyCallerId
-    ++ [
-      (pbxLib.app "Dial" (["PJSIP/${number}@${e.trunk}"] ++ callerIdArguments emergencyCallerId e.trunk))
-      (pbxLib.app "Hangup" [])
-    ];
+    ++ dialTrunk (["PJSIP/${number}@${e.trunk}"] ++ callerIdArguments emergencyCallerId e.trunk);
 
   prefix = cfg.outbound.prefix;
   numberAfterPrefix =
@@ -274,7 +285,14 @@ in {
         trunk = "provider";
         callerId = "5551000";
       };
-      description = "Calls from phones to numbers outside: the prefix, then the number.";
+      description = ''
+        Calls from phones to numbers outside: the prefix, then the number. A
+        call the trunk does not put through ends with congestion, which phones
+        play as a fast busy, and one the far end answers busy stays busy. A
+        provider that does not answer at all fails a call once its INVITE
+        times out, after 32 s, and at once after the trunk's next qualify
+        (`qualifyFrequency`).
+      '';
     };
 
     emergency = mkOption {
@@ -288,7 +306,9 @@ in {
       };
       description = ''
         Emergency calls. There are no defaults: the numbers, and who must be
-        told, depend on where the PBX is.
+        told, depend on where the PBX is. A call waits for the trunk as long
+        as it takes, and one the trunk does not put through ends with
+        congestion, as with {option}`pbx.outbound`.
       '';
     };
   };
@@ -352,10 +372,7 @@ in {
         comment = mkDefault "from pbx.outbound";
         extensions."_${prefix}X." =
           setCallerId cfg.outbound.callerId
-          ++ [
-            (pbxLib.app "Dial" (["PJSIP/${numberAfterPrefix}@${cfg.outbound.trunk}"] ++ callerIdArguments cfg.outbound.callerId cfg.outbound.trunk))
-            (pbxLib.app "Hangup" [])
-          ];
+          ++ dialTrunk (["PJSIP/${numberAfterPrefix}@${cfg.outbound.trunk}"] ++ callerIdArguments cfg.outbound.callerId cfg.outbound.trunk);
       };
     })
 

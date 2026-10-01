@@ -25,7 +25,8 @@
       extension = "9123";
       steps = [
         "pbx-internal,9123,1,Dial(PJSIP/123@provider)"
-        "pbx-internal,9123,2,Hangup()"
+        "pbx-internal,9123,2,GotoIf(0?busy)"
+        "pbx-internal,9123,3,Congestion()"
       ];
     }
     {
@@ -33,7 +34,8 @@
       steps = [
         "pbx-internal,911,1,Goto(pbx-emergency,911,1)"
         "pbx-emergency,911,1,Dial(PJSIP/911@provider)"
-        "pbx-emergency,911,2,Hangup()"
+        "pbx-emergency,911,2,GotoIf(0?busy)"
+        "pbx-emergency,911,3,Congestion()"
       ];
     }
     {
@@ -41,7 +43,8 @@
       steps = [
         "pbx-internal,9911,1,Goto(pbx-emergency,911,1)"
         "pbx-emergency,911,1,Dial(PJSIP/911@provider)"
-        "pbx-emergency,911,2,Hangup()"
+        "pbx-emergency,911,2,GotoIf(0?busy)"
+        "pbx-emergency,911,3,Congestion()"
       ];
     }
     {

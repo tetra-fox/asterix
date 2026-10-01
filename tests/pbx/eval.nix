@@ -719,17 +719,23 @@ in {
           ; from pbx.outbound
           [pbx-outbound]
           exten => _9X.,1,Dial(PJSIP/''${EXTEN:1}@provider)
-           same => n,Hangup()''
+           same => n,GotoIf($["''${DIALSTATUS}" = "BUSY"]?busy)
+           same => n,Congestion()
+           same => n(busy),Hangup()''
         ''
           ; from pbx.outbound
           [pbx-outbound]
           exten => _00X.,1,Dial(PJSIP/''${EXTEN:2}@provider)
-           same => n,Hangup()''
+           same => n,GotoIf($["''${DIALSTATUS}" = "BUSY"]?busy)
+           same => n,Congestion()
+           same => n(busy),Hangup()''
         ''
           ; from pbx.outbound
           [pbx-outbound]
           exten => _X.,1,Dial(PJSIP/''${EXTEN}@provider)
-           same => n,Hangup()''
+           same => n,GotoIf($["''${DIALSTATUS}" = "BUSY"]?busy)
+           same => n,Congestion()
+           same => n(busy),Hangup()''
       ];
     };
 
@@ -804,12 +810,16 @@ in {
            same => n,Gosub(notify,1(202))
            same => n,Set(CALLERID(num)=5551000)
            same => n,Dial(PJSIP/112@provider,,b(pbx-caller-id^s^1(sip.provider.example)))
-           same => n,Hangup()
+           same => n,GotoIf($["''${DIALSTATUS}" = "BUSY"]?busy)
+           same => n,Congestion()
+           same => n(busy),Hangup()
           exten => 911,1,Gosub(notify,1(201))
            same => n,Gosub(notify,1(202))
            same => n,Set(CALLERID(num)=5551000)
            same => n,Dial(PJSIP/911@provider,,b(pbx-caller-id^s^1(sip.provider.example)))
-           same => n,Hangup()
+           same => n,GotoIf($["''${DIALSTATUS}" = "BUSY"]?busy)
+           same => n,Congestion()
+           same => n(busy),Hangup()
           exten => notify,1,GotoIf($["''${CUT(CHANNEL,-,1)}" = "PJSIP/''${ARG1}"]?done)
            same => n,Originate(Local/''${ARG1}@pbx-devices,app,SayDigits,''${CALLERID(num)},,30,acn)
            same => n(done),Return()'';

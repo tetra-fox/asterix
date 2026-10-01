@@ -3,14 +3,14 @@
 # Asterisk's default of ten registration attempts: the trunk keeps trying and
 # registers once the name resolves, and the provider's address it lists
 # identifies the provider all along. The provider stops answering in a call: a
-# new call fails after the INVITE's timeout, and immediately once qualify marks
-# the provider unreachable; when it is back, the call goes on and calls go out
-# again within the qualify interval. The same holds when the office's own
-# trunk link goes down and up. The provider moves to a new address, and calls
-# go both ways without a restart. A phone that loses power in a call, so no
-# BYE ever comes, has its call ended by the session timer it asked for, on a
-# call to another phone and on a trunk call, and one that asked for none by
-# the RTP timeout pbx gives an extension.
+# new call fails with congestion, a fast busy, after the INVITE's timeout, and
+# immediately once qualify marks the provider unreachable; when it is back, the
+# call goes on and calls go out again within the qualify interval. The same
+# holds when the office's own trunk link goes down and up. The provider moves
+# to a new address, and calls go both ways without a restart. A phone that
+# loses power in a call, so no BYE ever comes, has its call ended by the
+# session timer it asked for, on a call to another phone and on a trunk call,
+# and one that asked for none by the RTP timeout pbx gives an extension.
 #
 #   pbx       lan (VLAN 1) 10.1.0.10, wan (VLAN 2) 203.0.113.10
 #   provider  wan 203.0.113.5 (SIP), 203.0.113.53 (DNS, sip.provider.example)
@@ -223,7 +223,7 @@ in
             start_phones([a, b, c, d])
             wait_registrations({a: 200, b: 200, c: 200, d: 200})
 
-        with subtest("the provider gone mid-call: new calls fail, and once it is back the call goes on and calls go out again"):
+        with subtest("the provider gone mid-call: new calls fail with congestion, and once it is back the call goes on and calls go out again"):
             a.call("95559001")
             wait_hears(a, [PROVIDER_TONE])
             provider.succeed(*[f"iptables -I {rule}" for rule in DROP_OFFICE])
@@ -235,6 +235,10 @@ in
             pbx.wait_until_succeeds("asterisk -rx 'pjsip show contacts' | grep -qE '^ *Contact: +provider/.* Unavail '", timeout=15)
             d.call("95559003")
             d.wait_disconnected(timeout=5)
+            # both get congestion, which phones play as a fast busy
+            for phone in (c, d):
+                status = re.findall(r"is DISCONNECTED \[reason=(\d+) ", phone.log_text())
+                assert status == ["503"], f"{phone.name}: {status}"
             provider.succeed(*[f"iptables -D {rule}" for rule in DROP_OFFICE])
             # the next qualify, qualifyFrequency (10 s) later
             pbx.wait_until_succeeds("asterisk -rx 'pjsip show contacts' | grep -qE '^ *Contact: +provider/.* Avail '", timeout=15)

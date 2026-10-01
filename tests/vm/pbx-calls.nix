@@ -18,8 +18,9 @@
 # prefix, leaves for the provider within a second of the phone's INVITE from
 # every extension, and so does a second call during the first, while notify
 # rings the other extensions, one of them busy and one not registered, but
-# not the caller's own; with the provider unreachable, the caller learns it
-# once the trunk's INVITE times out.
+# not the caller's own; with the provider unreachable, an emergency or
+# outbound caller gets congestion (503), a fast busy, once the trunk's INVITE
+# times out.
 #
 #   pbx       10.2.0.10, trunks provider and second
 #   provider  10.2.0.5, accounts 5551000 (provider) and 5552000 (second)
@@ -559,16 +560,20 @@ in
             wait_bridged(pbx, "204", "provider")
             hang_up(boss, warehouse, desk, sales)
 
-        with subtest("with the provider unreachable, an emergency caller learns it once the trunk's INVITE times out"):
+        with subtest("with the provider unreachable, emergency and outbound callers get congestion once the trunk's INVITE times out"):
             provider.block()
             mark = len(sip_messages(pbx))
-            done = boss.disconnects()
-            boss.call("911")
-            status = ended(boss, done)
-            out = wait_sent(mark, "INVITE sip:911@10.2.0.5", "10.2.0.5:")[0]
-            final = wait_sent(mark, f"SIP/2.0 {status} ", f"10.2.0.21:{boss.sip_port}")[-1]
-            # pjsip gives up after timer B, 64 times T1 of 0.5 s
-            assert status >= 400 and final["time"] - out["time"] < 33, f"{status} after {final['time'] - out['time']:.1f} s"
+            calls = [(boss, "911", "911"), (warehouse, "#5559999", "5559999")]
+            done = {caller.name: caller.disconnects() for caller, _, _ in calls}
+            # both INVITEs leave before a qualify can find the provider gone
+            call_at_once([(caller, dialled) for caller, dialled, _ in calls])
+            for caller, dialled, number in calls:
+                status = ended(caller, done[caller.name])
+                out = wait_sent(mark, f"INVITE sip:{number}@10.2.0.5", "10.2.0.5:")[0]
+                final = wait_sent(mark, f"SIP/2.0 {status} ", f"10.2.0.21:{caller.sip_port}")[-1]
+                # a fast busy once pjsip gives up after timer B, 64 times T1 of
+                # 0.5 s
+                assert status == 503 and final["time"] - out["time"] < 33, f"{dialled}: {status} after {final['time'] - out['time']:.1f} s"
             hang_up(desk, sales)
       '';
   }

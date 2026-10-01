@@ -9,6 +9,7 @@ cat > log << 'EOF'
 [Sep 29 11:41:28] ERROR[44] res_pjsip.c: Error 171039 'Unsupported transport (PJSIP_EUNSUPTRANSPORT)' sending OPTIONS request to endpoint gate
 [Sep 29 11:41:28] WARNING[58] res_musiconhold.c: poll() failed: Interrupted system call
 [Sep 29 11:41:28] WARNING[58] res_musiconhold.c: poll() failed: Bad file descriptor
+[Sep 29 11:41:28] WARNING[35] taskprocessor.c: Taskprocessor 'stasis/m:devicestate:all-00000009' queue reached 500 scheduled tasks (high water mark: 500).
 [Sep 29 11:41:28] WARNING[18] pbx_config.c: No closing parenthesis found? 'Dial(PJSIP/101' at line 9 of extensions.conf
 [Sep 29 11:41:28] NOTICE[18] cdr.c: CDR simple logging enabled.
 EOF

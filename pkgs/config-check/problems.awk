@@ -1,7 +1,7 @@
 # prints the errors and warnings Asterisk logged while it loaded the
 # configuration, up to "Asterisk Ready.", without the ones that come from the
-# build having no network, see package.nix, or from the program of a music
-# class that ended; exits 1 when there are none
+# build having no network, see package.nix, from the program of a music class
+# that ended, or from a busy machine; exits 1 when there are none
 #
 #   gawk [-v named=FILE] -f problems.awk LOG
 #
@@ -45,6 +45,12 @@ function unreachable(entry) {
 # TODO: drop this once res_musiconhold waits again after EINTR without a warning
 function interrupted(entry) {
     return entry ~ /^\[[^]]*\] WARNING\[[0-9]+\] res_musiconhold\.c: poll\(\) failed: Interrupted system call$/
+}
+
+# a task queue reaching its high water mark (main/taskprocessor.c:1356) says how
+# fast the machine worked through what loading queued, not what the configuration lacks
+function backlog(entry) {
+    return entry ~ /^\[[^]]*\] WARNING\[[0-9]+\] taskprocessor\.c: Taskprocessor '[^']+' queue reached [0-9]+ scheduled tasks/
 }
 
 # a module that autoload brought in: one the loader started, which
@@ -99,7 +105,7 @@ function unwanted(thread, source, message,    module, m, n, k, others) {
             } else
                 loading = ""
         }
-        if (list[i] ~ /^\[[^]]*\] (ERROR|WARNING)\[/ && !unreachable(list[i]) && !interrupted(list[i]) &&
+        if (list[i] ~ /^\[[^]]*\] (ERROR|WARNING)\[/ && !unreachable(list[i]) && !interrupted(list[i]) && !backlog(list[i]) &&
             !(named != "" && parsed && unwanted(e[2], e[3], e[4]))) {
             sub(/^\[[^]]*\] /, "", list[i])
             print list[i]

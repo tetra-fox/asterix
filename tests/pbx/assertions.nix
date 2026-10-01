@@ -692,6 +692,45 @@
       throws = true;
     };
 
+    # with the prefix 9 and no route of its own, 911 would reach the trunk as 11
+    outboundWithoutEmergency = {
+      module.pbx.emergency = lib.mkForce null;
+      assertions = [
+        ''
+          pbx.outbound is set but pbx.emergency is not, so an emergency number dialled from a phone goes out as a number outside, or nowhere: with the prefix 9, 911 reaches the trunk as 11. Add the emergency numbers where the PBX is, such as
+            pbx.emergency.numbers = [ "911" ];
+          which go out through pbx.outbound.trunk unless pbx.emergency.trunk names another, or, if this PBX makes no emergency calls,
+            pbx.emergency.numbers = [ ];
+        ''
+      ];
+    };
+
+    # an empty list says so, and needs no trunk
+    outboundWithoutEmergencyNumbers = {
+      module.pbx.emergency = lib.mkForce {numbers = [];};
+      assertions = [];
+    };
+
+    # but only written out: emergency settings without numbers say nothing
+    emergencyNumbersUnset = {
+      module.pbx.emergency = lib.mkForce {callerId = "5551000";};
+      throws = true;
+    };
+
+    # emergency calls go out through pbx.outbound's trunk unless they name one
+    emergencyThroughOutboundTrunk = {
+      module.pbx.emergency = lib.mkForce {numbers = ["911"];};
+      assertions = [];
+    };
+
+    emergencyWithoutTrunk = {
+      module.pbx = {
+        outbound = lib.mkForce null;
+        emergency = lib.mkForce {numbers = ["911"];};
+      };
+      assertions = ["pbx.emergency: emergency calls need a trunk; set pbx.emergency.trunk, or pbx.outbound, whose trunk they then go out through."];
+    };
+
     objectsWithoutEnable = {
       module.pbx.enable = lib.mkForce false;
       warning = "pbx objects are defined, but pbx.enable is not set";

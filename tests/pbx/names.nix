@@ -136,6 +136,8 @@
             prefix = "9";
             trunk = "provider";
           };
+          # no emergency calls, which pbx.outbound needs said
+          emergency.numbers = [];
           ringGroups = forEach "ringGroups" (o:
             lib.nameValuePair o.name {
               number = "60${toString o.i}";

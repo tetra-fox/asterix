@@ -104,15 +104,21 @@
   emergencyType = types.submodule {
     options = {
       numbers = mkOption {
-        type = types.nonEmptyListOf (types.strMatching "[0-9]+");
+        # numbers left unset are an error, as with nonEmptyListOf, rather
+        # than an empty list, so a PBX without emergency calls says so
+        type = types.listOf (types.strMatching "[0-9]+") // {emptyValue = {};};
         example = ["911"];
         description = ''
           Emergency numbers where the PBX is. Phones can dial them with and
-          without the outbound prefix.
+          without the outbound prefix. With {option}`pbx.outbound`, an empty
+          list says that the PBX makes no emergency calls; an emergency number
+          is then taken for a number outside, or reaches nothing.
         '';
       };
       trunk = mkOption {
-        type = types.str;
+        type = types.nullOr types.str;
+        default = null;
+        defaultText = lib.literalExpression "config.pbx.outbound.trunk";
         description = "Trunk of {option}`services.asterisk.pjsip.trunks` emergency calls go out through.";
       };
       callerId = mkOption {
@@ -199,7 +205,15 @@
   emergencySteps = e: number:
     map (extension: pbxLib.app "Gosub" ["notify" "1(${extension})"]) e.notify
     ++ setCallerId emergencyCallerId
-    ++ dialTrunk (["PJSIP/${number}@${e.trunk}"] ++ callerIdArguments emergencyCallerId e.trunk);
+    ++ dialTrunk (["PJSIP/${number}@${emergencyTrunk}"] ++ callerIdArguments emergencyCallerId emergencyTrunk);
+
+  # emergency calls without a trunk of their own go out through pbx.outbound's
+  emergencyTrunk =
+    if cfg.emergency.trunk != null
+    then cfg.emergency.trunk
+    else if cfg.outbound != null
+    then cfg.outbound.trunk
+    else null;
 
   prefix = cfg.outbound.prefix;
   numberAfterPrefix =
@@ -212,7 +226,7 @@
       where = "pbx.outbound.trunk";
       inherit (cfg.outbound) trunk;
     }
-    ++ optional (cfg.emergency != null) {
+    ++ optional (cfg.emergency != null && cfg.emergency.trunk != null) {
       where = "pbx.emergency.trunk";
       inherit (cfg.emergency) trunk;
     };
@@ -291,7 +305,10 @@ in {
         play as a fast busy, and one the far end answers busy stays busy. A
         provider that does not answer at all fails a call once its INVITE
         times out, after 32 s, and at once after the trunk's next qualify
-        (`qualifyFrequency`).
+        (`qualifyFrequency`). It needs {option}`pbx.emergency` beside it, with
+        no emergency numbers if the PBX makes no emergency calls: without
+        their own route they would go out as numbers outside, 911 as 11 with
+        the prefix 9.
       '';
     };
 
@@ -305,10 +322,11 @@ in {
         notify = ["201"];
       };
       description = ''
-        Emergency calls. There are no defaults: the numbers, and who must be
-        told, depend on where the PBX is. A call waits for the trunk as long
-        as it takes, and one the trunk does not put through ends with
-        congestion, as with {option}`pbx.outbound`.
+        Emergency calls, which {option}`pbx.outbound` needs. There are no
+        defaults: the numbers, and who must be told, depend on where the PBX
+        is. A call waits for the trunk as long as it takes, and one the trunk
+        does not put through ends with congestion, as with
+        {option}`pbx.outbound`.
       '';
     };
   };
@@ -352,6 +370,15 @@ in {
           assertion = foreignContexts == [];
           message = "pbx.inbound: the trunk(s) ${concatStringsSep ", " foreignContexts} have a context of their own, so their calls do not reach pbx.inbound; remove it.";
         }
+        {
+          assertion = cfg.outbound == null || cfg.emergency != null;
+          message = ''
+            pbx.outbound is set but pbx.emergency is not, so an emergency number dialled from a phone goes out as a number outside, or nowhere: with the prefix 9, 911 reaches the trunk as 11. Add the emergency numbers where the PBX is, such as
+              pbx.emergency.numbers = [ "911" ];
+            which go out through pbx.outbound.trunk unless pbx.emergency.trunk names another, or, if this PBX makes no emergency calls,
+              pbx.emergency.numbers = [ ];
+          '';
+        }
       ];
     }
 
@@ -377,7 +404,9 @@ in {
     })
 
     (mkIf (cfg.emergency != null) {
-      services.asterisk.dialplan.contexts = {
+      # without numbers there is nothing to dial, and without a trunk the
+      # assertion below says so
+      services.asterisk.dialplan.contexts = mkIf (cfg.emergency.numbers != [] && emergencyTrunk != null) {
         pbx-emergency = {
           comment = mkDefault "from pbx.emergency";
           extensions =
@@ -413,9 +442,13 @@ in {
           assertion = unknownNotify == [];
           message = "pbx.emergency.notify: ${concatStringsSep ", " unknownNotify} are not extensions of pbx.extensions.";
         }
+        {
+          assertion = cfg.emergency.numbers == [] || emergencyTrunk != null;
+          message = "pbx.emergency: emergency calls need a trunk; set pbx.emergency.trunk, or pbx.outbound, whose trunk they then go out through.";
+        }
       ];
 
-      warnings = optional (emergencyCallerId == null) "pbx.emergency: neither pbx.emergency.callerId nor pbx.outbound.callerId is set, so the provider decides which number emergency calls present. Set pbx.emergency.callerId to the number the site's address is registered with.";
+      warnings = optional (cfg.emergency.numbers != [] && emergencyCallerId == null) "pbx.emergency: neither pbx.emergency.callerId nor pbx.outbound.callerId is set, so the provider decides which number emergency calls present. Set pbx.emergency.callerId to the number the site's address is registered with.";
     })
   ]);
 }

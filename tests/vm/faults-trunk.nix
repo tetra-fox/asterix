@@ -69,6 +69,7 @@ in
             trunk = "provider";
             callerId = "5551000";
           };
+          emergency.numbers = ["911"];
         };
 
         services.asterisk = {

@@ -158,6 +158,9 @@ def configurations(draw, fast=False, wide=False, vm=False):
             # or pbx.outbound's
             if "callerId" not in (m["outbound"] or {}) or draw(st.booleans()):
                 m["emergency"]["callerId"] = draw(st.text("0123456789", min_size=3, max_size=10))
+    # pbx.outbound needs pbx.emergency, which says so with no numbers
+    if m["outbound"] and not m["emergency"]:
+        m["emergency"] = {"numbers": []}
 
     numbers = draw(st.lists(st.sampled_from(POOL), min_size=1, max_size=4, unique=True)) if vm else [fresh_number() for _ in range(draw(st.integers(1, 5)))]
     taken.update(numbers)
@@ -322,7 +325,7 @@ def configurations(draw, fast=False, wide=False, vm=False):
             route["destination"] = destination()
         m["inbound"][did] = route
 
-    if m["emergency"] and draw(st.booleans()):
+    if m["emergency"] and m["emergency"]["numbers"] and draw(st.booleans()):
         m["emergency"]["notify"] = draw(st.lists(st.sampled_from(extensions), max_size=2, unique=True))
     return m
 
@@ -440,8 +443,10 @@ def repair(m):
                 if field in c and c[field] not in known:
                     del c[field]
         for key in ["outbound", "emergency"]:
-            if m[key] and m[key]["trunk"] not in m["trunks"]:
+            if m[key] and "trunk" in m[key] and m[key]["trunk"] not in m["trunks"]:
                 m[key] = None
+        if m["outbound"] and not m["emergency"]:
+            m["emergency"] = {"numbers": []}
         if m["emergency"] and "notify" in m["emergency"]:
             m["emergency"]["notify"] = [e for e in m["emergency"]["notify"] if e in m["extensions"]]
         for did, r in list(m["inbound"].items()):

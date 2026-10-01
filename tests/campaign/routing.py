@@ -12,7 +12,7 @@ The facts it uses, each from a description or the README:
   the number, of two digits or more, and a pbx number that starts with the
   prefix still reaches the pbx (`outbound.prefix`); emergency numbers work
   with and without the prefix (`emergency.numbers`) and go out through
-  `emergency.trunk`
+  `emergency.trunk`, by default `outbound.trunk`
 - calls from a trunk start in `pbx-inbound-<trunk>`, which holds the numbers
   of `pbx.inbound` on that trunk; other numbers are rejected (`inbound`)
 - an extension's phone rings for `ringTime`, then its no-answer destination
@@ -278,7 +278,8 @@ class Oracle:
                 path.long = True
             elif kind == "emergency":
                 # the options after the dial string carry a caller ID
-                path.apps.append(["Dial", {"first": f"PJSIP/{name}@{self.m['emergency']['trunk']}"}])
+                trunk = self.m["emergency"].get("trunk") or self.m["outbound"]["trunk"]
+                path.apps.append(["Dial", {"first": f"PJSIP/{name}@{trunk}"}])
                 # the extensions of notify are called at the same moment
                 path.legs += [["Dial", "", e] for e in self.m["emergency"].get("notify", []) if e != callerid]
                 # how a call outside ends is the far end's

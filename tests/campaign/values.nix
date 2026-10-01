@@ -813,7 +813,12 @@ in
       valid = [["112" "911"]];
       invalid = [["620"]];
     };
-    "pbx.emergency.trunk".invalid = ["nope"];
+    # without one, emergency calls go out through pbx.outbound's trunk, which
+    # the base lacks
+    "pbx.emergency.trunk" = {
+      invalid = ["nope" null];
+      default = "reject";
+    };
     "pbx.extensions.<name>.name".valid = ["Reception"];
     "pbx.extensions.<name>.pickupGroups" = {
       valid = [["front" "sales team"]];

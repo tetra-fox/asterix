@@ -296,6 +296,8 @@ in
       closed.voicemail = "201";
     };
     outbound = { prefix = "9"; trunk = "provider"; callerId = "5551000"; };
+    # 911 with and without the 9, out through the same trunk
+    emergency.numbers = [ "911" ];
   };
 
   # trunks, transports and everything else stay core options
@@ -341,9 +343,10 @@ pressed nothing goes to `noInput`, or one who pressed an unknown key goes to
 `invalid`. Pages are one-way unless `duplex` is set, and skip phones that are
 in a call. The phones must also be set to allow auto-answer.
 
-Emergency numbers have no defaults, since they depend on where the PBX is:
-see `pbx.emergency`. [small-office.nix](examples/small-office.nix) is a
-complete example.
+Emergency numbers have no defaults, since they depend on where the PBX is,
+and `outbound` needs them beside it, or `emergency.numbers = [ ];` for a PBX
+that makes no emergency calls: see `pbx.emergency`.
+[small-office.nix](examples/small-office.nix) is a complete example.
 
 ## Development
 

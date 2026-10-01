@@ -465,6 +465,7 @@ in {
             trunk = "provider";
             callerId = "5551000";
           };
+          emergency.numbers = [];
         };
       };
     in {
@@ -704,9 +705,12 @@ in {
         map (
           prefix:
             context "pbx-outbound" {
-              pbx.outbound = {
-                inherit prefix;
-                trunk = "provider";
+              pbx = {
+                outbound = {
+                  inherit prefix;
+                  trunk = "provider";
+                };
+                emergency.numbers = [];
               };
             }
         ) [
@@ -736,6 +740,37 @@ in {
            same => n,GotoIf($["''${DIALSTATUS}" = "BUSY"]?busy)
            same => n,Congestion()
            same => n(busy),Hangup()''
+      ];
+    };
+
+    # emergency calls go out through pbx.outbound's trunk unless they name
+    # one, and without emergency numbers there is no emergency context
+    testEmergencyTrunk = {
+      expr =
+        map (
+          numbers:
+            context "pbx-emergency" {
+              pbx = {
+                outbound = {
+                  prefix = "9";
+                  trunk = "provider";
+                };
+                emergency.numbers = numbers;
+              };
+            }
+        ) [
+          ["112"]
+          []
+        ];
+      expected = [
+        ''
+          ; from pbx.emergency
+          [pbx-emergency]
+          exten => 112,1,Dial(PJSIP/112@provider)
+           same => n,GotoIf($["''${DIALSTATUS}" = "BUSY"]?busy)
+           same => n,Congestion()
+           same => n(busy),Hangup()''
+        null
       ];
     };
 

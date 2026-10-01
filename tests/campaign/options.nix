@@ -281,9 +281,13 @@
       slot = true;
       def = _: {extension = "201";};
     };
-    "pbx.outbound".def = _: {
-      prefix = "9";
-      trunk = "provider";
+    # pbx.outbound needs pbx.emergency, here with no emergency numbers
+    "pbx.outbound" = {
+      def = _: {
+        prefix = "9";
+        trunk = "provider";
+      };
+      extra.pbx.emergency.numbers = [];
     };
     "pbx.paging.<name>" = {
       name = "front";

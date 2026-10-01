@@ -144,6 +144,7 @@ in
             prefix = "9";
             trunk = "provider";
           };
+          emergency.numbers = ["911"];
 
           ivrs = {
             keys = {

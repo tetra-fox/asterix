@@ -359,6 +359,32 @@
       assertions = [];
     };
 
+    # a lookup skips a context named, but for case, like one it searched
+    # already: through an include of an include, and through two includes of
+    # one context, one of them timed (main/pbx.c:2527-2531)
+    includeChainsReachContextsAlikeButForCase = {
+      module.services.asterisk.dialplan.contexts = {
+        internal.includes = ["phones"];
+        phones.includes = ["Phones"];
+        Phones.extensions."200" = ["Answer()"];
+        lobby.includes = ["front" "Front,09:00-17:00,mon-fri,*,*"];
+        front.extensions."201" = ["Answer()"];
+        Front.extensions."202" = ["Answer()"];
+      };
+      assertions = ["services.asterisk.dialplan: include chains reach contexts named alike but for case, and Asterisk searches only the first of the two it reaches, skipping the other without a word: Front and front (from lobby), Phones and phones (from internal). Rename one context of each pair."];
+    };
+
+    # each is searched from the contexts that reach it
+    contextsAlikeButForCaseInSeparateChains = {
+      module.services.asterisk.dialplan.contexts = {
+        internal.includes = ["sales"];
+        lobby.includes = ["Sales"];
+        sales.extensions."201" = ["Answer()"];
+        Sales.extensions."202" = ["Answer()"];
+      };
+      assertions = [];
+    };
+
     # an include ends its context at a | too, the old separator of the time
     includeOfContextWithPipe = {
       module.services.asterisk.dialplan.contexts = {

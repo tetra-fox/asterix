@@ -281,6 +281,42 @@
         ) (toList (s.include or []))
       )
   ) (attrValues dialplan);
+  # a lookup skips an included context named, but for case, like one it searched
+  # already, though context names are case-sensitive (main/pbx.c:2527-2531, 703-711)
+  # TODO: drop this once pbx_find_extension compares the contexts it searched with case
+  includers = lib.foldl' (acc: s:
+    lib.foldl' (acc: target: acc // {${target} = (acc.${target} or []) ++ [s.name];}) acc (
+      map includedContext (filter isString (toList (s.include or [])))
+    )) {} (attrValues dialplan);
+  # a context and every context whose includes reach it
+  reachedFrom = name: let
+    go = seen: queue:
+      if queue == []
+      then seen
+      else let
+        new = filter (s: !(seen ? ${s})) (unique (includers.${lib.head queue} or []));
+      in
+        go (seen // lib.genAttrs new (_: true)) (lib.tail queue ++ new);
+  in
+    go {${name} = true;} [name];
+  # names of contexts and include targets alike but for case, in groups
+  alikeNames = filter (names: builtins.length names > 1) (
+    map (names: sort (a: b: a < b) (unique names)) (attrValues (builtins.groupBy lib.toLower (map (s: s.name) (attrValues dialplan) ++ attrNames includers)))
+  );
+  alikeReached =
+    lib.concatMap (
+      names:
+        lib.concatMap (
+          a:
+            lib.concatMap (b: let
+              common = attrNames (builtins.intersectAttrs (reachedFrom a) (reachedFrom b));
+            in
+              optional (a < b && common != []) "${a} and ${b} (from ${lib.head common})")
+            names
+        )
+        names
+    )
+    alikeNames;
   # Pre-dial subroutines of Dial()/Page() written as b(context^exten^priority)
   # or B(context^exten^priority).
   gosubTargets = line:
@@ -500,6 +536,10 @@ in {
           services.asterisk: dialplan includes contexts that are not defined:
             ${concatStringsSep "\n  " danglingIncludes}
         '';
+      }
+      {
+        assertion = alikeReached == [];
+        message = "services.asterisk.dialplan: include chains reach contexts named alike but for case, and Asterisk searches only the first of the two it reaches, skipping the other without a word: ${concatStringsSep ", " alikeReached}. Rename one context of each pair.";
       }
       {
         assertion = knownContexts == null || danglingSubroutines == [];

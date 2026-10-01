@@ -110,6 +110,10 @@ A full list of options is in the options reference: `nix build .#docs`.
   and TURN for ICE. `externalSignalingAddress` in the options reference says
   over which transports Asterisk applies a PBX's public address.
 - **Sandboxed.** Asterisk runs as its own user, without extra privileges.
+- **Restarted when it fails.** systemd restarts Asterisk when its process
+  crashes or exits with an error. Nothing notices an Asterisk that hangs or is
+  stopped (SIGSTOP), since it sends systemd no watchdog notifications: the
+  unit stays active while calls time out.
 - **Phone provisioning.** Supported devices fetch their configuration from the
   PBX. It is part of the pbx layer, see [PROVISIONING.md](PROVISIONING.md).
 

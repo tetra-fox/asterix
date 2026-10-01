@@ -115,7 +115,10 @@ A full list of options is in the options reference: `nix build .#docs`.
 - **NAT.** Options for a PBX behind NAT and for phones behind NAT, plus STUN
   and TURN for ICE. `externalSignalingAddress` in the options reference says
   over which transports Asterisk applies a PBX's public address.
-- **Sandboxed.** Asterisk runs as its own user, without extra privileges.
+- **Sandboxed.** Asterisk runs as its own user, without extra privileges
+  unless a SIP or HTTP port is below 1024, which takes `CAP_NET_BIND_SERVICE`.
+  `systemd-analyze security asterisk.service` rates its exposure 1.5, 1.6 with
+  `realtime` and 1.7 with such a port.
 - **Restarted when it fails.** systemd restarts Asterisk when its process
   crashes or exits with an error. Nothing notices an Asterisk that hangs or is
   stopped (SIGSTOP), since it sends systemd no watchdog notifications: the

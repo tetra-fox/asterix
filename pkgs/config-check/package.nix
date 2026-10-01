@@ -203,8 +203,13 @@ in
       if [ "$failed" = 0 ] && [ -n "$probe" ]; then
         "$probe" "$asterisk" -C "$root/config/asterisk.conf" || failed=1
       fi
-      rx "core stop now" > /dev/null
-      wait "$pid"
+      # stopping Asterisk can crash it after a custom music class's program ends,
+      # since res_musiconhold closes the class's timer before the class's thread is
+      # done with it (res/res_musiconhold.c:2015-2055, 865-866), so the check kills it
+      # TODO: stop it with "core stop now" again once res_musiconhold joins the thread first
+      kill -KILL "$pid"
+      # bash notes on standard error that a job was killed
+      wait "$pid" 2> /dev/null || [ "$(kill -l $?)" = KILL ]
       exit "$failed"
     '';
     derivationArgs.postCheck = ''

@@ -1420,6 +1420,46 @@
       assertion = "musicOnHold.classes.office: mode `files` needs a directory";
     };
 
+    # res_musiconhold plays the default class for one it does not know, and
+    # finds a class in any case; queues take three keys for it
+    musicOnHoldClassesUndefined = {
+      module.services.asterisk = {
+        musicOnHold.classes.office.directory = "moh";
+        queues.queues.support = {
+          members = ["PJSIP/101"];
+          musicOnHoldClass = "jazz";
+        };
+        settings."queues.conf".sales = {
+          MusicOnHold = "Office";
+          member = ["PJSIP/101"];
+        };
+        confbridge.users = {
+          chair.musicOnHoldClass = "DEFAULT";
+          guest.settings.music_on_hold_class = "lounge";
+        };
+      };
+      assertions = [
+        ''
+          services.asterisk: queues.conf and confbridge.conf name music on hold classes that musiconhold.conf does not define, so callers would hear the default class:
+            queues.conf [support] musicclass = jazz
+            confbridge.conf [guest] music_on_hold_class = lounge
+          Define them in services.asterisk.musicOnHold.classes, or name a class that is defined.
+        ''
+      ];
+    };
+
+    # included files or a realtime backend can define any class
+    musicOnHoldClassesUnknowable = {
+      module.services.asterisk = {
+        queues.queues.support = {
+          members = ["PJSIP/101"];
+          musicOnHoldClass = "jazz";
+        };
+        settings."extconfig.conf".settings.musiconhold = "curl,http://moh.example.org";
+      };
+      assertions = [];
+    };
+
     plainPasswordWarns = {
       module.services.asterisk.pjsip.endpoints."101".auth.password = lib.mkForce "hunter2";
       assertions = [];

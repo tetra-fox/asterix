@@ -31,6 +31,43 @@
     then "${cfg.paths.data}/${c.directory}"
     else c.directory;
 
+  # the classes of the final musiconhold.conf, in lower case as Asterisk matches
+  # them (res/res_musiconhold.c:2303-2310); null when files or realtime add more
+  classes = let
+    names = format.sectionNames {
+      sections = lib.filterAttrs (_: section: !(section.template or false)) (cfg.settings."musiconhold.conf" or {});
+      includes = cfg.includes."musiconhold.conf" or [];
+      extraConfig = cfg.extraConfig."musiconhold.conf" or "";
+    };
+    realtime =
+      (cfg.includes."extconfig.conf" or [])
+      != []
+      || (cfg.extraConfig."extconfig.conf" or "") != ""
+      || builtins.any (section: builtins.any (key: lib.toLower key == "musiconhold") (builtins.attrNames section)) (builtins.attrValues (cfg.settings."extconfig.conf" or {}));
+  in
+    if names == null || realtime
+    then null
+    else lib.remove "general" (map lib.toLower names);
+  # the classes queues and user profiles name, with the keys Asterisk takes in
+  # any case (apps/app_queue.c:3533-3534, apps/confbridge/conf_config_parser.c:2637)
+  references = file: keep: keys:
+    lib.concatMap (
+      section:
+        lib.concatMap (
+          key:
+            map (class: {
+              inherit class;
+              text = "${file} [${section.name}] ${key} = ${class}";
+            }) (builtins.filter builtins.isString (lib.toList section.${key}))
+        ) (builtins.filter (key: builtins.elem (lib.toLower key) keys) (builtins.attrNames section))
+    ) (builtins.filter keep (format.resolveInheritance (cfg.settings.${file} or {})).sections);
+  missingClasses = map (reference: reference.text) (
+    builtins.filter (reference: !(builtins.elem (lib.toLower reference.class) classes)) (
+      references "queues.conf" (section: lib.toLower section.name != "general") ["musicclass" "music" "musiconhold"]
+      ++ references "confbridge.conf" (section: lib.toLower (toString (section.type or "")) == "user") ["music_on_hold_class"]
+    )
+  );
+
   classType = types.submodule {
     options = {
       mode = mkOption {
@@ -129,7 +166,19 @@ in {
     services.asterisk.syntax."musiconhold.conf".arrowKeys = ["entry"];
 
     assertions =
-      lib.mapAttrsToList (name: c: {
+      [
+        {
+          # res_musiconhold plays the default class instead, and warns only when a
+          # call asks for the missing one (res/res_musiconhold.c:1013, local_ast_moh_start)
+          assertion = classes == null || missingClasses == [];
+          message = ''
+            services.asterisk: queues.conf and confbridge.conf name music on hold classes that musiconhold.conf does not define, so callers would hear the default class:
+              ${lib.concatStringsSep "\n  " missingClasses}
+            Define them in services.asterisk.musicOnHold.classes, or name a class that is defined.
+          '';
+        }
+      ]
+      ++ lib.mapAttrsToList (name: c: {
         assertion =
           (c.mode == "files" -> c.directory != null)
           && (c.mode == "custom" -> c.application != null)

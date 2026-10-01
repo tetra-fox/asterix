@@ -165,7 +165,10 @@ in
       invalid = [{admin_menu."*1" = "q7action";}];
       key = "*1";
     };
-    "services.asterisk.confbridge.users.<name>.musicOnHoldClass".valid = ["default"];
+    "services.asterisk.confbridge.users.<name>.musicOnHoldClass" = {
+      valid = ["default"];
+      invalid = ["q7class"];
+    };
     "services.asterisk.confbridge.users.<name>.pin" = {
       valid = [password];
       warn = ["1234"];
@@ -563,7 +566,10 @@ in
       valid = ["PJSIP/101"];
       verbatim = false;
     };
-    "services.asterisk.queues.queues.<name>.musicOnHoldClass".valid = ["default"];
+    "services.asterisk.queues.queues.<name>.musicOnHoldClass" = {
+      valid = ["default"];
+      invalid = ["q7class"];
+    };
     "services.asterisk.queues.queues.<name>.settings" = freeform {
       int.announce-frequency = 60;
       str.joinempty = "paused,invalid";

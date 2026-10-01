@@ -17,8 +17,6 @@
 }: let
   inherit (pkgs) lib;
 
-  sipProbe = pkgs.writers.writePython3Bin "sip-probe" {flakeIgnore = ["E501"];} ./sip-probe.py;
-
   # what a program the dialplan starts can write and read, reported to
   # /var/lib/asterisk/probe-$1
   sandboxProbe = pkgs.writeShellApplication {
@@ -236,6 +234,7 @@ in
       intruder = {
         imports = [
           ./common.nix
+          ./sip-probe.nix
           ./sipp.nix
         ];
         networking.interfaces.eth1.ipv4.addresses = lib.mkForce [
@@ -252,7 +251,6 @@ in
             prefixLength = 24;
           }
         ];
-        environment.systemPackages = [sipProbe];
       };
     };
 

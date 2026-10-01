@@ -8,7 +8,9 @@
 # hanging up; a call parked on 700 and picked up by dialing its parking space,
 # and one parked on 750 that comes back to the phone that parked it when its
 # 5 s run out. Wherever a call ends up with a phone, the caller and that phone
-# hear each other.
+# hear each other. Busy lamp keys that subscribe to dialog state (RFC 4235)
+# show an extension ringing, with its caller, and in a call, and a parking
+# space holding a call, each within 2 s, and go out within 2 s.
 {
   pkgs,
   self,
@@ -106,6 +108,8 @@ in
               parkext = 700;
               parkpos = "701-720";
               context = "parkedcalls";
+              # a hint for each space, for busy lamps
+              parkinghints = true;
             };
             # a call parked on 750 rings the phone that parked it after 5 s
             brief = {
@@ -120,6 +124,7 @@ in
 
           dialplan.contexts.office = {
             includes = ["parkedcalls"];
+            hints = lib.genAttrs extensions (extension: "PJSIP/${extension}");
             extensions = {
               # t: the called phone may transfer with the feature codes
               "_30X" = [
@@ -153,17 +158,21 @@ in
         imports = [
           ./common.nix
           ./phone.nix
+          ./sip-probe.nix
         ];
       };
     };
 
     extraPythonPackages = p: [p.numpy];
 
-    testScript =
+    testScript = {nodes, ...}:
       builtins.readFile ./phone.py
       + builtins.readFile ./tones.py
       + ''
         import types
+        import xml.etree.ElementTree as ElementTree
+
+        PHONES = "${nodes.phones.networking.primaryIPAddress}"
 
         start_all()
         pbx.wait_for_unit("asterisk.service")
@@ -189,18 +198,88 @@ in
             wait_bridged(pbx, "301", "302")
             transferrer.transfer(target_number)
 
+        DIALOG_INFO = {"d": "urn:ietf:params:xml:ns:dialog-info"}
+
+        def lamp(extension):
+            """What each NOTIFY for the busy lamp of `extension` said, without
+            retransmissions: the state, direction and remote identity of its
+            dialog. Each NOTIFY's version is one more than the last's."""
+            shown, seen = [], set()
+            for line in phones.succeed(f"cat /tmp/lamp-{extension}.json").splitlines():
+                message = json.loads(line)
+                cseq = dict(message["headers"]).get("CSeq")
+                if message.get("method") != "NOTIFY" or cseq in seen:
+                    continue
+                seen.add(cseq)
+                info = ElementTree.fromstring(message["body"])
+                assert info.get("version") == str(len(shown)) and info.get("state") == "full", message["body"]
+                assert info.get("entity", "").startswith(f"sip:{extension}@"), message["body"]
+                (dialog,) = info.findall("d:dialog", DIALOG_INFO)
+                remote = dialog.findtext("d:remote/d:identity", namespaces=DIALOG_INFO)
+                shown.append((dialog.findtext("d:state", namespaces=DIALOG_INFO), dialog.get("direction"), remote))
+            return shown
+
+        def wait_lamp(extension, count):
+            """Wait until the lamp of `extension` got `count` NOTIFYs, and return what they said."""
+            deadline = time.time() + 30
+            while len(shown := lamp(extension)) < count:
+                assert time.time() < deadline, phones.succeed(f"cat /tmp/lamp-{extension}.json")
+                time.sleep(0.5)
+            return shown
+
+        def lit(extension, state):
+            """Capture times of the NOTIFYs the pbx sent with `state` for the lamp of `extension`."""
+            return sip_times(pbx, r"\ANOTIFY ", rf'entity="sip:{extension}@', rf"<state>{state}</state>")
+
+        def sent_by(phone, *patterns):
+            """The SIP messages `phone` sent the pbx whose text matches each of
+            `patterns`; pjsua's answers name no user in their Contact."""
+            return [
+                m for m in sip_messages(pbx)
+                if m["source"] == f"{PHONES}:{phone.sip_port}" and all(re.search(p, m["text"], re.M) for p in patterns)
+            ]
+
+        IDLE = ("terminated", None, None)
+
         with subtest("phones register"):
             start_phones([caller, transferrer, target, ringer, carrier])
             # and the carrier's static contact, once it answers the pbx
             wait_contacts(pbx, 5)
             pbx.wait_until_succeeds("asterisk -rx 'pjsip show contacts' | grep -qE '^ *Contact: +carrier/sip:.* Avail'", timeout=30)
 
-        with subtest("blind transfer: the called phone sends the caller on with REFER"):
+        with subtest("busy lamp keys on 303 subscribe to the dialog state of 302, 304 and parking space 701, and show each idle"):
+            for extension in ["302", "304", "701"]:
+                phones.succeed(
+                    f"systemd-run --unit=lamp-{extension} --collect -E PATH sh -c "
+                    + shlex.quote(f"sip-probe pbx SUBSCRIBE 303 pw-303 --to {extension} > /tmp/lamp-{extension}.json")
+                )
+            for extension in ["302", "304", "701"]:
+                assert wait_lamp(extension, 1) == [IDLE], lamp(extension)
+
+        with subtest("the lamp of a ringing extension shows who calls within 2 s, and goes out within 2 s of the caller giving up"):
+            rang = len(sent_by(ringer, r"\ASIP/2\.0 180 "))
+            caller.call("304")
+            wait_channel(pbx, "304", state="Ringing")
+            [early] = wait_lamp("304", 2)[1:]
+            assert early[:2] == ("early", "recipient") and early[2].startswith("sip:301@"), early
+            within(2, sent_by(ringer, r"\ASIP/2\.0 180 ")[rang]["time"], lit("304", "early"))
+            caller.hangup()
+            wait_idle(pbx)
+            assert wait_lamp("304", 3)[2:] == [IDLE], lamp("304")
+            within(2, sip_times(pbx, r"\ACANCEL sip:304@")[-1], lit("304", "terminated"))
+
+        with subtest("blind transfer: the called phone sends the caller on with REFER, and its lamp shows the call within 2 s of its answer and goes out within 2 s of the REFER"):
+            answers = (r"\ASIP/2\.0 200 ", r"^CSeq: \d+ INVITE")
+            answered = len(sent_by(transferrer, *answers))
             ended = transferrer.disconnects()
             transfer_from_callee("303")
             wait_bridged(pbx, "301", "303")
             transferrer.wait_disconnected(after=ended)
             hear_each_other(caller, target)
+            assert wait_lamp("302", 3)[1:] == [("confirmed", None, None), IDLE], lamp("302")
+            within(2, sent_by(transferrer, *answers)[answered]["time"], lit("302", "confirmed"))
+            # the transfer takes 302's channel out of the call, before 302's BYE
+            within(2, sent_by(transferrer, r"\AREFER ")[-1]["time"], lit("302", "terminated"))
             caller.hangup()
             wait_idle(pbx)
 
@@ -300,13 +379,18 @@ in
             caller.hangup()
             wait_idle(pbx)
 
-        with subtest("a call transferred to the parking extension is picked up from its space"):
+        with subtest("a call transferred to the parking extension is picked up from its space, whose lamp shows the call within 2 s of the transfer and goes out within 2 s of the pickup"):
             cursor = journal_cursor(pbx)
             transfer_from_callee("700")
             wait_journal(pbx, cursor, "Parking 'PJSIP/301-[0-9a-f]+' in 'default' at space 701")
+            assert wait_lamp("701", 2)[1:] == [("confirmed", None, None)], lamp("701")
+            within(2, sip_times(pbx, r"\AREFER ", r"^Refer-To: <?sip:700@")[-1], lit("701", "confirmed"))
             target.call("701")
             wait_bridged(pbx, "301", "303")
             hear_each_other(caller, target)
+            assert wait_lamp("701", 3)[2:] == [IDLE], lamp("701")
+            # the second INVITE, which answers the pbx's challenge
+            within(2, sip_times(pbx, r"\AINVITE sip:701@")[-1], lit("701", "terminated"))
             caller.hangup()
             wait_idle(pbx)
 

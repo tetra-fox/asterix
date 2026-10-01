@@ -613,6 +613,12 @@ in
             file, the CDR table and the CEL table end after them. Asterisk
             writes records in order, so those of calls that ended before are
             all written by then."""
+            # an earlier call's row can still be on its way to master.db, as
+            # after another writer held it, so count once both files agree
+            pbx.wait_until_succeeds(
+                f"test $(grep -c '\"mark\"' /var/log/asterisk/cdr-csv/Master.csv) -eq $({SQLITE} \"select count(*) from cdr where dst = 'mark'\")",
+                timeout=60,
+            )
             marks = int(table("select count(*) from cdr where dst = 'mark'")[0][0])
             ended = caller.disconnects()
             caller.call("mark")

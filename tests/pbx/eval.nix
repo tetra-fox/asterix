@@ -51,6 +51,10 @@
 
   zoneFile = zone: "${pkgs.tzdata}/share/zoneinfo/${zone}";
 
+  # the step of a hangup destination: no answer (19) for a caller not
+  # answered yet whose channel has no cause or normal clearing
+  hangup = ''Hangup(''${IF($["''${CHANNEL(state)}" != "Up" & (''${HANGUPCAUSE} = 0 | ''${HANGUPCAUSE} = 16)]?19)})'';
+
   # an HT801 adapter for extension 201 on the phones' network, which each test
   # adds to
   ht801 = module:
@@ -287,7 +291,7 @@ in {
         [pbx-extension-202]
         exten => s,1,Dial(''${PJSIP_DIAL_CONTACTS(202)},30)
          same => n,GotoIf($["''${DIALSTATUS}" = "BUSY"]?busy)
-         same => n,Hangup()
+         same => n,${hangup}
          same => n(busy),Goto(pbx-extension-201,s,1)'';
     };
 
@@ -489,7 +493,7 @@ in {
         exten => s,1,Dial(''${PJSIP_DIAL_CONTACTS(202)},10)
          same => n,Dial(''${PJSIP_DIAL_CONTACTS(201)},10)
          same => n,Dial(Local/5559000@pbx-ringgroup-hunt/n,10,b(pbx-confirm^leg^1))
-         same => n,Hangup()'';
+         same => n,${hangup}'';
     };
 
     testHoursRoutine = {
@@ -567,7 +571,7 @@ in {
          same => n,VoiceMail(201@default,u)
          same => n,Hangup()
          same => n(open),Goto(pbx-extension-201,s,1)
-        exten => 5551001,1,Hangup()'';
+        exten => 5551001,1,${hangup}'';
     };
 
     # a trunk's From names its account, so the calls pbx gives a caller ID
@@ -797,7 +801,7 @@ in {
           [pbx-queue-support]
           exten => s,1,Answer()
            same => n,Queue(support)
-           same => n,Hangup()''
+           same => n,${hangup}''
         ''
           ; from pbx.queues.sales
           [pbx-queue-sales]
@@ -888,13 +892,13 @@ in {
         ivr = ''
           ; from pbx.ivrs.main
           [pbx-ivr-main]
-          exten => #,1,Hangup()
+          exten => #,1,${hangup}
           exten => 1,1,Goto(pbx-extension-201,s,1)
           exten => 201,1,Goto(pbx-extension-201,s,1)
           exten => 202,1,Goto(pbx-extension-202,s,1)
           exten => i,1,Playback(pbx-invalid)
            same => n,GotoIf($[''${PBX_ATTEMPT} < 2]?s,prompt)
-           same => n,Hangup()
+           same => n,${hangup}
           exten => s,1,Answer()
            same => n,Set(PBX_ATTEMPT=0)
            same => n(prompt),Set(PBX_ATTEMPT=$[''${PBX_ATTEMPT} + 1])

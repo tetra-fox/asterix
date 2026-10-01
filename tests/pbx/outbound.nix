@@ -16,12 +16,13 @@
   # "context,extension,priority,application(data)" for the steps of one extension
   numbered = context: extension: lib.imap1 (priority: step: "${context},${extension},${toString priority},${step}");
 
+  # nobody answers, so the hangup destination gives no answer (19)
   extensionSteps = number:
     numbered "pbx-internal" number ["Goto(pbx-extension-${number},s,1)"]
     ++ numbered "pbx-extension-${number}" "s" [
       "Dial(,20)"
       "GotoIf(0?busy)"
-      "Hangup()"
+      "Hangup(19)"
     ];
 
   # each prefix, with a pbx number that starts with it where one makes sense

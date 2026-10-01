@@ -22,6 +22,10 @@
       };
     };
   };
+
+  # Hangup() without a cause ends with normal clearing (16), which a caller
+  # not answered yet gets as 603 Decline (channels/chan_pjsip.c hangup_cause2sip)
+  unansweredCause = ''''${IF($["''${CHANNEL(state)}" != "Up" & (''${HANGUPCAUSE} = 0 | ''${HANGUPCAUSE} = 16)]?19)}'';
 in rec {
   destination = types.attrTag {
     extension = mkOption {
@@ -73,7 +77,11 @@ in rec {
     };
     hangup = mkOption {
       type = types.enum [true];
-      description = "End the call.";
+      description = ''
+        End the call. A caller who was not answered gets the reason the last
+        phone or trunk it rang gave, such as busy, or that nobody answered
+        (480 Temporarily Unavailable in SIP) where none gave one.
+      '';
     };
   };
 
@@ -154,7 +162,7 @@ in rec {
     ]
     # hangup: its value is read, so its type, which takes only true, is
     # checked
-    else builtins.seq dest.hangup [(app "Hangup" [])];
+    else builtins.seq dest.hangup [(app "Hangup" [unansweredCause])];
 
   # `steps`, the first one labelled
   labelled = label: dest: let

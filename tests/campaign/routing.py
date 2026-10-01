@@ -35,6 +35,9 @@ The facts it uses, each from a description or the README:
   `busy`
 - a `context` destination goes to that extension and priority or label of
   hand-written dialplan
+- a `hangup` destination ends a call not answered yet with the reason the
+  last phone or trunk it rang gave, or with no answer (19) where none gave
+  one; no phone is in the probe, and how a trunk ends is the far end's
 - `closeEarly` closes the hours when dialled and opens them when dialled
   again; closed hours send calls to `closed`, like the time outside `open`
   and holidays
@@ -81,6 +84,8 @@ class Path:
         self.ringing = 0
         self.keys = keys
         self.long = False
+        # whether a number outside rang, whose reason the oracle cannot know
+        self.outside = False
         self.kinds = []
         # steps other channels of the call run, as application, start of the
         # data and extension
@@ -139,7 +144,8 @@ class Oracle:
             path.apps.append(["NoOp", f"mark {value['context']} {value.get('extension', 's')} {mark}"])
             path.last = "Hangup"
         elif kind == "hangup":
-            path.apps.append(["Hangup", ""])
+            cause = "" if path.answered else None if path.outside else "19"
+            path.apps.append(["Hangup", cause])
             path.last = "Hangup"
         else:
             raise ValueError(f"unknown destination {dest}")
@@ -167,6 +173,7 @@ class Oracle:
         path.ringing += rings * g.get("ringTime", 20)
         trunk = g.get("trunk") or (self.m["outbound"] or {}).get("trunk")
         path.legs += [["Dial", f"PJSIP/{number}@{trunk},", number] for number in external]
+        path.outside = path.outside or bool(external)
         self.follow(path, g.get("noAnswer", {"hangup": True}), seen)
 
     def queue(self, path, name, seen):

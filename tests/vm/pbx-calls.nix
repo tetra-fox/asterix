@@ -4,7 +4,8 @@
 # ring time before the no-answer destination takes the call, one that is not
 # registered goes there at once, a phone in a call rings again with call
 # waiting and answers busy without it, an extension without a mailbox hangs
-# up on callers it does not answer, and names with quotes and letters outside
+# up on callers it does not answer with 480 Temporarily Unavailable, or 486
+# Busy Here when it is busy, and names with quotes and letters outside
 # ASCII reach the phones as written. Inbound: each number a trunk sends,
 # written with a + too, reaches its destination, and a number without a route
 # on the trunk it arrives on is refused. Outbound: the provider gets the
@@ -391,12 +392,12 @@ in
             assert channel["data"] == "201@default,b", channel
             hang_up(desk, sales)
 
-        with subtest("an extension without a mailbox hangs up on callers it does not answer, busy or not"):
+        with subtest("an extension without a mailbox hangs up on callers it does not answer with 480, and with 486 when it is busy"):
             mark = len(sip_messages(pbx))
             done = sales.disconnects()
             confirmed = sales.confirmed()
             sales.call("204")
-            assert ended(sales, done) >= 400
+            assert ended(sales, done) == 480
             assert sales.confirmed() == confirmed, "the call was answered"
             rang = wait_sent(mark, "INVITE sip:204@", "10.2.0.21:5063")[0]
             cancel = wait_sent(mark, "CANCEL sip:204@", "10.2.0.21:5063")[0]

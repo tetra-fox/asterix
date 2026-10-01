@@ -1,9 +1,10 @@
 # Extensions through the probe (tests/campaign/probe.nix): each kind of
 # destination in `noAnswer`, reached after the phone rang for `ringTime`, and
-# in `busy`, reached when the phone answers busy; and names with quotes, with
-# letters outside ASCII and of 79 bytes, read back from Asterisk as the caller
-# ID. The phones are this Asterisk itself, at static contacts that ring
-# without answering or answer busy.
+# in `busy`, reached when the phone answers busy, with the cause a hangup
+# destination ends such a call with; and names with quotes, with letters
+# outside ASCII and of 79 bytes, read back from Asterisk as the caller ID. The
+# phones are this Asterisk itself, at static contacts that ring without
+# answering or answer busy.
 {
   pkgs,
   self,
@@ -30,13 +31,20 @@
   answersBusy = extensionFor 221;
 
   # where each kind ends: the contexts after the extension's own, and the
-  # last step
-  hangup = {
+  # last step. A hangup destination gives a caller not answered yet no answer
+  # (19), unless the phone answered busy, which stays the call's cause.
+  hangup = data: {
     application = "Hangup";
-    data = "";
+    inherit data;
     how = "hangup";
   };
-  ends = {
+  ends = busy: let
+    unanswered = hangup (
+      if busy
+      then ""
+      else "19"
+    );
+  in {
     conference = {
       contexts = ["pbx-conference-board"];
       ended = {
@@ -47,27 +55,27 @@
     };
     context = {
       contexts = ["landed"];
-      ended = hangup;
+      ended = hangup "";
     };
     extension = {
       contexts = ["pbx-extension-201"];
-      ended = hangup;
+      ended = unanswered;
     };
     hangup = {
       contexts = [];
-      ended = hangup;
+      ended = unanswered;
     };
     ivr = {
       contexts = ["pbx-ivr-lobby"];
-      ended = hangup;
+      ended = hangup "";
     };
     queue = {
       contexts = ["pbx-queue-desk"];
-      ended = hangup;
+      ended = hangup "";
     };
     ringGroup = {
       contexts = ["pbx-ringgroup-front"];
-      ended = hangup;
+      ended = unanswered;
     };
     voicemail = {
       contexts = [];
@@ -191,13 +199,13 @@
   expected = {
     calls =
       map (sample: {
-        contexts = ["pbx-internal" "pbx-extension-${sample.number}"] ++ ends.${sample.kind}.contexts;
+        contexts = ["pbx-internal" "pbx-extension-${sample.number}"] ++ (ends sample.busy).${sample.kind}.contexts;
         busy = "${
           if sample.busy
           then "1"
           else "0"
         }?busy";
-        ended = ends.${sample.kind}.ended;
+        ended = (ends sample.busy).${sample.kind}.ended;
       })
       samples;
     callerIds = lib.mapAttrsToList (number: name: ''"${lib.escape [''"''] name}" <${number}>'') names;

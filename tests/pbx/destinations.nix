@@ -27,11 +27,19 @@
   # with the conference for no answer, and the context when busy
   busyPhone = slots.extensionTo.conference;
 
-  # the last step of a call that hangs up, or goes to the mailbox
+  # the last step of a call that hangs up, or goes to the mailbox; a hangup
+  # destination gives a caller not answered yet no answer (19)
   hangup = [
     {
       application = "Hangup";
       data = "";
+      how = "hangup";
+    }
+  ];
+  unanswered = [
+    {
+      application = "Hangup";
+      data = "19";
       how = "hangup";
     }
   ];
@@ -151,7 +159,7 @@
         "pbx-extension-${slots.extensionTo.extension}"
         "pbx-extension-201"
       ];
-      ended = hangup;
+      ended = unanswered;
     }
     {
       call = {

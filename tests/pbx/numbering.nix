@@ -18,7 +18,7 @@
       steps = [
         "pbx-internal,9000,1,Goto(pbx-ringgroup-big,s,1)"
         "pbx-ringgroup-big,s,1,Dial(,20)"
-        "pbx-ringgroup-big,s,2,Hangup()"
+        "pbx-ringgroup-big,s,2,Hangup(19)"
       ];
     }
     {
@@ -46,7 +46,7 @@
     }
     {
       extension = "201";
-      steps = ["pbx-internal,201,1,Goto(pbx-extension-201,s,1)"] ++ extension201;
+      steps = ["pbx-internal,201,1,Goto(pbx-extension-201,s,1)"] ++ extension201 "19";
     }
     {
       extension = "250";
@@ -55,7 +55,7 @@
     {
       extension = "700";
       keys = "201";
-      steps = menu ++ ["pbx-ivr-menu,201,1,Goto(pbx-extension-201,s,1)"] ++ extension201;
+      steps = menu ++ ["pbx-ivr-menu,201,1,Goto(pbx-extension-201,s,1)"] ++ extension201 "";
     }
     {
       extension = "700";
@@ -68,10 +68,12 @@
         ];
     }
   ];
-  extension201 = [
+  # 201 has no phone and hangs up, with no answer (19) on a call not answered
+  # yet and with no cause after the menu answered
+  extension201 = cause: [
     "pbx-extension-201,s,1,Dial(,20)"
     "pbx-extension-201,s,2,GotoIf(0?busy)"
-    "pbx-extension-201,s,3,Hangup()"
+    "pbx-extension-201,s,3,Hangup(${cause})"
   ];
   menu = [
     "pbx-internal,700,1,Goto(pbx-ivr-menu,s,1)"

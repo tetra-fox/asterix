@@ -21,6 +21,7 @@
   cfg = config.pbx;
   pbxLib = import ./lib.nix {inherit lib;};
   format = (import ../../lib {inherit lib;}).format;
+  inherit (import ../lib.nix {inherit lib;}) confbridgeModules;
   core = config.services.asterisk;
 
   conferenceType = types.submodule {
@@ -86,6 +87,8 @@ in {
   };
 
   config = mkIf cfg.enable {
+    services.asterisk.modules.needed."pbx.conferences" = mkIf (cfg.conferences != {}) confbridgeModules;
+
     services.asterisk.dialplan.contexts =
       mapAttrs' (
         name: conference:

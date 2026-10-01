@@ -1,17 +1,18 @@
 # reports what the dialplan names that Asterisk does not have, see
 # package.nix: an application, function or switch no loaded module provides,
-# a sound no language has, or one that a language calls use lacks, a Goto()
+# and the bridge technology ConfBridge() mixes in, a sound no language has, or one that a language calls use lacks, a Goto()
 # or Gosub() target that does not exist, and an include of a context that does
 # not exist
 #
 #   gawk -v applications=FILE -v functions=FILE -v switches=FILE \
-#     -v settings=FILE -v formats=FILE -v languages=FILE \
+#     -v settings=FILE -v formats=FILE -v bridges=FILE -v languages=FILE \
 #     -v asterisk=PROGRAM -v config=FILE -f dialplan.awk DIALPLAN
 #
 # APPLICATIONS is the output of `core show applications`, FUNCTIONS of
 # `core show functions`, SWITCHES of `core show switches`, SETTINGS of `core
-# show settings`, FORMATS of `core show file formats` and DIALPLAN of
-# `dialplan show`. LANGUAGES lists the languages endpoints set, one a line.
+# show settings`, FORMATS of `core show file formats`, BRIDGES of `bridge
+# technology show` and DIALPLAN of `dialplan show`. LANGUAGES lists the
+# languages endpoints set, one a line.
 # `PROGRAM -C FILE -rx COMMAND` runs a CLI command on the running Asterisk
 
 @load "filefuncs"
@@ -31,6 +32,11 @@ BEGIN {
     while ((getline line < switches) > 0)
         if (match(line, /^([A-Za-z0-9_]+): /, m))
             has_switch[tolower(m[1])] = 1
+    # ConfBridge mixes every conference in a bridge technology that mixes
+    # many channels (apps/app_confbridge.c:1863), which bridge_softmix provides
+    while ((getline line < bridges) > 0)
+        if (split(line, columns) >= 2 && columns[2] == "MultiMix")
+            has_multimix = 1
 
     while ((getline line < settings) > 0) {
         if (match(line, /^  Default language: +([^ ]*)/, m))
@@ -421,6 +427,8 @@ priority($0, p) {
         sounds(field(data, 2), "")
     # ConfBridge(conference,bridge profile,...)
     else if (app == "confbridge") {
+        if (!has_multimix)
+            report("multimix bridge technology ConfBridge needs (bridge_softmix)")
         profile = field(data, 2)
         if (profile !~ /\$/)
             bridge_profiles[profile == "" ? "default_bridge" : profile] = 1

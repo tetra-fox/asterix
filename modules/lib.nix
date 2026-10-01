@@ -155,6 +155,15 @@ in {
   in
     !(listed "noload") && (format.isTrue (modules.autoload or false) || listed "load" || listed "preload");
 
+  # the modules a conference needs: app_confbridge mixes every conference in
+  # bridge_softmix but does not declare it (apps/app_confbridge.c:1863,
+  # 4726-4733), and each call fails without it
+  # TODO: drop bridge_softmix once app_confbridge requires it
+  confbridgeModules = [
+    "app_confbridge.so"
+    "bridge_softmix.so"
+  ];
+
   # a rendered value Asterisk takes `bytes` of; `room` is what the secrets in
   # it may add to its other bytes, where `\;` is one byte
   limited = what: bytes: text: {

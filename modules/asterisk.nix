@@ -956,7 +956,8 @@ in {
         built, and fail the build if Asterisk logs an error or a warning
         while loading it or cannot start the program of a custom music
         class, or if the dialplan uses an application, function or switch
-        that no loaded module provides, plays a sound Asterisk cannot find,
+        that no loaded module provides, or ConfBridge() without
+        bridge_softmix, plays a sound Asterisk cannot find,
         sends calls to a context, extension, priority or label that does
         not exist, or includes a context that does not exist once every
         dialplan module has loaded. Secrets are replaced by zeros, credentials by a

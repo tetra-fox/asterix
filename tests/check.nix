@@ -156,6 +156,14 @@
         "Could not create an object of type 'acl' with id 'lan'"
       ];
     };
+    # ConfBridge() answers and then cannot create the conference's bridge
+    confbridgeWithoutMixing = {
+      module.services.asterisk = {
+        dialplan.contexts.internal.extensions."800" = ["ConfBridge(board)"];
+        modules.noload = ["bridge_softmix.so"];
+      };
+      expect = ["(internal, 800): no loaded module provides the multimix bridge technology ConfBridge needs (bridge_softmix)"];
+    };
     # Asterisk loads a switch it has no module for, then passes over it with a
     # warning on every call
     switchNotLoaded = {

@@ -19,7 +19,7 @@
   ccfg = cfg.confbridge;
   asteriskLib = import ../lib {inherit lib;};
   inherit (asteriskLib) format;
-  inherit (import ./lib.nix {inherit lib;}) settingsOption toSection;
+  inherit (import ./lib.nix {inherit lib;}) confbridgeModules settingsOption toSection;
 
   optionalBool = description:
     mkOption {
@@ -170,13 +170,7 @@ in {
   config = mkIf cfg.enable {
     assertions = lib.concatMap (bridge: bridge.assertions) (builtins.attrValues ccfg.bridges);
 
-    services.asterisk.modules.needed."services.asterisk.confbridge" = mkIf (ccfg.bridges != {} || ccfg.users != {} || ccfg.menus != {}) [
-      "app_confbridge.so"
-      # app_confbridge mixes every conference in bridge_softmix but does not
-      # declare it (apps/app_confbridge.c:1863, 4726-4733); each call fails without
-      # TODO: drop this once app_confbridge requires bridge_softmix
-      "bridge_softmix.so"
-    ];
+    services.asterisk.modules.needed."services.asterisk.confbridge" = mkIf (ccfg.bridges != {} || ccfg.users != {} || ccfg.menus != {}) confbridgeModules;
 
     services.asterisk.settings."confbridge.conf" = mkMerge [
       (profiles "bridge" ccfg.bridges (b: {

@@ -3,10 +3,11 @@
 # Starts ASTERISK with the configuration in CONFIG, followed by the ARGUMENTs
 # as the service passes its extra arguments, and fails if Asterisk logs an
 # error or warning while loading it, if it cannot start the program of a
-# custom music class, or if the dialplan uses an application, function or
-# switch that no loaded module provides, plays a sound that a language calls
-# use lacks, sends calls to a Goto() or Gosub() target that does not exist, or
-# includes a context that does not exist (dialplan.awk). CONFIG is prepared by
+# custom music class, or if the dialplan uses an application, function,
+# switch or ConfBridge() bridge technology that no loaded module provides,
+# plays a sound that a language calls use lacks, sends calls to a Goto() or
+# Gosub() target that does not exist, or includes a context that does not
+# exist (dialplan.awk). CONFIG is prepared by
 # modules/asterisk.nix: `config/` with `@root@` where the files will be and a
 # log channel `check`, `credentials/`, `directories`, which lists the
 # directories to create below `@root@`, `hosts` for the names Asterisk
@@ -175,6 +176,7 @@ in
       rx "core show switches" > "$root/switches"
       rx "core show settings" > "$root/settings"
       rx "core show file formats" > "$root/formats"
+      rx "bridge technology show" > "$root/bridges"
 
       failed=0
       named=()
@@ -195,7 +197,7 @@ in
         failed=1
       fi
       if ! gawk -v applications="$root/applications" -v functions="$root/functions" \
-        -v switches="$root/switches" -v settings="$root/settings" -v formats="$root/formats" \
+        -v switches="$root/switches" -v settings="$root/settings" -v formats="$root/formats" -v bridges="$root/bridges" \
         -v languages="$root/languages" -v asterisk="$asterisk" -v config="$root/config/asterisk.conf" \
         -f ${./dialplan.awk} "$root/dialplan" >&2; then
         failed=1

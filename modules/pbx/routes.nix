@@ -250,6 +250,9 @@
     }) (filterAttrs (_: group: group.external != [] && group.trunk != null) cfg.ringGroups)
   );
 
+  # a number, s, or a pattern of numbers: X, Z and N, sets in brackets, and
+  # . and ! at the end (main/pbx.c ext_cmp_pattern_pos)
+  badKeys = builtins.filter (key: builtins.match "[+]?[0-9*#]+|s|_([0-9*#+XZNxzn.!]|\\[[0-9*#+-]+])+" key == null) (builtins.attrNames cfg.inbound);
   unknownHours = builtins.filter (number: cfg.inbound.${number}.hours != null && !(cfg.hours ? ${cfg.inbound.${number}.hours})) (builtins.attrNames cfg.inbound);
   unknownNotify = builtins.filter (extension: !(cfg.extensions ? ${extension})) (lib.optionals (cfg.emergency != null) cfg.emergency.notify);
   # where calls from a trunk start is the context of its endpoint in the final
@@ -288,6 +291,16 @@ in {
         `closed`. With pbx, calls from a trunk start in
         `pbx-inbound-<trunk>`, which holds these numbers, unless the trunk
         sets a `context` of its own. Other numbers are rejected.
+
+        A key is a number of digits, `*` and `#`, with an optional leading
+        `+`; `s`, which takes the calls that name no number: those to the
+        address a trunk registered, unless its `registration.contactUser`
+        gives that a number, and those whose Request-URI has no user part; or
+        a pattern of numbers, such as `_X.` for any number. A number of the
+        trunk goes before its patterns, and of two patterns that match, the
+        more specific one takes the call. chan_pjsip takes a call to the call
+        pickup code (`pickupexten` of features.conf) as a call pickup before
+        the dialplan runs, also when a pattern matches it.
       '';
     };
 
@@ -347,6 +360,10 @@ in {
           message = "pbx.inbound: ${
             concatStringsSep ", " (builtins.attrNames (filterAttrs (_: route: !(complete route)) cfg.inbound))
           } need either `destination`, or `hours` with `open` and `closed`.";
+        }
+        {
+          assertion = badKeys == [];
+          message = "pbx.inbound: keys must be a number of digits, * and #, with an optional leading +; s, which takes the calls that name no number; or a pattern of such numbers that starts with _, such as _X.: ${concatMapStringsSep ", " (key: lib.showOption ["pbx" "inbound" key]) badKeys}.";
         }
         {
           assertion = unknownHours == [];

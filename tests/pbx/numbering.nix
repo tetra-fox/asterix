@@ -4,7 +4,9 @@
 # pbx-internal also matches extension 201, and in a menu with direct dial, key
 # 2 starts 201. Asterisk takes a number before a pattern of the same context
 # and before the contexts it includes, and a key that starts a longer number
-# counts on its own once no digit follows within 5 s.
+# counts on its own once no digit follows within 5 s. From a trunk, a number
+# of pbx.inbound goes before its patterns, of which the more specific one
+# takes a number both match, and s takes a call that names no number.
 {
   pkgs,
   self,
@@ -71,6 +73,33 @@
         ];
     }
   ];
+  # calls from the trunk, and the context of the route each takes
+  fromTrunk =
+    map (call: {
+      context = "pbx-inbound-provider";
+      inherit (call) extension;
+      steps = [
+        "pbx-inbound-provider,${call.extension},1,Goto(${call.route},s,1)"
+        "${call.route},s,1,Hangup()"
+      ];
+    }) [
+      {
+        extension = "5551000";
+        route = "number";
+      }
+      {
+        extension = "5559999";
+        route = "pattern";
+      }
+      {
+        extension = "4441000";
+        route = "wide-pattern";
+      }
+      {
+        extension = "s";
+        route = "no-number";
+      }
+    ];
   # 201 has no phone and hangs up, with no answer (19) on a call not answered
   # yet and with no cause after the menu answered
   extension201 = cause: [
@@ -114,6 +143,16 @@
             numbers = ["911"];
             trunk = "provider";
           };
+          inbound =
+            builtins.mapAttrs (_: route: {
+              trunk = "provider";
+              destination.context.context = route;
+            }) {
+              "5551000" = "number";
+              "_555XXXX" = "pattern";
+              "_X." = "wide-pattern";
+              s = "no-number";
+            };
         };
         services.asterisk = {
           pjsip = {
@@ -124,19 +163,20 @@
               password = secret "trunk";
             };
           };
-          dialplan.contexts = {
-            pbx-internal.extensions."_2XX" = ["Hangup()"];
-            two.extensions.s = ["Hangup()"];
-          };
+          dialplan.contexts =
+            {
+              pbx-internal.extensions."_2XX" = ["Hangup()"];
+            }
+            // pkgs.lib.genAttrs ["two" "number" "pattern" "wide-pattern" "no-number"] (_: {extensions.s = ["Hangup()"];});
         };
       })
     ];
-    calls = map (sample: removeAttrs sample ["steps"] // {context = "pbx-internal";}) samples;
+    calls = map (sample: {context = "pbx-internal";} // removeAttrs sample ["steps"]) (samples ++ fromTrunk);
   };
 in
   pkgs.runCommand "asterisk-pbx-numbering-tests" {
     nativeBuildInputs = [pkgs.jq];
-    expected = builtins.toJSON (map (sample: sample.steps) samples);
+    expected = builtins.toJSON (map (sample: sample.steps) (samples ++ fromTrunk));
     passAsFile = ["expected"];
   } ''
     jq '[.calls[] | .channel as $channel | [.steps[] | select(.channel == $channel) | "\(.context),\(.extension),\(.priority),\(.application)(\(.data))"]]' \

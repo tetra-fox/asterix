@@ -243,6 +243,40 @@
       assertion = ''takes a call to 5551000, the pickupexten of features.conf, as a call pickup before the dialplan runs, so it never reaches pbx.inbound."5551000".'';
     };
 
+    # and one inside an inbound pattern takes the one number it matches, as
+    # pbx.inbound says, like one inside the outbound pattern
+    callPickupInsideInboundPattern = {
+      module = {
+        pbx.inbound."_98X" = {
+          trunk = "provider";
+          destination.hangup = true;
+        };
+        services.asterisk.features.general.pickupexten = "981";
+      };
+      assertions = [];
+    };
+
+    # a number, s or a pattern of numbers: an extension of the trunk's
+    # context such as h, which Asterisk runs at every hangup, or one with a
+    # letter, which a caller would have to send, is none of them
+    inboundKeys = {
+      module.pbx.inbound = lib.genAttrs ["5551abc" "h" "S" "1+5551000" "555-1000" "_" "_[]" "_555abc" "_555-XXXX"] (_: {
+        trunk = "provider";
+        destination.hangup = true;
+      });
+      assertions = [
+        ''pbx.inbound: keys must be a number of digits, * and #, with an optional leading +; s, which takes the calls that name no number; or a pattern of such numbers that starts with _, such as _X.: pbx.inbound."1+5551000", pbx.inbound."555-1000", pbx.inbound."5551abc", pbx.inbound.S, pbx.inbound._, pbx.inbound._555-XXXX, pbx.inbound._555abc, pbx.inbound."_[]", pbx.inbound.h.''
+      ];
+    };
+
+    inboundNumbersSAndPatterns = {
+      module.pbx.inbound = lib.genAttrs ["+15551001" "*5551002#" "s" "_X." "_555XXXX" "_[2-9]xx!" "_+1NXXNXXXXXX" "_*[0-9#]Z"] (_: {
+        trunk = "provider";
+        destination.hangup = true;
+      });
+      assertions = [];
+    };
+
     # list definitions concatenate, so these steps would follow the pbx's
     stepsAddedToPbxNumber = {
       module.services.asterisk.dialplan.contexts.pbx-internal.extensions."201" = ["NoOp(extra)"];

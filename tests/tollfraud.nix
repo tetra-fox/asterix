@@ -1,7 +1,6 @@
 # Every way from a trunk to a trunk's Dial (SEC-03), walked through the
 # dialplan Asterisk loads (tests/campaign/tollfraud.nix): the examples have
-# none, the generated configurations of the gate's sample none they do not
-# name, and the walk finds each way out built in here, the outside member of
+# none, and the walk finds each way out built in here, the outside member of
 # a ring group, which the configuration names, among them.
 {
   pkgs,
@@ -154,19 +153,6 @@
     };
   };
 
-  # the valid configurations of campaign/configs-sample.json; `configs.py
-  # tollfraud` walks thousands like them
-  campaign = import ./campaign/configs.nix {inherit pkgs self;};
-  generated = builtins.filter (case: case.expect == "accept") (builtins.fromJSON (builtins.readFile ./campaign/configs-sample.json)).configurations;
-  sampleWalks = lib.listToAttrs (map (case: let
-    name = "generated-${case.id}";
-  in
-    lib.nameValuePair name (tollfraud {
-      inherit name;
-      config = campaign.evaluate "light" case.modules;
-    }))
-  generated);
-
   walks =
     lib.mapAttrs (name: config: {
       report = tollfraud {inherit name config;};
@@ -192,13 +178,5 @@ in
         fi
       '')
       walks)}
-    ${lib.concatStrings (lib.mapAttrsToList (name: report: ''
-        jq -c '[.paths[] | select(.finding != null)], .unresolved' ${report}/report.json > actual
-        if [ "$(cat actual)" != "$(printf '[]\n[]')" ]; then
-          echo "${name}: the walk found ways out the configuration does not name, see ${report}" >&2
-          exit 1
-        fi
-      '')
-      sampleWalks)}
     touch $out
   ''

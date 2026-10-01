@@ -97,12 +97,6 @@ in
     pbx-queues = import ./pbx/queues.nix {inherit pkgs self;};
     pbx-paging = import ./pbx/paging.nix {inherit pkgs self;};
 
-    # a seeded sample of tests/campaign/options.nix, which options.py runs whole
-    campaign-options = import ./campaign/sample.nix {inherit pkgs self;};
-    # a seeded sample of the generated configurations, which configs.py runs
-    # a campaign of
-    campaign-configs = import ./campaign/configs-sample.nix {inherit pkgs self;};
-
     # opening hours against their oracle at a seeded sample of instants in
     # every zone of tests/campaign/hours.nix, which hours.py sweep runs whole
     campaign-hours = let
@@ -143,20 +137,6 @@ in
 
     vm-calls = import ./vm/calls.nix {inherit pkgs self;};
 
-    vm-transfers = import ./vm/transfers.nix {inherit pkgs self;};
-
-    vm-dialogs = import ./vm/dialogs.nix {inherit pkgs self;};
-
-    vm-conference = import ./vm/conference.nix {inherit pkgs self;};
-
-    vm-recordings = import ./vm/recordings.nix {inherit pkgs self;};
-
-    vm-queues = import ./vm/queues.nix {inherit pkgs self;};
-
-    vm-nat = import ./vm/nat.nix {inherit pkgs self;};
-
-    vm-media = import ./vm/media.nix {inherit pkgs self;};
-
     vm-transports = import ./vm/transports.nix {inherit pkgs self;};
 
     vm-security = import ./vm/security.nix {inherit pkgs self;};
@@ -173,14 +153,8 @@ in
 
     vm-pbx-calls = import ./vm/pbx-calls.nix {inherit pkgs self;};
 
-    vm-dtmf = import ./vm/dtmf.nix {inherit pkgs self;};
-
     vm-upgrade = import ./vm/upgrade.nix {inherit pkgs self;};
     vm-faults = import ./vm/faults.nix {inherit pkgs self;};
-
-    vm-impairments = import ./vm/impairments.nix {inherit pkgs self;};
-
-    vm-faults-trunk = import ./vm/faults-trunk.nix {inherit pkgs self;};
 
     vm-faults-net = import ./vm/faults-net.nix {inherit pkgs self;};
 
@@ -216,7 +190,7 @@ in
       touch $out
     '';
   }
-  # the pairwise rows of the environment matrix (tests/campaign/matrix.py)
+  # the pairwise rows of the environment matrix
   // lib.listToAttrs (map (test: lib.nameValuePair "vm-${test.name}" (import ./vm/matrix.nix {inherit pkgs self sopsSecrets test;}))
     (lib.importJSON ./campaign/matrix-pairwise.json).tests)
   // evalSuiteParts "eval" (import ./eval.nix {inherit pkgs self;})

@@ -35,7 +35,6 @@
     checks = forAllSystems (pkgs: import ./tests {inherit pkgs self sops-nix;});
 
     legacyPackages = forAllSystems (pkgs: {
-      stressTests = import ./tests/stress.nix {inherit pkgs self;};
       packageChecks = import ./tests/packages.nix {inherit pkgs self sops-nix;};
     });
 

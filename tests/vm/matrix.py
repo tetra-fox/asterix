@@ -24,7 +24,7 @@ class Row:
         self.id = plan["id"]
         self.pbx = by_name[plan["pbx"]]
         self.websocket = plan["websocket"]
-        # a bug outside asterix the row meets (tests/campaign/matrix.py KNOWN)
+        # a bug outside asterix the row meets
         self.known = plan["known"]
         self.failure = None
         self.planned = {phone["role"]: phone for phone in plan["phones"]}

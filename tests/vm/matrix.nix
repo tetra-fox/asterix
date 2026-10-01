@@ -1,4 +1,4 @@
-# One VM test of the environment matrix (tests/campaign/matrix.py). Each pbx
+# One VM test of the environment matrix (tests/campaign/matrix-pairwise.json). Each pbx
 # node runs the Asterisk package, IP family (IPv4 with IPv6 turned off, IPv6
 # alone, or both), host networking and firewall of its rows, and offers every
 # transport of its families: on the internet, or behind the office router,

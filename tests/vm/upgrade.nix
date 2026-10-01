@@ -7,9 +7,7 @@
 # the phones and a call through the queue to the runtime member carry audio
 # both ways, and both calls add CDR and CEL records.
 #
-# The gate goes from the default Asterisk to asterisk_23 and back;
-# tests/campaign/upgrade.nix runs longer chains, the previous asterix commit
-# and nixos-unstable.
+# The gate goes from the default Asterisk to asterisk_23 and back.
 {
   pkgs,
   self,

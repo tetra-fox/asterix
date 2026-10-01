@@ -87,6 +87,15 @@
       then "aliases"
       else "context";
 
+  # whether extconfig.conf of `core` can map the realtime family `family`,
+  # whose objects a database then holds: a key of that name, in any case, in
+  # any section, or included files or raw text, which can hold one
+  mapsRealtime = core: family:
+    (core.includes."extconfig.conf" or [])
+    != []
+    || (core.extraConfig."extconfig.conf" or "") != ""
+    || builtins.any (section: builtins.any (key: lib.toLower key == family) (builtins.attrNames section)) (builtins.attrValues (core.settings."extconfig.conf" or {}));
+
   # the host of a `bind` or `tlsbindaddr` value: `host`, `host:port` or
   # `[host]:port`
   bindHost = bind: let
@@ -110,12 +119,14 @@
     then lib.toInt (builtins.head plain)
     else default;
 in {
-  inherit splitMailbox voicemailLines entryOf voicemailSectionKind bindHost parseBindPort;
+  inherit splitMailbox voicemailLines entryOf voicemailSectionKind mapsRealtime bindHost parseBindPort;
 
   # the mailboxes of voicemail.conf, as { contexts.<context>.<box> = true;
   # aliases."<box>@<context>" = true; search; }, raw text included, or null
-  # when the file includes others, which can hold any mailbox; `search` is
-  # searchcontexts, with which app_voicemail finds a mailbox in any context
+  # when the file includes others or realtime can map the voicemail family,
+  # which app_voicemail looks in for a mailbox voicemail.conf lacks
+  # (apps/app_voicemail.c:2018-2020); `search` is searchcontexts, with which
+  # app_voicemail finds a mailbox in any context
   voicemailMailboxes = core: let
     lines = voicemailLines (core.renderedFiles."voicemail.conf" or "");
     kindOf = voicemailSectionKind lines;
@@ -138,6 +149,7 @@ in {
         includes = core.includes."voicemail.conf" or [];
         extraConfig = core.extraConfig."voicemail.conf" or "";
       }
+      || mapsRealtime core "voicemail"
     then null
     else {
       contexts = lib.mapAttrs (_: boxes: lib.genAttrs (map (e: e.key) boxes) (_: true)) (builtins.groupBy (e: e.section) (ofKind "context"));

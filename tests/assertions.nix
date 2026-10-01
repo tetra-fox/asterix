@@ -1670,6 +1670,19 @@
       assertion = "pjsip.endpoints.101.mailboxes: 102@default";
     };
 
+    # app_voicemail looks for a mailbox voicemail.conf lacks in the realtime
+    # voicemail family, which extconfig.conf can map to a database
+    mwiForRealtimeMailbox = {
+      module = {config, ...}: {
+        services.asterisk = {
+          voicemail.mailboxes."101".pin = config.lib.asterisk.secret "/run/secrets/vm";
+          pjsip.endpoints."101".mailboxes = ["102@default"];
+          settings."extconfig.conf".settings.voicemail = "curl,http://vm.example.org";
+        };
+      };
+      assertions = [];
+    };
+
     # the mailboxes of voicemail.conf's raw text count by name
     mwiForMailboxInExtraConfig = {
       module = {config, ...}: {

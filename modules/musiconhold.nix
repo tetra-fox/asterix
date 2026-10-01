@@ -19,7 +19,7 @@
   mcfg = cfg.musicOnHold;
   asteriskLib = import ../lib {inherit lib;};
   inherit (asteriskLib) format;
-  inherit (import ./lib.nix {inherit lib;}) toSection;
+  inherit (import ./lib.nix {inherit lib;}) mapsRealtime toSection;
 
   # res_musiconhold looks for a relative directory in the data directory in
   # files mode (moh_scan_files), but in its working directory in custom mode,
@@ -39,13 +39,8 @@
       includes = cfg.includes."musiconhold.conf" or [];
       extraConfig = cfg.extraConfig."musiconhold.conf" or "";
     };
-    realtime =
-      (cfg.includes."extconfig.conf" or [])
-      != []
-      || (cfg.extraConfig."extconfig.conf" or "") != ""
-      || builtins.any (section: builtins.any (key: lib.toLower key == "musiconhold") (builtins.attrNames section)) (builtins.attrValues (cfg.settings."extconfig.conf" or {}));
   in
-    if names == null || realtime
+    if names == null || mapsRealtime cfg "musiconhold"
     then null
     else lib.remove "general" (map lib.toLower names);
   # the classes queues and user profiles name, with the keys Asterisk takes in

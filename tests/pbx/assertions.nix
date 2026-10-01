@@ -1085,7 +1085,8 @@
     ht801ControlCharacters = {
       module = {
         imports = [phones];
-        services.asterisk.pjsip.endpoints."202".auth.username = lib.mkForce "202${builtins.fromJSON ''"\u0007"''}";
+        # inside the value, since pjsip.conf refuses one at either end
+        services.asterisk.pjsip.endpoints."202".auth.username = lib.mkForce "20${builtins.fromJSON ''"\u0007"''}2";
         pbx.phones.grandstream.ht801 = {
           enable = true;
           timeZone = "CET-1CEST\n";

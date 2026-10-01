@@ -1560,6 +1560,54 @@
       assertions = [];
     };
 
+    # with voicemail off, MWI comes only for a context that a voicemail.conf
+    # of one's own or an endpoint's incoming_mwi_mailbox names
+    mwiWithVoicemailOffWarns = {
+      module = {config, ...}: {
+        services.asterisk = {
+          modules.load = ["app_voicemail.so"];
+          extraConfig."voicemail.conf" = ''
+            [sales]
+            200 => 1234,Sales
+          '';
+          pjsip = {
+            endpoints."101".mailboxes = [
+              "102@default"
+              "103"
+              "201@sales"
+              "5551000@provider"
+            ];
+            trunks.provider = {
+              host = "203.0.113.5";
+              username = "5551000";
+              password = config.lib.asterisk.secret "/run/secrets/trunk";
+              context = "internal";
+              settings.incoming_mwi_mailbox = "5551000@provider";
+            };
+          };
+        };
+      };
+      assertions = [];
+      warnings = [
+        ''
+          services.asterisk: voicemail is off, and nothing sends MWI for these mailboxes that PJSIP endpoints name, so their message lamps never light:
+            pjsip.endpoints.101.mailboxes: 102@default
+            pjsip.endpoints.101.mailboxes: 103
+          Turn voicemail on and define them in services.asterisk.voicemail.mailboxes, or remove them from the endpoints' mailboxes.
+        ''
+      ];
+    };
+
+    # app_minivm sends MWI for any mailbox the dialplan names
+    mwiWithVoicemailOffAndMinivm = {
+      module.services.asterisk = {
+        modules.load = ["app_minivm.so"];
+        pjsip.endpoints."101".mailboxes = ["102@default"];
+      };
+      assertions = [];
+      warnings = [];
+    };
+
     provisioningMoved = {
       module.services.asterisk.provisioning.listenAddress = "10.0.20.10";
       assertion = "Phone provisioning moved to pbx.phones, in nixosModules.pbx.";

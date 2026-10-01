@@ -31,7 +31,7 @@
   vcfg = cfg.voicemail;
   asteriskLib = import ../lib {inherit lib;};
   inherit (asteriskLib) format secrets;
-  inherit (import ./lib.nix {inherit lib;}) entryOf limited secretMaxLengths splitMailbox toSection voicemailLines voicemailMailboxes voicemailSectionKind;
+  inherit (import ./lib.nix {inherit lib;}) entryOf limited moduleLoaded secretMaxLengths splitMailbox toSection voicemailLines voicemailMailboxes voicemailSectionKind;
 
   mailboxType = types.submodule (
     {name, ...}: let
@@ -346,6 +346,39 @@
   missingMailboxes = filter (m: hasInfix "@" m.ref && knownMailboxes != null && !(mwiNames ? ${m.ref}) && !(builtins.elem m.ref refused)) mwiReferences;
   showReference = m: "pjsip.endpoints.${m.endpoint}.mailboxes: ${m.ref}";
 
+  # an MWI name is box@context (main/mwi.c:129-133)
+  mwiContext = ref: let
+    parts = builtins.match "[^@]*@(.*)" ref;
+  in
+    if parts == null
+    then null
+    else builtins.head parts;
+  # the modules besides app_voicemail that send MWI (ast_publish_mwi_state),
+  # for mailboxes asterix cannot see: from AMI or ARI, the dialplan, analog
+  # lines or other servers
+  mwiModules = [
+    "app_minivm.so"
+    "chan_dahdi.so"
+    "res_corosync.so"
+    "res_mwi_external.so"
+    "res_pjsip_publish_asterisk.so"
+    "res_xmpp.so"
+  ];
+  # the mailboxes res_pjsip_pubsub sends the MWI of an endpoint's NOTIFYs to
+  # (res/res_pjsip_pubsub.c:3888-3939)
+  incomingMailboxes = lib.concatMap (line: let
+    entry = entryOf line;
+  in
+    lib.optional (entry != null && entry.key == "incoming_mwi_mailbox") entry.value) (splitString "\n" (cfg.renderedFiles."pjsip.conf" or ""));
+  # with voicemail off, the contexts that still get MWI: voicemail.conf's, for
+  # an app_voicemail loaded by hand, and the incoming mailboxes'; null when
+  # any context can
+  mwiContexts =
+    if knownMailboxes == null || builtins.any (moduleLoaded cfg) mwiModules
+    then null
+    else builtins.attrNames knownMailboxes.contexts ++ filter (context: context != null) (map mwiContext (builtins.attrNames knownMailboxes.aliases ++ incomingMailboxes));
+  unsentMwi = filter (m: mwiContexts != null && !(builtins.elem (mwiContext m.ref) mwiContexts)) mwiReferences;
+
   # mailboxes of the final voicemail.conf with an e-mail or pager address
   mailedBoxes = lib.concatLists (
     mapAttrsToList (
@@ -601,6 +634,14 @@ in {
       warnings = map (
         box: "services.asterisk.voicemail.mailboxes.\"${box.mailbox}@${box.context}\".pin is a plain string, so it is stored world-readable in the Nix store; use config.lib.asterisk.secret instead."
       ) (filter (box: !secrets.holdsSecret box.pin) mailboxes);
+    })
+
+    (mkIf (cfg.enable && !vcfg.enable) {
+      warnings = lib.optional (unsentMwi != []) ''
+        services.asterisk: voicemail is off, and nothing sends MWI for these mailboxes that PJSIP endpoints name, so their message lamps never light:
+          ${lib.concatMapStringsSep "\n  " showReference unsentMwi}
+        Turn voicemail on and define them in services.asterisk.voicemail.mailboxes, or remove them from the endpoints' mailboxes.
+      '';
     })
   ];
 }

@@ -102,7 +102,6 @@
   "services.asterisk.pjsip.endpoints.<name>.auth.settings = {\"q7unknown\":\"x\"}" = "rejected by asterisk-config-check";
   "services.asterisk.pjsip.endpoints.<name>.identify.match = [\"q7 host\"]" = "rejected by asterisk-config-check";
   "services.asterisk.pjsip.endpoints.<name>.identify.settings = {\"q7unknown\":\"x\"}" = "rejected by asterisk-config-check";
-  "services.asterisk.pjsip.endpoints.<name>.mailboxes = [\"102@default\"]" = "P3: loads";
   "services.asterisk.pjsip.endpoints.<name>.outboundAuth.settings = {\"q7unknown\":\"x\"}" = "rejected by asterisk-config-check";
   "services.asterisk.pjsip.endpoints.<name>.settings = {\"q7unknown\":\"x\"}" = "rejected by asterisk-config-check";
   "services.asterisk.pjsip.endpoints.<name>.settings = {\"rtp_timeout\":0.5}" = "rejected by asterisk-config-check";

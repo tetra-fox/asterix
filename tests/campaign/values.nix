@@ -415,9 +415,10 @@ in
     };
     "services.asterisk.pjsip.endpoints.<name>.identify.name".valid = ["102-identify"];
     "services.asterisk.pjsip.endpoints.<name>.identify.settings" = freeform {bool.srv_lookups = false;};
+    # with voicemail off nothing sends a mailbox's MWI
     "services.asterisk.pjsip.endpoints.<name>.mailboxes" = {
       valid = [(with' {services.asterisk.voicemail.mailboxes."102".pin = password;} ["102@default"])];
-      invalid = [["102@default"]];
+      warn = [["102@default"]];
     };
     # the endpoint has neither auth nor identify
     "services.asterisk.pjsip.endpoints.<name>.open" = {

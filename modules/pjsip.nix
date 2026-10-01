@@ -386,7 +386,11 @@
               these NOTIFYs. Each is `box@context`, such as `101@default`, as
               voicemail.conf spells it, since Asterisk sends a mailbox's MWI only
               in that form and compares it exactly, or an alias from the section
-              voicemail.conf's `aliasescontext` names.
+              voicemail.conf's `aliasescontext` names. While voicemail is off,
+              evaluation warns about a mailbox whose context neither
+              voicemail.conf nor an endpoint's `incoming_mwi_mailbox` names,
+              unless a module that can send its MWI, such as app_minivm.so, is
+              loaded.
             '';
           };
         };

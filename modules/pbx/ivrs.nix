@@ -1,6 +1,6 @@
 # pbx.ivrs: a menu that plays a prompt and sends each key to a destination,
-# in pbx-ivr-<name>. A prompt given as text is spoken by flite when the
-# system is built.
+# in pbx-ivr-<name>, which includes pbx-directdial with directDial. A prompt
+# given as text is spoken by flite when the system is built.
 {
   config,
   lib,
@@ -20,6 +20,7 @@
     mkIf
     mkOption
     nameValuePair
+    optional
     optionalAttrs
     types
     ;
@@ -103,6 +104,8 @@
     again = pbxLib.app "GotoIf" [''$[''${PBX_ATTEMPT} < ${toString ivr.attempts}]?s,prompt''];
   in {
     comment = mkDefault "from pbx.ivrs.${name}";
+    # searched after the menu's own keys
+    includes = optional ivr.directDial "pbx-directdial";
     extensions =
       {
         s = [
@@ -125,15 +128,15 @@
         t = [again] ++ pbxLib.steps ivr.noInput;
         i = [(pbxLib.app "Playback" ["pbx-invalid"]) again] ++ pbxLib.steps ivr.invalid;
       }
-      // optionalAttrs ivr.directDial (genAttrs (builtins.attrNames cfg.extensions) (number: [
-        (pbxLib.goto (pbxLib.objectContext "extension" number))
-      ]))
       // lib.mapAttrs (_: pbxLib.steps) ivr.options;
   };
 
+  directDial = builtins.any (ivr: ivr.directDial) (builtins.attrValues cfg.ivrs);
+
   badNames = builtins.filter (name: builtins.match "[A-Za-z0-9_-]+" name == null) (builtins.attrNames cfg.ivrs);
   badKeys = concatMap (name: map (key: "pbx.ivrs.${name}.options.${key}") (builtins.filter (key: builtins.match "[0-9*#]" key == null) (builtins.attrNames cfg.ivrs.${name}.options))) (builtins.attrNames cfg.ivrs);
-  # a key that is also an extension number would be defined twice
+  # a key that is also an extension number would hide that number from
+  # directDial, as the menu's own keys come before its includes
   shadowed = concatMap (name: let
     ivr = cfg.ivrs.${name};
   in
@@ -161,7 +164,18 @@ in {
 
   config = mkIf cfg.enable {
     services.asterisk = {
-      dialplan.contexts = mapAttrs' (name: ivr: nameValuePair (pbxLib.objectContext "ivr" name) (ivrSection name ivr)) cfg.ivrs;
+      dialplan.contexts =
+        mapAttrs' (name: ivr: nameValuePair (pbxLib.objectContext "ivr" name) (ivrSection name ivr)) cfg.ivrs
+        # one context every menu with directDial includes, so the dialplan
+        # grows with the menus plus the extensions, not with their product
+        // optionalAttrs directDial {
+          pbx-directdial = {
+            comment = mkDefault "from pbx.ivrs: the extensions a menu with directDial lets callers dial";
+            extensions = genAttrs (builtins.attrNames cfg.extensions) (number: [
+              (pbxLib.goto (pbxLib.objectContext "extension" number))
+            ]);
+          };
+        };
       sounds.packages = lib.optional (spoken != {}) prompts;
     };
 

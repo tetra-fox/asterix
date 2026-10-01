@@ -957,7 +957,8 @@ in {
     };
 
     # the attempt counter replays the prompt, the last timeout or invalid
-    # key takes noInput or invalid
+    # key takes noInput or invalid; with directDial the menu includes the
+    # context of every extension's number, after its own keys
     testIvrMenu = let
       module = {
         pbx = {
@@ -979,6 +980,7 @@ in {
     in {
       expr = {
         ivr = context "pbx-ivr-main" module;
+        directDial = context "pbx-directdial" module;
         inbound = context "pbx-inbound-provider" module;
         prompts = map (package: package.name) (configOf module).services.asterisk.sounds.packages;
       };
@@ -986,10 +988,9 @@ in {
         ivr = ''
           ; from pbx.ivrs.main
           [pbx-ivr-main]
+          include => pbx-directdial
           exten => #,1,${hangup}
           exten => 1,1,Goto(pbx-extension-201,s,1)
-          exten => 201,1,Goto(pbx-extension-201,s,1)
-          exten => 202,1,Goto(pbx-extension-202,s,1)
           exten => i,1,Playback(pbx-invalid)
            same => n,GotoIf($[''${PBX_ATTEMPT} < 2]?s,prompt)
            same => n,${hangup}
@@ -1001,6 +1002,11 @@ in {
           exten => t,1,GotoIf($[''${PBX_ATTEMPT} < 2]?s,prompt)
            same => n,VoiceMail(201@default,u)
            same => n,Hangup()'';
+        directDial = ''
+          ; from pbx.ivrs: the extensions a menu with directDial lets callers dial
+          [pbx-directdial]
+          exten => 201,1,Goto(pbx-extension-201,s,1)
+          exten => 202,1,Goto(pbx-extension-202,s,1)'';
         inbound = ''
           ; from pbx.inbound: calls from trunk provider
           [pbx-inbound-provider]

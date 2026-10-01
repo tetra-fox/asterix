@@ -103,12 +103,17 @@
       ];
       holidays = ["apr 5-6"];
     };
-    # an overnight range on given days (F11)
+    # ranges past midnight on given days, also on days that wrap around the
+    # week, which the routine splits at midnight
     overnight = {
       open = [
         {
           days = "fri";
           time = "22:00-06:00";
+        }
+        {
+          days = "sat-mon";
+          time = "23:00-00:30";
         }
       ];
     };
@@ -175,8 +180,8 @@ in {
       nativeBuildInputs = [pkgs.jq];
       passthru = {inherit plan report;};
     } ''
-      if ! jq -e '.unknown == 0 and .problems == []' ${report}/report.json > /dev/null; then
-        jq '.problems, [.disagreements[] | select(.known == null)][:20]' ${report}/report.json >&2
+      if ! jq -e '.disagree == 0 and .problems == []' ${report}/report.json > /dev/null; then
+        jq '.problems, .disagreements[:20]' ${report}/report.json >&2
         echo "the dialplan disagrees with the oracle, see ${report}/report.json" >&2
         exit 1
       fi

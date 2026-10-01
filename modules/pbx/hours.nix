@@ -11,6 +11,7 @@
   inherit
     (lib)
     concatLists
+    concatMap
     concatMapStringsSep
     elemAt
     escapeShellArgs
@@ -31,7 +32,8 @@
   cfg = config.pbx;
   pbxLib = import ./lib.nix {inherit lib;};
 
-  day = "(sun|mon|tue|wed|thu|fri|sat)";
+  weekdays = ["sun" "mon" "tue" "wed" "thu" "fri" "sat"];
+  day = "(${lib.concatStringsSep "|" weekdays})";
   days = "${day}(-${day})?";
   # GotoIfTime skips a time past 23:59 or a day outside 1 to 31
   # (main/pbx_timing.c get_timerange and lookup_name)
@@ -64,7 +66,11 @@
       time = mkOption {
         type = types.strMatching "${timeOfDay}-${timeOfDay}";
         example = "09:00-17:00";
-        description = "Opening hours of those days, in `timezone`, up to the end of the last minute: `00:00-23:59` is the whole day.";
+        description = ''
+          Opening hours of those days, in `timezone`, up to the end of the last
+          minute: `00:00-23:59` is the whole day. A range past midnight, such
+          as `22:00-06:00`, opens on those days and closes the morning after.
+        '';
       };
     };
   };
@@ -148,6 +154,29 @@
   # (main/stdtime/localtime.c timesub), which the system clock does not count
   leapZones = lib.filterAttrs (_: hours: lib.hasPrefix "right/" hours.timezone) cfg.hours;
 
+  # GotoIfTime checks the weekday apart from the time (main/pbx_timing.c
+  # ast_check_timing2), so a range past midnight on given days is split there
+  openings = range: let
+    times = lib.splitString "-" range.time;
+    start = elemAt times 0;
+    end = elemAt times 1;
+    dayAfter = d: elemAt weekdays (lib.mod (lib.lists.findFirstIndex (w: w == d) null weekdays + 1) 7);
+    # each day, and each end of a range of days, one day later
+    daysAfter = concatMapStringsSep "&" (part: concatMapStringsSep "-" dayAfter (lib.splitString "-" part)) (lib.splitString "&" range.days);
+  in
+    if start <= end || range.days == "*"
+    then [range]
+    else [
+      {
+        inherit (range) days;
+        time = "${start}-23:59";
+      }
+      {
+        days = daysAfter;
+        time = "00:00-${end}";
+      }
+    ];
+
   hoursSection = name: hours: let
     state = stateDevice name;
     # GotoIfTime(times,weekdays,monthdays,months,zone?label); a zone name
@@ -179,7 +208,7 @@
               "*"
               "*"
             ] "open")
-          hours.open
+          (concatMap openings hours.open)
           ++ [
             {
               app = "Return";

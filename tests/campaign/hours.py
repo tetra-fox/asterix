@@ -20,10 +20,8 @@ and plan.json, the instants of each extension.
 `check` compares what the probe logged with the oracle, which reads the zone
 files of ZONEINFO, the tzdata whose files the routine's GotoIfTime names.
 OUT gets report.json: the number of instants that agree, each one that does
-not, with `known` set to F11 where GotoIfTime did what F11 records (an
-overnight range on given days, whose time and weekday it checks
-separately), and `problems`: a zone file of another tzdata, results the log
-lacks, and messages the logger dropped.
+not, and `problems`: a zone file of another tzdata, results the log lacks,
+and messages the logger dropped.
 
 `sweep` runs every instant, a few zones to a boot, and writes each report
 and a summary to OUT.
@@ -112,19 +110,6 @@ class Hours:
             elif (today in days and minute >= start) or (yesterday in days and minute <= end):
                 return True
         return False
-
-    def f11(self, epoch):
-        """Open or closed as F11 records GotoIfTime: the weekday and the time
-        checked separately, so an overnight range opens on its days before
-        its end and after its start."""
-        local = self.local(epoch)
-        if (local.month, local.day) in self.holidays:
-            return False
-        minute = local.hour * 60 + local.minute
-        return any(
-            local.weekday() in days and ((start <= minute <= end) if start <= end else (minute >= start or minute <= end))
-            for days, start, end in self.ranges
-        )
 
     def changes(self):
         """The instants in WINDOW at which the zone's offset changes."""
@@ -283,9 +268,6 @@ def check(args):
             if got == expected:
                 agree += 1
                 continue
-            known = None
-            if state is None and got[0] == ("open" if hours.f11(epoch) else "closed"):
-                known = "F11"
             disagree.append({
                 "call": plan["extension"],
                 "hours": name,
@@ -295,13 +277,11 @@ def check(args):
                 "local": hours.local(epoch).strftime("%a %Y-%m-%d %H:%M:%S %z"),
                 "expected": expected,
                 "got": got,
-                "known": known,
             })
     report = {
         "zones": sorted({h.options["timezone"] for h in all_hours.values()}),
         "agree": agree,
         "disagree": len(disagree),
-        "unknown": sum(1 for d in disagree if d["known"] is None),
         "problems": problems,
         "seconds": round(sum(c["seconds"] for c in probe["calls"]), 1),
         "disagreements": disagree,
@@ -331,22 +311,21 @@ def sweep(args):
     seconds = round(time.monotonic() - start)
     out = pathlib.Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    summary = {"seconds": seconds, "zones": zones, "agree": 0, "disagree": 0, "unknown": 0, "problems": [], "boots": []}
-    known = {}
+    summary = {"seconds": seconds, "zones": zones, "agree": 0, "disagree": 0, "problems": [], "boots": []}
+    disagreeing = set()
     for path in reports:
         report = json.loads((path / "report.json").read_text())
         (out / f"report-{'-'.join(z.replace('/', '_') for z in report['zones'])}.json").write_text(json.dumps(report, indent=1) + "\n")
-        for key in ("agree", "disagree", "unknown"):
+        for key in ("agree", "disagree"):
             summary[key] += report[key]
         summary["problems"] += report["problems"]
         summary["boots"].append({key: report[key] for key in ("zones", "seconds", "agree", "disagree")})
-        for d in report["disagreements"]:
-            # the zone and the kind: names repeat from one boot to the next
-            known.setdefault(d["known"] or "unknown", []).append(f"{d['timezone']} {d['hours'].split('-', 1)[1]}")
-    summary["disagreeing hours"] = {k: sorted(set(v)) for k, v in known.items()}
+        # the zone and the kind: names repeat from one boot to the next
+        disagreeing.update(f"{d['timezone']} {d['hours'].split('-', 1)[1]}" for d in report["disagreements"])
+    summary["disagreeing hours"] = sorted(disagreeing)
     (out / "summary.json").write_text(json.dumps(summary, indent=1) + "\n")
     print(json.dumps(summary, indent=1))
-    return 1 if summary["unknown"] or summary["problems"] else 0
+    return 1 if summary["disagree"] or summary["problems"] else 0
 
 
 def build(flake, jobs, attributes):

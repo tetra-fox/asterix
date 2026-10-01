@@ -569,6 +569,49 @@ in {
          same => n,Hangup()'';
     };
 
+    # a range past midnight on given days opens until 23:59 on them and from
+    # 00:00 on the days after, ranges of days that wrap around the week
+    # included; on every day the time range alone does that
+    testHoursPastMidnight = {
+      expr = context "pbx-hours-night" {
+        pbx.hours.night = {
+          timezone = "UTC";
+          open = [
+            {
+              days = "mon-fri";
+              time = "22:00-06:00";
+            }
+            {
+              days = "sat&sun";
+              time = "23:30-00:00";
+            }
+            {
+              days = "fri-mon";
+              time = "21:00-01:00";
+            }
+            {
+              days = "*";
+              time = "20:00-02:00";
+            }
+          ];
+        };
+      };
+      expected = let
+        zone = zoneFile "UTC";
+      in ''
+        ; from pbx.hours.night
+        [pbx-hours-night]
+        exten => s,1,GotoIfTime(22:00-23:59,mon-fri,*,*,${zone}?open)
+         same => n,GotoIfTime(00:00-06:00,tue-sat,*,*,${zone}?open)
+         same => n,GotoIfTime(23:30-23:59,sat&sun,*,*,${zone}?open)
+         same => n,GotoIfTime(00:00-00:00,sun&mon,*,*,${zone}?open)
+         same => n,GotoIfTime(21:00-23:59,fri-mon,*,*,${zone}?open)
+         same => n,GotoIfTime(00:00-01:00,sat-tue,*,*,${zone}?open)
+         same => n,GotoIfTime(20:00-02:00,*,*,*,${zone}?open)
+         same => n(closed),Return(closed)
+         same => n(open),Return(open)'';
+    };
+
     testInboundByHours = {
       expr = context "pbx-inbound-provider" {
         pbx = {

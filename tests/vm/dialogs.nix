@@ -1,14 +1,16 @@
 # Calls whose SIP dialog changes after it starts, and both ends keep the same
 # view of it: hold with sendonly (pjsua) and with inactive (SIPp) plays music
-# to the other party, and nothing to the phone that holds, until the call is
-# taken back; an UPDATE with a new offer; early media in a 183; reliable
-# provisional responses (100rel) with PRACK on both legs; a 200 that crosses a
-# CANCEL on either leg; re-INVITEs that cross (glare), each answered with 491,
-# and the retry of the side that does not own the Call-ID; and session timers
-# of 90 s refreshed by the phone on one leg and the pbx on the other, with the
-# call going on past them. Each case checks the channels on the pbx, the
-# phones' call state and the dialog in the capture at both ends, and that the
-# call, where it goes on, is heard both ways.
+# to the other party, from a Nix-built directory and from the program of a
+# custom class that runs in Asterisk's unit and sandbox, and nothing to the
+# phone that holds, until the call is taken back; an UPDATE with a new offer;
+# early media in a 183; reliable provisional responses (100rel) with PRACK on
+# both legs; a 200 that crosses a CANCEL on either leg; re-INVITEs that cross
+# (glare), each answered with 491, and the retry of the side that does not
+# own the Call-ID; and session timers of 90 s refreshed by the phone on one
+# leg and the pbx on the other, with the call going on past them. Each case
+# checks the channels on the pbx, the phones' call state and the dialog in
+# the capture at both ends, and that the call, where it goes on, is heard
+# both ways.
 {
   pkgs,
   self,
@@ -19,13 +21,18 @@
   # others take part one case at a time
   extensions = map toString (lib.range 501 508);
 
-  # held parties hear this tone instead of music, so a test can tell what
-  # they hear: it is none of the phones' tones, nor half or twice one
+  # held parties hear these tones instead of music, so a test can tell what
+  # they hear: they are none of the phones' tones, nor half or twice one.
+  # holdTone plays from files, streamTone from a program sox runs as the
+  # custom class's application
   holdTone = 2500;
   holdMusic = pkgs.runCommand "hold-tone" {nativeBuildInputs = [pkgs.sox];} ''
     mkdir $out
     sox -n -r 8000 -b 16 -c 1 $out/tone.wav synth 5 sine ${toString holdTone} vol 0.05
   '';
+  streamTone = 2900;
+  # a sine without end, as signed linear audio at 8 kHz on standard output
+  streamCommand = "${pkgs.sox}/bin/sox -q -n -r 8000 -c 1 -b 16 -e signed-integer -t raw - synth sine ${toString streamTone} vol 0.05";
 
   # SIPp calls in as the endpoint sipp from this port, and answers calls to
   # 590 as the endpoint uas on the next one
@@ -66,7 +73,13 @@ in
           ];
           settings."asterisk.conf".options.verbose = 3;
 
-          musicOnHold.classes.default.directory = holdMusic;
+          musicOnHold.classes = {
+            default.directory = holdMusic;
+            stream = {
+              mode = "custom";
+              application = streamCommand;
+            };
+          };
 
           pjsip = {
             transports.udp = {};
@@ -88,6 +101,8 @@ in
               {
                 # the pbx refreshes the session of calls to 508 every 45 s
                 "508".settings.timers_sess_expires = 90;
+                # the party SIPp holds hears the custom class
+                sipp.settings.moh_suggest = "stream";
                 uas = {
                   context = "dialogs";
                   aor = {
@@ -129,6 +144,7 @@ in
       + builtins.readFile ./tones.py
       + ''
         HOLD_TONE = ${toString holdTone}
+        STREAM_TONE = ${toString streamTone}
         PHONES = "${nodes.phones.networking.primaryIPAddress}"
         PBX_IP = "${nodes.pbx.networking.primaryIPAddress}"
         PBX = f"{PBX_IP}:5060"
@@ -287,6 +303,23 @@ in
             start_phones(list(phone.values()))
             wait_registrations({p: 200 for p in phone.values()})
 
+        with subtest("the custom class's program runs in Asterisk's unit, as its user and in its sandbox"):
+            def confinement(pid):
+                """The unit, user, mount namespace, seccomp mode and capabilities of a process."""
+                status = dict(line.split(":\t", 1) for line in pbx.succeed(f"cat /proc/{pid}/status").splitlines())
+                return {
+                    "cgroup": pbx.succeed(f"cat /proc/{pid}/cgroup").strip(),
+                    "mounts": pbx.succeed(f"readlink /proc/{pid}/ns/mnt").strip(),
+                    **{key: status[key] for key in ["Uid", "Gid", "NoNewPrivs", "Seccomp", "CapEff", "CapBnd"]},
+                }
+
+            main = pbx.succeed("systemctl show -P MainPID asterisk.service").strip()
+            stream = pbx.succeed("pgrep -f 'synth sine ${toString streamTone}'").split()
+            assert len(stream) == 1, stream
+            confined = confinement(main)
+            assert confined["cgroup"] == "0::/system.slice/asterisk.service" and confined["Seccomp"] == "2", confined
+            assert confinement(stream[0]) == confined, (confinement(stream[0]), confined)
+
         with subtest("session timers: a call with sessions of 90 s starts, refreshed by the phone on one leg and by the pbx on the other"):
             timed_mark = len(sip_messages(pbx))
             phone["507"].call("508")
@@ -327,7 +360,7 @@ in
             ]
             check_hold(holding, at(holder), leg(mark, at(held)), at(held), "recvonly")
 
-        with subtest("hold with inactive: the pbx answers inactive and plays music to the other party, and nothing to the phone that holds, until the call is taken back"):
+        with subtest("hold with inactive: the pbx answers inactive and plays the custom class SIPp's endpoint suggests to the other party, and nothing to the phone that holds, until the call is taken back"):
             held = phone["502"]
             mark = len(sip_messages(pbx))
             # the pbx answers late while SIPp calls and changes the call, and
@@ -341,8 +374,8 @@ in
             # each NOTIFY lets the scenario send its next re-INVITE
             with stalled(pbx):
                 asterisk(pbx, f"pjsip send notify clear-mwi channel {channel('sipp')}")
-                wait_journal(pbx, cursor, "Started music on hold, class 'default', on channel 'PJSIP/502-")
-            wait_hears(held, [HOLD_TONE])
+                wait_journal(pbx, cursor, "Started music on hold, class 'stream', on channel 'PJSIP/502-")
+            wait_hears(held, [STREAM_TONE])
             with stalled(pbx):
                 asterisk(pbx, f"pjsip send notify clear-mwi channel {channel('sipp')}")
                 wait_journal(pbx, cursor, "Stopped music on hold on PJSIP/502-")

@@ -67,6 +67,12 @@
     table = mkDefault table;
     columns = mkDefault (concatStringsSep ", " (builtins.attrNames columns));
     values = mkDefault (concatStringsSep ", " (map (v: "'${v}'") (builtins.attrValues columns)));
+    # both modules write master.db, one row per transaction, and drop a row
+    # that waits longer than busy_timeout, 1000 ms unless set, for the other's
+    # lock (cdr/cdr_sqlite3_custom.c:186-192, 274-277)
+    # TODO: leave busy_timeout to Asterisk once the modules retry a row
+    # instead of dropping it
+    busy_timeout = mkDefault 10000;
   };
 
   # the arguments __ast_app_separate_args (main/app.c) makes of a string:

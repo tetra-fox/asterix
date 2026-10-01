@@ -168,7 +168,7 @@ in
         def records():
             """Rows of the CDR and CEL tables and the size of master.db."""
             db = "/var/log/asterisk/master.db"
-            # Asterisk waits up to 1 s (busy_timeout) for a reader to let go
+            # Asterisk waits up to 10 s (busy_timeout) for a reader to let go
             cdr, cel = pbx.succeed(f"sqlite3 -readonly -cmd '.timeout 500' {db} 'select count(*) from cdr' 'select count(*) from cel'").split()
             return {"cdr_rows": int(cdr), "cel_rows": int(cel), "master_db_bytes": int(pbx.succeed(f"stat -c %s {db}"))}
 

@@ -10,10 +10,10 @@
 # once; ARI over HTTP and HTTPS answers only its allowed origins, refuses a
 # read-only user's POST and runs a Stasis application that answers, plays a
 # sound and hangs up; CDR records in CSV and SQLite and CEL records of blind
-# and attended transfers, a conference, a queue, a ring group and a call
-# nobody answered, with a transfer's target and a hangup's cause and dial
-# status in eventextra; ConfBridge profiles, queues and music on hold from a
-# Nix-built directory.
+# and attended transfers, a conference, a queue, a ring group, a call nobody
+# answered and a call that ends while another writer holds master.db, with a
+# transfer's target and a hangup's cause and dial status in eventextra;
+# ConfBridge profiles, queues and music on hold from a Nix-built directory.
 {
   pkgs,
   self,
@@ -771,6 +771,22 @@ in
             assert legs(events) == expected_legs([], unanswered=["103"]), events
             hangup = extra(before, "HANGUP", "103")
             assert (hangup["hangupcause"], hangup["dialstatus"]) == (16, ""), hangup
+
+        with subtest("CDR and CEL: the records of a call wait while another writer holds master.db for 8 s"):
+            # as CDR and CEL do to each other while one writes a burst of records
+            hold = "(echo 'BEGIN IMMEDIATE;'; sleep 8; echo 'COMMIT;') | sqlite3 -cmd '.timeout 10000' /var/log/asterisk/master.db"
+            pbx.succeed(f"systemd-run --unit=master-db-lock --collect -E PATH sh -c {shlex.quote(hold)}")
+            pbx.wait_until_fails("sqlite3 /var/log/asterisk/master.db 'BEGIN IMMEDIATE; ROLLBACK;'")
+            ended = caller.disconnects()
+            caller.call("mark")
+            caller.wait_disconnected(after=ended)
+            # the call ended, and so its records were written, while the lock was held
+            pbx.succeed("systemctl is-active --quiet master-db-lock")
+            pbx.wait_until_fails("systemctl is-active --quiet master-db-lock", timeout=30)
+            cdrs, events, position = records_since(position)
+            assert cdrs == [("101", "mark", "101", "", "Hangup", "ANSWERED")], cdrs
+            assert legs(events) == expected_legs(["101"]), events
+            pbx.fail("journalctl -u asterisk.service | grep 'database is locked'")
 
         with subtest("AMI users receive every event of 128 calls at once"):
             ami_listen(pbx, "ami-secret", "calls", "everything")

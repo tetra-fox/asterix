@@ -276,6 +276,56 @@ in {
       expected = true;
     };
 
+    # Asterisk names its own address in the From of its requests unless the
+    # endpoint has from_domain, which an endpoint pinned to a transport with an
+    # external address gets; a definition in settings replaces it
+    testPinnedEndpointsNameTheExternalAddressInFrom = {
+      expr = let
+        sections =
+          (evalConfig [
+            phone
+            ({config, ...}: {
+              services.asterisk.pjsip = {
+                transports = {
+                  public = {
+                    port = 5070;
+                    externalSignalingAddress = "198.51.100.10";
+                  };
+                  public6 = {
+                    address = "::";
+                    port = 5072;
+                    externalSignalingAddress = "2001:db8::10";
+                  };
+                };
+                endpoints = lib.genAttrs ["102" "103" "104" "105"] (extension: {
+                  context = "internal";
+                  auth.password = config.lib.asterisk.secret "/run/secrets/${extension}";
+                  transport =
+                    {
+                      "102" = "public";
+                      "103" = "public6";
+                      "104" = "public";
+                      "105" = "udp";
+                    }
+                    .${
+                      extension
+                    };
+                  settings = lib.optionalAttrs (extension == "104") {from_domain = "pbx.example.org";};
+                });
+              };
+            })
+          ]).services.asterisk.settings."pjsip.conf";
+      in
+        map (extension: sections."endpoint:${extension}".from_domain or null) ["101" "102" "103" "104" "105"];
+      expected = [
+        null
+        "198.51.100.10"
+        "[2001:db8::10]"
+        "pbx.example.org"
+        null
+      ];
+    };
+
     testTypedSettingsOptionReachesSection = {
       expr =
         lib.hasInfix "rtp_timeout = 30"

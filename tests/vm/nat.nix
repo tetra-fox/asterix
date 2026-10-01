@@ -5,11 +5,12 @@
 # sits behind a router that masquerades it and advertises its private address
 # (`behindNat` on its endpoint). Calls between it and a desk phone in the
 # office have audio both ways, each phone is only given PBX addresses it can
-# reach, except in the From header of Asterisk's requests, which names the
-# PBX's own address, and hanging up at home ends the call in the office. A
-# phone on the internet calls the office the same way. Two phones behind the
-# home router, both on port 5060, one of them learning its public address
-# from STUN, register with a PBX on a public address and call each other;
+# reach, in the From header of Asterisk's requests too, since the endpoints
+# of the phones outside name the transport, and hanging up at home ends the
+# call in the office. A phone on the internet calls the office the same way.
+# Two phones behind the home router, both on port 5060, one of them learning
+# its public address from STUN, register with a PBX on a public address and
+# call each other;
 # then the home router maps each connection to a random port, as a symmetric
 # NAT does, so the port STUN gives isn't where the phone's RTP comes from,
 # and Asterisk answers where it comes from. When the router gives a call's
@@ -108,16 +109,22 @@ in
               externalMediaAddress = "198.51.100.10";
               localNet = ["10.1.0.0/24"];
             };
+            # the phones outside name the transport, whose external address
+            # their endpoints then put in From
             endpoints = {
               # desk phone in the office
               "301" = endpoint "301" {};
               # softphone at home
-              "302" = endpoint "302" {behindNat = true;};
+              "302" = endpoint "302" {
+                behindNat = true;
+                transport = "udp";
+              };
               # phone on the internet, not behind NAT
-              "303" = endpoint "303" {};
+              "303" = endpoint "303" {transport = "udp";};
               # softphone at home with ICE
               "304" = endpoint "304" {
                 behindNat = true;
+                transport = "udp";
                 settings.ice_support = true;
               };
             };
@@ -292,12 +299,6 @@ in
                 if text in line and not re.match(r"\d\d:\d\d:\d\d\.\d{3} ", line)
             ]
 
-        def office_addresses(phone):
-            """Lines naming the office LAN in what a phone outside it received.
-            From names the PBX's own address, which res_pjsip takes from the
-            transport (res_pjsip.c:808-833), not from external_signaling_address."""
-            return [line for line in received_with(phone, "10.1.0.") if not re.fullmatch(r"From: <sip:\d+@10\.1\.0\.10>;tag=\S+", line)]
-
         def contact_ports(machine):
             return re.findall(r"^ *Contact: +\d+/sip:\d+@198\.51\.100\.20:(\d+)", asterisk(machine, "pjsip show contacts"), re.M)
 
@@ -317,7 +318,7 @@ in
             print(wait_for_media_both_ways(pbx, [desk, home]))
             invite = home.received("INVITE")[-1]
             assert set(header(invite, "c")) == {"IN IP4 198.51.100.10"}, invite
-            assert all("198.51.100.10" in value for value in header(invite, "Via") + header(invite, "Contact")), invite
+            assert all("198.51.100.10" in value for value in header(invite, "Via") + header(invite, "Contact") + header(invite, "From")), invite
             desk.hangup()
             wait_idle(pbx)
 
@@ -331,7 +332,7 @@ in
             # the BYE has to find its way back through both routers
             home.hangup()
             wait_idle(pbx)
-            assert office_addresses(home) == [], office_addresses(home)
+            assert received_with(home, "10.1.0.") == [], received_with(home, "10.1.0.")
             assert received_with(desk, "192.168.1.") == [], received_with(desk, "192.168.1.")
 
         with subtest("a phone on the internet calls the office: audio both ways, only public PBX addresses"):
@@ -343,7 +344,7 @@ in
             wait_hears(desk, [public.tone])
             public.hangup()
             wait_idle(pbx)
-            assert office_addresses(public) == [], office_addresses(public)
+            assert received_with(public, "10.1.0.") == [], received_with(public, "10.1.0.")
 
         with subtest("two phones behind one NAT, one with STUN, register with a public PBX and call each other"):
             anna = Phone(remote, "401", "401", "pw-401", "198.51.100.40", sip_port=5060, cli_port=2301)

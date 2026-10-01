@@ -187,7 +187,12 @@
     transport = mkOption {
       type = types.nullOr types.str;
       default = null;
-      description = "Transport for outgoing requests; by default Asterisk picks a matching one.";
+      description = ''
+        Transport for outgoing requests; by default Asterisk picks a matching
+        one. For an endpoint, naming a transport with an external address
+        also puts that address in the From header of requests to it (see the
+        transport's `externalSignalingAddress`).
+      '';
     };
     allow = mkOption {
       type = types.nonEmptyListOf types.str;
@@ -253,10 +258,11 @@
       default = false;
       description = ''
         Enable `rtp_symmetric`, `force_rport` and `rewrite_contact` for devices
-        behind NAT. The From header of requests to the device still names the
-        PBX's own address, not its transport's external one, so a private
-        address when the PBX is behind NAT as well; `from_domain` in
-        `settings` replaces it.
+        behind NAT. With the PBX behind NAT as well, the From header of
+        requests to an endpoint names the PBX's private address unless its
+        `transport` names the transport with the external address (see the
+        transport's `externalSignalingAddress`); a trunk's names
+        `fromDomain`.
       '';
     };
     identify = mkOption {
@@ -493,6 +499,10 @@
             and tls on IPv4. Over tcp and tls on IPv6 it applies them only to
             endpoints whose `transport` names this transport; to the others a
             PBX behind NAT sends its private address in SIP headers and SDP.
+            Asterisk never applies it to the From header, so an endpoint, not
+            a trunk, whose `transport` names this transport gets it as
+            `from_domain`, for peers in `localNet` too; From of requests to
+            other endpoints names the PBX's own address.
             On a ws or wss transport the three fail evaluation, as Asterisk
             applies them to nothing it sends over WebSocket.
           '';
@@ -810,9 +820,19 @@
       };
     };
 
-  endpointSectionsFor = name: e:
+  endpointSectionsFor = name: e: let
+    transport =
+      if e.transport != null
+      then pcfg.transports.${e.transport} or null
+      else null;
+  in
     endpointSections name e {
       inherit (e) aor auth mailboxes;
+      # without from_domain, Asterisk names the address it sends from in From,
+      # never the transport's external one (res_pjsip/pjsip_message_filter.c:319-329)
+      extraValues = optionalAttrs (transport != null && transport.externalSignalingAddress != null) {
+        from_domain = hostPort transport.externalSignalingAddress null;
+      };
     };
 
   trunkSectionsFor = name: t: let

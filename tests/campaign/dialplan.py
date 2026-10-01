@@ -16,7 +16,7 @@ context, with an optional caller ID. PROBE is the probe.json of a run with
 
 The expected dialplan comes from the option descriptions: the definitions of
 a list from several modules are concatenated in module order, lib.mkBefore
-ones first and lib.mkAfter ones last (D22), and an include, switch or ignore
+ones first and lib.mkAfter ones last, and an include, switch or ignore
 pattern listed twice counts once; an extension's first step gets priority 1
 and the following ones the next priorities, a label names its step; a
 context searches its own extensions, then its switches, then its includes in

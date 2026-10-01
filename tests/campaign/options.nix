@@ -582,7 +582,7 @@
     # where a wrong value of the option is meant to fail: evaluation, or,
     # for freeform keys only Asterisk knows, loading
     guard = (specOf option).guard or "t0";
-    # why a case cannot do what it expects, when a decision says so
+    # why a case cannot do what it expects, when that is a known limit
     limitation = (specOf option).limitations.${label} or null;
     modules =
       [(build base names [] [] loc value) extra]

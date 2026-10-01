@@ -44,8 +44,8 @@
   "services.asterisk.http.address = \"pbx\"" = "rejected by asterisk-config-check";
   "services.asterisk.http.settings = {\"q7unknown\":\"x\"}" = "rejected by asterisk-config-check";
   "services.asterisk.http.tls.address = \"pbx\"" = "rejected by asterisk-config-check";
-  "services.asterisk.includes.<name>.*.optional = default" = "limitation (D43: the included file is not in the build)";
-  "services.asterisk.includes.<name>.*.optional = false" = "limitation (D43: the included file is not in the build)";
+  "services.asterisk.includes.<name>.*.optional = default" = "limitation (the included file is not in the build)";
+  "services.asterisk.includes.<name>.*.optional = false" = "limitation (the included file is not in the build)";
   "services.asterisk.logger.channels = {\"messages\":[\"q7level\"]}" = "P3: loads";
   "services.asterisk.modules.autoload = true" = "P2: does not load";
   "services.asterisk.modules.defaultModules = false" = "rejected by asterisk-config-check";

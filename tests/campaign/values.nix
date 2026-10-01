@@ -19,7 +19,7 @@
   # keys each freeform section reads, one per value kind, one no Asterisk
   # module knows and, as `wrong`, a key with a value of another kind. Only
   # Asterisk knows what a freeform key takes, so loading is where a wrong one
-  # fails (D43); strings go under the string key.
+  # fails; strings go under the string key.
   freeform = kinds:
     {
       valid = builtins.attrValues (removeAttrs kinds ["unknown" "wrong"]);
@@ -294,12 +294,12 @@ in
     };
     "services.asterisk.includes.<name>.*.file" = {
       valid = ["pjsip-local.conf"];
-      # a file outside the store does not exist where the check runs (D43)
-      limitations."\"pjsip-local.conf\"" = "D43: the included file is not in the build";
+      # a file outside the store does not exist where the check runs
+      limitations."\"pjsip-local.conf\"" = "the included file is not in the build";
     };
     "services.asterisk.includes.<name>.*.optional".limitations = {
-      default = "D43: the included file is not in the build";
-      false = "D43: the included file is not in the build";
+      default = "the included file is not in the build";
+      false = "the included file is not in the build";
     };
     "services.asterisk.logger.channels" = {
       valid = [

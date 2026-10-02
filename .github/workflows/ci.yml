@@ -14,29 +14,20 @@ permissions:
   actions: write # cache-nix-action purges stale nix-store caches
 
 jobs:
-  # the checks are listed from the flake, so tests/default.nix stays the only
-  # place a check is named. the vm tests take longest, so they go first
-  discover:
-    runs-on: ubuntu-latest
-    outputs:
-      checks: ${{ steps.list.outputs.checks }}
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/setup-nix
-      - id: list
-        run: |
-          echo "checks=$(nix eval --json .#checks.x86_64-linux --apply builtins.attrNames \
-            | jq -c 'sort_by(startswith("vm-") | not)')" >> "$GITHUB_OUTPUT"
-
-  check:
-    name: ${{ matrix.check }}
-    needs: discover
+  # the groups of legacyPackages.ci in flake.nix, whose checks nix-fast-build
+  # evaluates in parallel. two workers keep the checks group near 7 GB of the
+  # runner's 16
+  checks:
+    name: ${{ matrix.group }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        check: ${{ fromJSON(needs.discover.outputs.checks) }}
+        group: [lint, checks]
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-nix
-      - run: nix build '.#checks.x86_64-linux.${{ matrix.check }}' -L --no-link
+      - run: >
+          nix run --inputs-from . nixpkgs#nix-fast-build --
+          --flake '.#legacyPackages.x86_64-linux.ci.${{ matrix.group }}'
+          --eval-workers 2 --no-nom --no-link

@@ -36,6 +36,14 @@
 
     legacyPackages = forAllSystems (pkgs: {
       packageChecks = import ./tests/packages.nix {inherit pkgs self sops-nix;};
+
+      # the checks CI builds, a job for each group. the vm tests only run locally
+      ci = let
+        lint = import ./tests/lint.nix {inherit pkgs self;};
+      in {
+        inherit lint;
+        checks = lib.filterAttrs (name: _: !(lint ? ${name} || lib.hasPrefix "vm-" name)) self.checks.${pkgs.stdenv.hostPlatform.system};
+      };
     });
 
     packages = forAllSystems (pkgs: {

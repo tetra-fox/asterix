@@ -2,7 +2,3 @@ result
 result-*
 .direnv/
 target/
-
-VALIDATION.md
-DECISIONS.md
-STATUS.md

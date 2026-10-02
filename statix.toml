@@ -1,0 +1,3 @@
+# the modules set options that share a prefix on separate lines, the way NixOS
+# configurations are written, which statix reports as repeated keys
+disabled = ["repeated_keys"]

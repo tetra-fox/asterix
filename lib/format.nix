@@ -466,11 +466,13 @@ in rec {
       byName = {${name} = entry;} // acc.byName;
       entries = acc.entries ++ [entry];
     };
-    entries =
+    inherit
       (foldl' step {
         byName = {};
         entries = [];
-      } (sortSections sections)).entries;
+      } (sortSections sections))
+      entries
+      ;
   in {
     sections = map (entry: entry.keys // {inherit (entry) name;}) (filter (entry: entry.known && !entry.template) entries);
     unresolved = map (entry: {inherit (entry) name inherits;}) (filter (entry: !entry.known) entries);

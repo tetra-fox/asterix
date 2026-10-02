@@ -28,7 +28,7 @@
 
   cfg = config.pbx;
   pbxLib = import ./lib.nix {inherit lib;};
-  format = (import ../../lib {inherit lib;}).format;
+  inherit (import ../../lib {inherit lib;}) format;
 
   inboundType = types.submodule {
     options = {

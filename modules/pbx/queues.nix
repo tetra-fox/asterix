@@ -23,7 +23,7 @@
   cfg = config.pbx;
   core = config.services.asterisk;
   pbxLib = import ./lib.nix {inherit lib;};
-  format = (import ../../lib {inherit lib;}).format;
+  inherit (import ../../lib {inherit lib;}) format;
 
   queueType = types.submodule {
     options = {

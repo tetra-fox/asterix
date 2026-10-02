@@ -20,7 +20,7 @@
 
   cfg = config.pbx;
   pbxLib = import ./lib.nix {inherit lib;};
-  format = (import ../../lib {inherit lib;}).format;
+  inherit (import ../../lib {inherit lib;}) format;
   inherit (import ../lib.nix {inherit lib;}) confbridgeModules;
   core = config.services.asterisk;
 

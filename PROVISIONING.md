@@ -1,11 +1,8 @@
 # Provisioning devices
 
-asterix provides automatic provisioning of IP phones.
-
-A supported device fetches its configuration from the PBX over HTTP: the SIP
-server, and the account and password of the PJSIP endpoint it is tied to.
-Point it at the PBX once, with DHCP option 66 or its web interface; the
-configuration it downloads keeps it pointed there.
+Supported phones fetch their SIP server, account and password from the PBX
+over HTTP. Point each one at the PBX once, with DHCP option 66 or its web
+interface, and the config it downloads keeps it there.
 
 ## Supported devices
 
@@ -15,9 +12,8 @@ configuration it downloads keeps it pointed there.
 
 ## Setup
 
-Provisioning is part of the pbx layer: import `asterix.nixosModules.pbx`
-(it brings the core with it). The pattern options stay off unless you set
-`pbx.enable`.
+Import `asterix.nixosModules.pbx`, which includes the core. The rest of the
+pbx layer stays off unless you set `pbx.enable`.
 
 ```nix
 pbx.phones = {
@@ -33,30 +29,23 @@ pbx.phones = {
 };
 ```
 
-- **Only the phones' network can connect.** Connections from outside
-  `allowedNetworks` are dropped.
-- **A device's file can be limited to that device.** With a static DHCP lease,
-  set its `allowedAddress`; other addresses get 403. Without it, any device on
-  the phones' network can fetch every file, SIP passwords included, by trying
-  MAC addresses, which are the file names.
-- **Passwords given with `secret` stay out of the Nix store**, like in the rest
-  of the configuration. When one changes, restart
-  `asterisk-provisioning.service` (sops-nix: `restartUnits`) and reboot the
-  device to fetch the new file.
-- **Files are sent over plain HTTP.** A device cannot use HTTPS before it is
-  provisioned, so anyone on the phones' network can read the files in transit.
-  Keep that network to phones.
-
-`journalctl -u asterisk-provisioning` logs each request with the device's
-address and the answer.
+- Files go over plain HTTP, since a phone can't use HTTPS before it's
+  provisioned. Keep the phones' network to phones.
+- Only `allowedNetworks` can connect, but anything there can fetch every
+  file, passwords included, by guessing MACs. With a static DHCP lease, set
+  the device's `allowedAddress` to lock its file to it.
+- After a password changes, restart `asterisk-provisioning.service`
+  (sops-nix: `restartUnits`) and reboot the device.
+- `journalctl -u asterisk-provisioning` logs every request.
 
 [`examples/household-intercom-ht801.nix`](examples/household-intercom-ht801.nix)
-has a complete configuration to copy.
+is a complete config.
 
-## Devices without support
+## Unsupported devices
 
-Write their files yourself; they are served the same way. The text may contain
-secrets:
+Write their files yourself. Or upstream them pls :3
+
+Secrets work in the text:
 
 ```nix
 pbx.phones.files."0015651234ab.cfg" = {
@@ -67,62 +56,52 @@ pbx.phones.files."0015651234ab.cfg" = {
 };
 ```
 
-For XML files, set `escape = "xml"` so secret values are escaped.
+Set `escape = "xml"` on XML files so secrets get escaped.
 
-## Grandstream
+## Grandstream HT801
 
-### HT801
+Analog adapter for one phone. Each one is tied to `devices.<name>.endpoint`
+(the attribute name by default) and downloads `cfg<mac>.xml`.
 
-An adapter for one analog phone. Each adapter is tied to an endpoint in
-`devices.<name>.endpoint` (by default the attribute name) and downloads
-`cfg<mac>.xml`.
+| P-value | Setting                | Value                                    |
+| ------- | ---------------------- | ---------------------------------------- |
+| P271    | account active         | yes                                      |
+| P47     | SIP server             | `sipServer` (default `listenAddress`)    |
+| P35     | SIP user ID            | the endpoint's name                      |
+| P36     | authentication ID      | the endpoint's auth user name            |
+| P34     | password               | the endpoint's password                  |
+| P212    | config download        | HTTP                                     |
+| P237    | config server          | `listenAddress`, plus the port if not 80 |
+| P238    | firmware check         | skipped (default: Grandstream's server)  |
+| P1409   | TR-069                 | off (default: Grandstream's GDMS cloud)  |
+| P2      | web interface password | `adminPassword`, if set                  |
+| P30     | NTP server             | `ntpServer`, if set                      |
+| P64     | time zone              | `timeZone`, if set                       |
 
-| P-value  | Setting                         | Value                                            |
-| -------- | ------------------------------- | ------------------------------------------------ |
-| P271     | account active                  | yes                                              |
-| P47      | SIP server                      | `sipServer` (by default `listenAddress`)         |
-| P35      | SIP user ID                     | the endpoint's name, which is also its aor's     |
-| P36      | authentication ID               | the endpoint's auth user name                    |
-| P34      | password                        | the endpoint's password                          |
-| P212     | configuration download protocol | HTTP                                             |
-| P237     | configuration server            | `listenAddress` (with the port, if it is not 80) |
-| P238     | firmware check                  | always skipped (Grandstream's server by default) |
-| P1409    | TR-069                          | off (Grandstream's GDMS cloud by default)        |
-| P2       | web interface password          | `adminPassword`, if set                          |
-| P30      | NTP server                      | `ntpServer`, if set                              |
-| P64      | time zone                       | `timeZone`, if set                               |
+Anything else goes in `settings` or `devices.<name>.settings`. The P-values
+come from Grandstream's config templates (ht80x 1.0.65.3, ht80x_v2 1.0.15.2,
+`config-template.zip` at grandstream.com/support/tools).
 
-More P-values go in `settings` (every device) or `devices.<name>.settings`.
-These P-values are in Grandstream's configuration templates for both hardware
-versions (`config-template.zip` from grandstream.com/support/tools: ht80x
-1.0.65.3 and ht80x_v2 1.0.15.2).
+Caveats:
 
-Caveats and known issues:
-
-- Not tested on a real HT801 yet, only against a simulated device in a VM test.
-  Try one adapter first.
-- P1414 is left alone. The HT80x templates only call it "Auto Provision", and
-  turning it off might stop the adapter from fetching its file.
-- The web interface password of V2 hardware must be 4 to 30 characters.
-- An adapter cannot connect to 0.0.0.0 or ::. With a `listenAddress` like
-  that, evaluation fails until `sipServer` and `settings.P237` name the PBX's
-  address on the adapters' network.
-- An IPv6 `listenAddress` goes into P47, as the default `sipServer`, without
-  brackets (`2001:db8::10`), and into P237 with them (`[2001:db8::10]`, then
-  `:port` if the port is not 80). Neither form has been tried on a real
-  adapter.
-- A call to the analog phone rings it. It cannot be answered automatically.
+- Only tested against a simulated device in a VM test. Try one adapter first.
+- P1414 ("Auto Provision") is left alone, since turning it off might stop
+  provisioning.
+- On V2 hardware the web interface password must be 4 to 30 characters.
+- A `listenAddress` of `0.0.0.0` or `::` fails evaluation until `sipServer`
+  and `settings.P237` name a real address.
+- IPv6 goes into P47 bare (`2001:db8::10`) and into P237 bracketed
+  (`[2001:db8::10]:port`).
+- Calls ring the phone, it can't auto-answer.
 
 ## Adding a device
 
-A device is supported once someone who owns it has tested it:
+It needs someone who owns one to test it, and:
 
-1. A module in `modules/pbx/phones/<vendor>/`, imported by
-   `modules/pbx/phones/default.nix`, that writes the device's files into
-   `pbx.phones.files`, like
-   `modules/pbx/phones/grandstream/ht801.nix`.
-2. Only settings the vendor documents for that device, with the source (template
-   or manual, and its version).
-3. A VM test like `tests/vm/ht801.nix`, and a check on the real device.
-4. A row in the table above and a section here with what the module sets and
-   its caveats.
+1. a module in `modules/pbx/phones/<vendor>/` that writes into
+   `pbx.phones.files`, imported from `modules/pbx/phones/default.nix`, like
+   `grandstream/ht801.nix`
+2. only settings the vendor documents for that device, with the source and its
+   version
+3. a VM test like `tests/vm/ht801.nix`, plus a check on the real device
+4. a row in the table above and a section here

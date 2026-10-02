@@ -1,6 +1,8 @@
 # asterix
 
-NixOS module for [Asterisk](https://www.asterisk.org/), with a provisioning server for phones and an optional, opinionated layer for common setups such as ring groups and business hours. Intended for anything from a household intercom to a small office PBX with SIP trunks, conferences and queues.
+NixOS module for [Asterisk](https://www.asterisk.org/), with a provisioning server for phones and an optional, opinionated layer for common setups such as ring groups and business hours.
+
+Intended for anything from a household intercom to a small office PBX with SIP trunks, conferences and queues.
 
 ## Quick start
 
@@ -86,128 +88,88 @@ See [examples](examples/) for more.
 
 A full list of options is in the options reference: `nix build .#docs`.
 
-## What it does
+## Features
 
-- **Phones, dialplan and the rest as options.** PJSIP phones and trunks, the
-  dialplan, voicemail, conferences, queues, music on hold, call features, AMI,
-  ARI and call records. Anything else can be written as Nix too (see below).
-- **Passwords can stay out of the Nix store.** Pass them as files, such as
-  sops-nix secrets, and they are read when Asterisk starts (see the [examples](examples/)).
-- **Asterisk checks the configuration before it is deployed.** Building the
-  system starts Asterisk with the new configuration in the build sandbox. If
-  Asterisk reports an error or a warning while loading it, or the dialplan
-  uses an application, function or switch that no loaded module provides,
-  plays a sound missing in a language your phones use, or sends calls to an
-  extension or label that does not exist, the build fails.
-  See `checkConfig` in the options reference.
-- **Reload instead of restart.** Changes are applied with a reload where
-  possible, so calls stay up. Only changes like a new SIP port
-  restart it, and phones stay registered across a restart. A deploy reloads
-  only the modules whose files changed (`core reload` for a file without a
-  reload of its own), so dialplan globals and extensions changed at runtime
-  stay until the dialplan is read again: on a deploy that changes
-  extensions.conf or extensions.ael or reloads everything, a reload from the
-  CLI or a restart.
-- **`openFirewall` opens only what your configuration uses:** the SIP ports and
-  the RTP range, and AMI or HTTP only if you ask for them.
-- **Several networks.** Give each network its own SIP transport and pin phones
-  to it. Asterisk relays the audio, so phones on different networks never talk
-  to each other directly.
-- **NAT.** Options for a PBX behind NAT and for phones behind NAT, plus STUN
-  and TURN for ICE. `externalSignalingAddress` in the options reference says
-  over which transports Asterisk applies a PBX's public address.
-- **Sandboxed.** Asterisk runs as its own user, without extra privileges
-  unless a SIP or HTTP port is below 1024, which takes `CAP_NET_BIND_SERVICE`.
-  `systemd-analyze security asterisk.service` rates its exposure 1.5, 1.6 with
-  `realtime` and 1.7 with such a port.
-- **Restarted when it fails.** systemd restarts Asterisk when its process
-  crashes or exits with an error. Nothing notices an Asterisk that hangs or is
-  stopped (SIGSTOP), since it sends systemd no watchdog notifications: the
-  unit stays active while calls time out.
-- **Phone provisioning.** Supported devices fetch their configuration from the
-  PBX. It is part of the pbx layer, see [PROVISIONING.md](PROVISIONING.md).
+- **Asterisk as Nix options:** PJSIP phones and trunks, dialplan, voicemail,
+  conferences, queues, music on hold, call features, AMI, ARI and call
+  records. Anything else goes in `settings`.
+- **A bad config fails the build.** Asterisk boots the new config in the build
+  sandbox, and any error or warning fails it, as does a dialplan that uses a
+  missing application, sound or extension. See `checkConfig`.
+- **Deploys reload instead of restart** where they can, so calls stay up.
+- **Several networks:** give each its own transport and pin phones to it.
+  Asterisk relays the audio between them.
+- **NAT** on either side, plus STUN and TURN.
+- **Sandboxed:** `systemd-analyze security` rates it 1.5.
+- **Phone provisioning** through the pbx layer, see
+  [PROVISIONING.md](PROVISIONING.md).
 
 ## Secrets
 
-Any value can be a secret: give `config.lib.asterisk.secret` the path of a file
-outside the Nix store. With [sops-nix](https://github.com/Mic92/sops-nix):
+Give `config.lib.asterisk.secret` the path of a file outside the Nix store.
+The file can stay root-only, and any secret manager works. With
+[sops-nix](https://github.com/Mic92/sops-nix):
 
 ```nix
-sops.secrets.sip-101.reloadUnits = [ "asterisk.service" ];
+sops.secrets.sip-101.reloadUnits = [ "asterisk.service" ]; # reload on change, no restart
 
 services.asterisk.pjsip.endpoints."101".auth.password = config.lib.asterisk.secret config.sops.secrets.sip-101.path;
 ```
 
-The file can stay readable by root only. With `reloadUnits`, a changed password
-is applied on the next deploy without restarting Asterisk. A secret can also be
-part of a longer value, as in the voicemail mailbox line
-`"${secret path},Front desk"`. Asterisk splits that line at every comma, so the
-service does not start when a secret in it contains one.
+Plain strings work too, but they land in the world-readable Nix store, and the
+module warns about them.
 
-Other secret managers work the same way, since `secret` only takes a path.
+- A secret can be part of a longer value, like `"${secret path},Front desk"`,
+  but Asterisk splits that at commas, so it won't start if the secret has
+  one.
+- Keep secrets out of dialplan arguments. Asterisk logs those everywhere
+  (verbose output, `core show channels`, CDR, CEL, AMI). To check a PIN, use
+  `Authenticate(/run/credentials/asterisk.service/<name>)` with
+  `services.asterisk.credentials.<name>` and `app_authenticate.so` loaded.
+- At runtime, secrets are readable by root, the `asterisk` user and group,
+  programs the dialplan starts, AMI users with the write classes listed in
+  `services.asterisk.ami.users.<name>.write`, and ARI users (voicemail PINs
+  during a call, every PJSIP password if `res_ari_asterisk.so` is loaded).
+- Secret files and `services.asterisk.credentials` entries share systemd's
+  cap of 256 credentials per service. Past that, the build fails.
+- Core dumps are off since they'd hold every secret. To debug a crash, set
+  `systemd.services.asterisk.serviceConfig.LimitCORE = "infinity";`.
 
-Keep secrets out of the arguments of dialplan steps. Asterisk splits a secret
-there at its commas, like any argument, and prints the arguments of every step
-it runs: in its verbose output from level 3, in `core show channels`, in call
-records (CDR `lastdata`, CEL `appdata`) and in AMI's `Newexten` events. To
-check a PIN in the dialplan, `Authenticate(/run/credentials/asterisk.service/<name>)`
-reads it from a file, here the credential `<name>` of
-`services.asterisk.credentials` (with `app_authenticate.so` in
-`services.asterisk.modules.load`).
+## Custom config
 
-While Asterisk runs, the secrets it holds can be read by root, by the
-`asterisk` user and the programs the dialplan starts, by members of the
-`asterisk` group through the CLI (`asterisk -rx 'pjsip show auths'`), and by
-AMI users with some action classes, which
-`services.asterisk.ami.users.<name>.write` lists. ARI users, read-only ones
-too, read voicemail PINs while a call is up, and every PJSIP password when
-`res_ari_asterisk.so` is added to `services.asterisk.modules.load`.
-
-Each secret file reaches Asterisk as a systemd credential, as does each of
-`services.asterisk.credentials`, and systemd holds at most 256 for a service:
-a configuration with more does not build.
-
-A crash leaves no core dump, since it would hold every secret. To debug one,
-set `systemd.services.asterisk.serviceConfig.LimitCORE = "infinity";`.
-
-A password written as a plain string works too, but it ends up in the Nix
-store, which every user on the host can read. The module warns about plain
-strings in password fields.
-
-## Anything the options don't cover
-
-Every Asterisk configuration file can be written as Nix in `settings`, one
-attribute per section:
+Any Asterisk config file can be written in `settings`, one attribute per
+section:
 
 ```nix
 services.asterisk.settings."followme.conf"."101".number = [ "5551234,30" ];
 ```
 
-`settings` also changes what the options generate. Those sections have ids:
-`endpoint:<name>`, `auth:<name>`, `aor:<name>`, `identify:<name>`,
-`registration:<name>`, `transport:<name>`, `tcp-transport:<name>` (the TCP
-listener of a UDP transport) and `acl:<name>` in pjsip.conf,
-`bridge:<name>`, `user:<name>` and `menu:<name>` in confbridge.conf, and the
-context name in extensions.conf.
+The same works on what the options generate, by section id:
+
+| File            | Section ids                                                                                                                                        |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| pjsip.conf      | `endpoint:<name>`, `auth:<name>`, `aor:<name>`, `identify:<name>`, `registration:<name>`, `transport:<name>`, `tcp-transport:<name>`, `acl:<name>` |
+| confbridge.conf | `bridge:<name>`, `user:<name>`, `menu:<name>`                                                                                                      |
+| extensions.conf | the context name                                                                                                                                   |
 
 ```nix
 services.asterisk.settings."pjsip.conf"."endpoint:101".direct_media = true;
 ```
 
-For raw text there is `extraConfig."<file>"`.
+For raw text there's `extraConfig."<file>"`.
 
 ## Dialplan
 
-Asterisk variables look like Nix string interpolation, so they need escaping.
-Each of these produces `Dial(PJSIP/${EXTEN},30)`:
+Asterisk's `${VAR}` looks like Nix interpolation, so escape it. Each of these
+produces `Dial(PJSIP/${EXTEN},30)`:
 
 ```nix
-"Dial(PJSIP/\${EXTEN},30)"                   # double-quoted string
-''Dial(PJSIP/''${EXTEN},30)''                # indented string
-"Dial(PJSIP/${var "EXTEN"},30)"              # let var = config.lib.asterisk.dialplan.var;
+"Dial(PJSIP/\${EXTEN},30)"
+''Dial(PJSIP/''${EXTEN},30)''
+"Dial(PJSIP/${var "EXTEN"},30)"   # var = config.lib.asterisk.dialplan.var
 ```
 
-Semicolons do not need to be escaped.
+Semicolons don't need escaping.
 
 ```nix
 { config, ... }:
@@ -227,7 +189,6 @@ in
             { app = "VoiceMail"; args = [ "101@default" "u" ]; label = "vm"; }
             "Hangup()"
           ];
-          # everyone who dials 800 joins the same conference
           "800" = [ "Answer()" (dp.app "ConfBridge" [ "800" ]) ];
         };
       };
@@ -235,13 +196,12 @@ in
     };
   };
 
-  # the mailbox VoiceMail(101@default) leaves messages in
   sops.secrets.vm-101.reloadUnits = [ "asterisk.service" ];
   services.asterisk.voicemail.mailboxes."101".pin = config.lib.asterisk.secret config.sops.secrets.vm-101.path;
 }
 ```
 
-renders the following:
+renders as:
 
 ```ini
 [internal]
@@ -254,16 +214,15 @@ exten => 800,1,Answer()
  same => n,ConfBridge(800)
 ```
 
-The helpers `var` and `app` are in `config.lib.asterisk.dialplan`, and in
-`asterix.lib` outside a NixOS configuration.
+`var` and `app` are in `config.lib.asterisk.dialplan`, or `asterix.lib`
+outside NixOS.
 
 ## PBX layer
 
-`nixosModules.pbx` adds `pbx.*` on top of the options above: extensions with
-voicemail, ring groups, queues, conference rooms, voice menus, paging, opening
-hours and routes to and from trunks, the way a PBX admin thinks of them. It
-imports the core, so it replaces `asterix.nixosModules.default` in the quick
-start's flake.nix:
+`nixosModules.pbx` adds `pbx.*`: extensions with voicemail, ring groups,
+queues, conference rooms, voice menus, paging, opening hours and trunk routes,
+the way a PBX admin thinks of them. It includes the core, so use it in place
+of `asterix.nixosModules.default` in the quick start's flake.nix:
 
 ```nix
 # pbx.nix: extensions 201 and 202, and calls to and from a provider
@@ -308,19 +267,16 @@ in
 }
 ```
 
-Each object becomes a context of its own, `pbx-<kind>-<name>`, with a comment
-saying which option it came from, and phones dial from `pbx-internal`. The
-layer only writes core options, as defaults, so anything it generates can be
-changed with the core options or `settings`. Evaluation fails when a number
-has two owners, a trunk, member or destination does not exist, or
-destinations lead a call round in a loop that no key press breaks. Of a
-`context` destination, which leads into dialplan of your own, evaluation
-checks at most the context; building the system checks the context,
-extension and priority.
+Each object becomes its own context, `pbx-<kind>-<name>`, and phones dial from
+`pbx-internal`. Everything the layer generates is a default on the core
+options, so those or `settings` can override it.
 
-A voice menu plays a prompt, a recorded sound or text spoken by flite when
-the system is built, and sends each key to a destination. A paging group
-calls several phones at once and asks them to answer by themselves:
+Evaluation fails on a number with two owners, a missing trunk, member or
+destination, or a loop of destinations that no key press breaks.
+
+A voice menu plays a prompt, recorded or spoken by flite at build time, and
+sends each key to a destination. A paging group calls several phones and asks
+them to auto-answer:
 
 ```nix
 pbx = {
@@ -338,38 +294,37 @@ pbx = {
 };
 ```
 
-`{ ivr = "main"; }` is a destination like the others, for example for
-`inbound`. A menu plays its prompt `attempts` times before a caller who
-pressed nothing goes to `noInput`, or one who pressed an unknown key goes to
-`invalid`. Pages are one-way unless `duplex` is set, and skip phones that are
-in a call. The phones must also be set to allow auto-answer.
+`{ ivr = "main"; }` works as a destination anywhere, like in `inbound`. After
+`attempts` prompts, a caller who pressed nothing goes to `noInput`, one who
+pressed an unknown key to `invalid`. Pages are one-way unless `duplex` is set,
+skip phones in a call, and only work on phones set to allow auto-answer.
 
-Emergency numbers have no defaults, since they depend on where the PBX is,
-and `outbound` needs them beside it, or `emergency.numbers = [ ];` for a PBX
-that makes no emergency calls: see `pbx.emergency`.
-[small-office.nix](examples/small-office.nix) is a complete example.
+Emergency numbers have no default, since they depend on where the PBX is.
+`outbound` requires them, or `emergency.numbers = [ ];` for a PBX that makes
+no emergency calls. See `pbx.emergency`, and
+[small-office.nix](examples/small-office.nix) for a complete example.
 
 ## Development
 
-`nix flake check` runs every check, including NixOS VM tests.
-`nix run nixpkgs#nix-fast-build -- --flake .#checks.x86_64-linux` runs the
-same checks, but evaluates them on several cores where `nix flake check` uses
-one.
-`nix fmt` formats everything, and `nix develop` has the Rust toolchain for
-the provisioning server.
+```sh
+nix flake check   # every check, VM tests included
+nix fmt
+nix develop       # Rust toolchain for the provisioning server
 
-The checks use nixpkgs' `asterisk`, and also build the examples with
-`asterisk_20` and `asterisk_23`. `.#packageChecks.<package>` has every check
-with one of `asterisk_20`, `asterisk_22` or `asterisk_23`, such as
-`nix build .#packageChecks.asterisk_23.probe`.
-`python3 tests/campaign/packages.py DIR` builds all but the VM tests with each
-of them, one at a time, with the logs in `DIR`, and with
-`--nixpkgs github:NixOS/nixpkgs/nixos-unstable` on that nixpkgs instead.
+# the same checks, evaluated in parallel
+nix run nixpkgs#nix-fast-build -- --flake .#checks.x86_64-linux
+```
 
-`nix build .#provisioning-server-fuzz` builds a libFuzzer target that sends
-what it generates to the provisioning server as one phone's connection. The
-`provisioning-server-fuzz` check runs it briefly; to fuzz on 8 cores until
-stopped, with the corpus and any crash in `DIR`:
+The checks build against nixpkgs' `asterisk`. To try another version:
+`nix build .#packageChecks.asterisk_23.probe` (also `asterisk_20`,
+`asterisk_22`). `python3 tests/campaign/packages.py DIR` runs every non-VM
+check against all of them, logs in `DIR`; add `--nixpkgs REF` for another
+nixpkgs.
+
+### Fuzzing
+
+`nix build .#provisioning-server-fuzz` builds a libFuzzer target for the
+provisioning server. To fuzz on 8 cores until stopped:
 
 ```sh
 mkdir -p DIR/corpus
@@ -378,6 +333,5 @@ result/bin/connection -fork=8 -ignore_crashes=1 -close_fd_mask=2 \
   DIR/corpus pkgs/provisioning-server/fuzz/seeds/connection
 ```
 
-`-close_fd_mask=2` keeps the server's log out of the fuzzer's output;
-`result/bin/connection FILE` runs one saved input again with the log and, if
-it crashes, the panic message.
+Crashes land in `DIR`. `result/bin/connection DIR/crash-<hash>` replays one
+with the server's log.

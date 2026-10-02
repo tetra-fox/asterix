@@ -1,20 +1,15 @@
 # Examples
 
-Starting points for your own configuration: copy one and fill in your
-addresses, extensions and names. Passwords come from sops-nix, so your sops
-file needs the keys each example lists.
+Copy one and fill in your addresses, extensions and names. Each one runs as
+written in a VM test (`tests/vm/`). Passwords come from sops-nix, and each
+example lists the keys it needs.
 
-The examples are tested as written, in NixOS VM tests (`tests/vm/`).
-
-A deploy that changes a secret reloads Asterisk, or restarts the provisioning
-server, through sops-nix's `reloadUnits` and `restartUnits`. By default
-sops-nix installs secrets from the activation script, which leaves the reload
-or restart to switch-to-configuration, and NixOS 26.05 warns that this is
-removed in NixOS 26.11, so the examples need revisiting before then. With
-`sops.useSystemdActivation = true`, the default with systemd-sysusers or
-userborn, sops-nix installs secrets from a systemd unit that reloads and
-restarts the units through systemctl itself; the VM tests run the examples
-without it.
+A changed secret reloads Asterisk, or restarts the provisioning server,
+through sops-nix's `reloadUnits` and `restartUnits`. By default sops-nix
+leaves that to switch-to-configuration, which NixOS 26.05 warns goes away in
+26.11, so the examples need revisiting before then.
+`sops.useSystemdActivation = true` does it from a systemd unit instead. It's
+the default with systemd-sysusers or userborn, but the VM tests don't use it.
 
 ## minimal.nix
 
@@ -40,12 +35,10 @@ and three or more can meet in a conference room.
 | 800       | conference room                                    |
 | 911       | a recording says that these phones cannot call 911 |
 
-The host does not route between the networks. Asterisk relays calls and their
-audio, so phones on different networks never talk to each other directly. SIP
-and RTP are only reachable from the trusted LAN and the VoIP VLAN: the firewall
-is opened on those two interfaces, a SIP ACL only allows their subnets, and each
-has its own transport bound to the host's address there. A phone's password
-only works from its own network.
+The host doesn't route between the networks, Asterisk relays calls and audio
+across them. SIP and RTP are only open on the trusted LAN and the VoIP VLAN,
+each with its own transport, and a phone's password only works from its own
+network.
 
 Adapt the `site` block to your network.
 
@@ -53,18 +46,17 @@ Secrets: `sip-101`, `sip-102`, `sip-201`, `sip-202`.
 
 ### household-intercom-ht801.nix
 
-Provisioning for the intercom's two HT801 adapters: they fetch their
-configuration from the host. Add it to your intercom configuration, together
-with `asterix.nixosModules.pbx`, which provisioning is part of, with the
-adapters' real MAC addresses (on the label under each adapter), then point each
-adapter at `http://10.0.20.10` once, with DHCP option 66 or its web interface.
+Provisioning for the intercom's two HT801s. Import it next to the intercom
+with `asterix.nixosModules.pbx`, fill in the adapters' MACs (on the label
+underneath), then point each one at `http://10.0.20.10` once, with DHCP option
+66 or its web interface.
 
-Secrets: `ht801-admin`, the password of the adapters' web interface (4 to 30
+Secrets: `ht801-admin`, the adapters' web interface password (4 to 30
 characters).
 
 ## small-office.nix
 
-A small office PBX with a SIP trunk, written with the PBX layer: import
+A small office PBX with a SIP trunk, written with the pbx layer, so import
 `asterix.nixosModules.pbx` instead of `nixosModules.default`.
 
 | Network | Addresses      | Devices                                             |
@@ -82,8 +74,8 @@ A small office PBX with a SIP trunk, written with the PBX layer: import
 | 800        | conference bridge                                                           |
 | \*97       | voicemail menu                                                              |
 
-The trunk, the queue's strategy and the conference profiles are core options,
-next to `pbx`. It also shows keys without a typed option, set through the
-`settings` of a typed object.
+The trunk, queue strategy and conference profiles are core options, next to
+`pbx`. It also sets a few keys that have no typed option, through a typed
+object's `settings`.
 
 Secrets: `sip-trunk`, `sip-201` to `sip-203`, `vm-200` to `vm-203`.

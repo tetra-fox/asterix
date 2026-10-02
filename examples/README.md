@@ -52,7 +52,7 @@ underneath), then point each one at `http://10.0.20.10` once, with DHCP option
 66 or its web interface.
 
 Secrets: `ht801-admin`, the adapters' web interface password (4 to 30
-characters).
+characters, ASCII without spaces).
 
 ## small-office.nix
 

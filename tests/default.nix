@@ -178,4 +178,10 @@ in
   // evalSuiteParts "assertions" (import ./assertions.nix {inherit pkgs self;})
   // evalSuiteParts "pbx-eval" (import ./pbx/eval.nix {inherit pkgs self;})
   // evalSuiteParts "pbx-assertions" (import ./pbx/assertions.nix {inherit pkgs self;})
+  // evalSuiteParts "pbx-phones" (let
+    suites = map (vendor: import ./pbx/phones-${vendor}.nix {inherit pkgs self;}) ["cisco" "fanvil" "grandstream" "poly" "snom" "yealink"];
+  in {
+    run = lib.runTests;
+    tests = lib.mergeAttrsList (map (suite: suite.tests) suites);
+  })
   // suiteParts "config-check" configCheck.run configCheck.tests

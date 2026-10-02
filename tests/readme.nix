@@ -303,17 +303,18 @@
       };
     };
 
-  # the P-values of the HT801 table are what the adapter's file has, except
-  # the ones set only on request
+  # the rows of the HT8xx section's tables that start with one P-value, those
+  # of every adapter and of port 1, are what the HT801's file has, except the
+  # ones set only on request
   tableProblems = let
-    rows = lib.filter (line: builtins.match "[|] P[0-9]+ .*" line != null) (lib.splitString "\n" (builtins.readFile ../PROVISIONING.md));
-    cells = row: map lib.trim (lib.filter builtins.isString (builtins.split "[|]" row));
-    listed = map (row: elemAt (cells row) 1) (lib.filter (row: !(lib.hasInfix "if set" (elemAt (cells row) 3))) rows);
+    section = builtins.head (lib.splitString "\n## " (builtins.elemAt (lib.splitString "\n## Grandstream HT8xx\n" (builtins.readFile ../PROVISIONING.md)) 1));
+    rows = lib.filter (line: builtins.match "[|] P[0-9]+ +[|].*" line != null && !(lib.hasInfix "if set" line)) (lib.splitString "\n" section);
+    listed = map (row: builtins.head (builtins.match "[|] (P[0-9]+) .*" row)) rows;
     files = lib.filterAttrs (name: _: lib.hasPrefix "cfg" name) systems.phones.pbx.phones.files;
     rendered = map builtins.head (lib.filter builtins.isList (builtins.split "<(P[0-9]+)>" (builtins.head (lib.attrValues files)).text));
   in
     lib.optional (lib.sort lib.lessThan listed != lib.sort lib.lessThan rendered) {
-      ht801Table = {
+      grandstreamTables = {
         inherit listed rendered;
       };
     };

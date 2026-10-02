@@ -45,6 +45,9 @@ function value(placeholder,    name, path, line, lines, count, status, v, parts,
         v = parts[1]
         for (i = 2; i <= n; i++)
             v = v "\\;" parts[i]
+    } else if (mode == "line") {
+        if (v ~ /[[:cntrl:]]/)
+            fail("secret " source[placeholder] " contains a control character, which a one-line value cannot hold")
     } else if (mode == "xml") {
         if (v ~ /[[:cntrl:]]/)
             fail("secret " source[placeholder] " contains a control character, which XML or a one-line value cannot hold")

@@ -1025,13 +1025,15 @@
     };
 
     # its length is known only once the secret is read
-    ht801AdminPasswordInterpolated = {
+    phonesAdminPasswordInterpolated = {
       module = {config, ...}: {
         imports = [phones];
-        pbx.phones.grandstream.ht801 = {
-          enable = true;
+        pbx.phones = {
           adminPassword = "${config.lib.asterisk.secret "/run/secrets/ht801-admin"}";
-          devices."201".mac = "c0:74:ad:00:02:01";
+          devices."201" = {
+            model = "grandstream-ht801";
+            mac = "c0:74:ad:00:02:01";
+          };
         };
       };
       assertions = [];
@@ -1039,28 +1041,34 @@
     };
 
     # an integer lands in the store just like a string
-    ht801IntegerAdminPasswordWarns = {
+    phonesIntegerAdminPasswordWarns = {
       module = {
         imports = [phones];
-        pbx.phones.grandstream.ht801 = {
-          enable = true;
+        pbx.phones = {
           adminPassword = 1234;
-          devices."201".mac = "c0:74:ad:00:02:01";
+          devices."201" = {
+            model = "grandstream-ht801";
+            mac = "c0:74:ad:00:02:01";
+          };
         };
       };
       assertions = [];
-      warning = "ht801.adminPassword is not a secret reference";
+      warning = "pbx.phones.adminPassword is not a secret reference";
     };
 
-    # V2 hardware takes 4 to 30 characters, from adminPassword or an adapter's
-    # own P2
-    ht801AdminPasswordLength = {
+    # V2 hardware takes 4 to 30 characters and V1 hardware ! to ~, from
+    # adminPassword or an adapter's own P2
+    grandstreamAdminPassword = {
       module = {
         imports = [phones];
-        pbx.phones.grandstream.ht801 = {
-          enable = true;
+        pbx.phones = {
           adminPassword = 123;
-          devices = lib.mapAttrs (_: device: device // {endpoint = "201";}) {
+          devices = lib.mapAttrs (_: device:
+            device
+            // {
+              model = "grandstream-ht801";
+              lines = ["201"];
+            }) {
             short.mac = "c0:74:ad:00:02:01";
             four = {
               mac = "c0:74:ad:00:02:02";
@@ -1074,72 +1082,56 @@
               mac = "c0:74:ad:00:02:04";
               settings.P2 = lib.strings.replicate 31 "x";
             };
+            space = {
+              mac = "c0:74:ad:00:02:05";
+              settings.P2 = "open sesame";
+            };
+            umlaut = {
+              mac = "c0:74:ad:00:02:06";
+              settings.P2 = builtins.fromJSON ''"k\u00e4se"'';
+            };
           };
         };
       };
-      assertions = ["pbx.phones.grandstream.ht801: the admin password (P2) of long, short is not 4 to 30 characters long, which HT801 V2 hardware requires."];
+      assertions = ["pbx.phones: the admin password (P2) of long, short, space, umlaut is not 4 to 30 characters from ASCII 33 (!) to 126 (~), which Grandstream's V2 hardware requires of the length and V1 hardware of the characters."];
     };
 
     # XML holds no control character but tab and line breaks, and a P-value
     # is one line: from the options, and from the endpoint's user name
-    ht801ControlCharacters = {
+    grandstreamControlCharacters = {
       module = {
         imports = [phones];
         # inside the value, since pjsip.conf refuses one at either end
         services.asterisk.pjsip.endpoints."202".auth.username = lib.mkForce "20${builtins.fromJSON ''"\u0007"''}2";
-        pbx.phones.grandstream.ht801 = {
-          enable = true;
-          timeZone = "CET-1CEST\n";
+        pbx.phones = {
+          grandstream.timeZone = "CET-1CEST\n";
           devices = {
             "201" = {
+              model = "grandstream-ht801";
               mac = "c0:74:ad:00:02:01";
               settings.P1362 = "de\tx";
             };
-            "202".mac = "c0:74:ad:00:02:02";
-          };
-        };
-      };
-      assertions = ["pbx.phones.grandstream.ht801: P-values cannot contain control characters: 201 P64, 201 P1362, 202 P36, 202 P64."];
-    };
-
-    # P47 and P237 name where the adapter registers and fetches its file; a
-    # socket on 0.0.0.0 or :: listens on every address, which no adapter can
-    # connect to
-    ht801WildcardServers = {
-      module = {
-        imports = [phones];
-        pbx.phones = {
-          listenAddress = lib.mkForce "::";
-          port = 8080;
-          grandstream.ht801 = {
-            enable = true;
-            devices = {
-              "201".mac = "c0:74:ad:00:02:01";
-              "202" = {
-                mac = "c0:74:ad:00:02:02";
-                settings = {
-                  P47 = "0.0.0.0:5060";
-                  P237 = "[fd00:20::10]:8080";
-                };
-              };
+            "202" = {
+              model = "grandstream-ht801";
+              mac = "c0:74:ad:00:02:02";
             };
           };
         };
       };
-      assertions = ["pbx.phones.grandstream.ht801: P-values that send adapters to 0.0.0.0 or ::, which no adapter can reach: 201 P47, 201 P237, 202 P47. Set pbx.phones.listenAddress to the PBX's address on the adapters' network, or give that address in sipServer (P47) and settings.P237."];
+      assertions = ["pbx.phones.devices: P-values cannot contain control characters: 201 P64, 201 P1362, 202 P36, 202 P64."];
     };
 
     # listening on :: serves adapters that are given the PBX's address
-    ht801WildcardListenWithAddresses = {
+    grandstreamWildcardListenWithAddresses = {
       module = {
         imports = [phones];
         pbx.phones = {
           listenAddress = lib.mkForce "::";
-          grandstream.ht801 = {
-            enable = true;
-            sipServer = "10.0.20.10";
-            settings.P237 = "10.0.20.10";
-            devices."201".mac = "c0:74:ad:00:02:01";
+          sipServer = "10.0.20.10";
+          grandstream.settings.P237 = "10.0.20.10";
+          devices."201" = {
+            model = "grandstream-ht801";
+            mac = "c0:74:ad:00:02:01";
           };
         };
       };
@@ -1147,18 +1139,61 @@
     };
 
     # two spellings of one address would be one file
-    ht801SameMacTwice = {
+    phonesSameMacTwice = {
       module = {
         imports = [phones];
-        pbx.phones.grandstream.ht801 = {
-          enable = true;
-          devices = {
-            "201".mac = "c0:74:ad:00:02:01";
-            "202".mac = "C0-74-AD-00-02-01";
+        pbx.phones.devices = {
+          "201" = {
+            model = "yealink-t33g";
+            mac = "c0:74:ad:00:02:01";
+          };
+          # its file has the Yealink's name too, which the assertion reports
+          # instead of a conflict between the two files
+          "202" = {
+            model = "poly-vvx450";
+            mac = "C0-74-AD-00-02-01";
           };
         };
       };
-      assertions = ["pbx.phones.grandstream.ht801.devices: MAC addresses must be unique."];
+      assertions = ["pbx.phones.devices: MAC addresses must be unique."];
+    };
+
+    # host:port and [v6]:port, where the port belongs in sipPort
+    phonesSipServerWithPort = {
+      module = {
+        imports = [phones];
+        pbx.phones = {
+          sipServer = "10.0.20.10:5070";
+          devices."201" = {
+            model = "grandstream-ht801";
+            mac = "c0:74:ad:00:02:01";
+          };
+        };
+      };
+      assertions = [''pbx.phones.sipServer is "10.0.20.10:5070", but takes the host alone; give the port in pbx.phones.sipPort.''];
+    };
+
+    # the device has nowhere to put the endpoints past its last line
+    phonesTooManyLines = {
+      module = {
+        imports = [phones];
+        pbx.phones.devices = {
+          kitchen = {
+            model = "grandstream-ht801";
+            mac = "c0:74:ad:00:02:01";
+            lines = ["201" "202"];
+          };
+          garage = {
+            model = "grandstream-ht812";
+            mac = "c0:74:ad:00:02:02";
+            lines = ["201" "202" null];
+          };
+        };
+      };
+      assertions = [
+        "pbx.phones.devices.garage: a grandstream-ht812 has 2 lines, but lines lists 3."
+        "pbx.phones.devices.kitchen: a grandstream-ht801 has 1 line, but lines lists 2."
+      ];
     };
 
     phonesFileNames = {
@@ -1217,12 +1252,10 @@
       module = {
         imports = [phones];
         pbx.phones = {
-          grandstream.ht801 = {
-            enable = true;
-            devices."201" = {
-              mac = "c0:74:ad:00:02:01";
-              allowedAddress = "10.0.20.021";
-            };
+          devices."201" = {
+            model = "grandstream-ht801";
+            mac = "c0:74:ad:00:02:01";
+            allowedAddress = "10.0.20.021";
           };
           files =
             lib.mapAttrs (_: allowedAddress: {
@@ -1264,16 +1297,13 @@
     };
 
     # the adapter sends one user name, for the endpoint and its aor
-    ht801EndpointWithRenamedAor = {
+    phonesEndpointWithRenamedAor = {
       module = {
+        imports = [phones];
         services.asterisk.pjsip.endpoints."201".aor.name = "kitchen";
-        pbx.phones = {
-          listenAddress = "10.0.20.10";
-          allowedNetworks = ["10.0.20.0/24"];
-          grandstream.ht801 = {
-            enable = true;
-            devices."201".mac = "c0:74:ad:00:02:01";
-          };
+        pbx.phones.devices."201" = {
+          model = "grandstream-ht801";
+          mac = "c0:74:ad:00:02:01";
         };
       };
       assertion = "an `aor` named like the endpoint";
@@ -1281,26 +1311,758 @@
 
     # the assertion, not an error from the file of an adapter whose endpoint
     # does not exist or has no auth
-    ht801EndpointMissing = {
+    phonesEndpointMissing = {
       module = {
+        imports = [phones];
         services.asterisk.pjsip.endpoints.kitchen.context = "pbx-internal";
+        pbx.phones.devices = {
+          "299" = {
+            model = "grandstream-ht801";
+            mac = "c0:74:ad:00:02:99";
+          };
+          garage = {
+            model = "grandstream-ht814";
+            mac = "c0:74:ad:00:02:98";
+            lines = ["201" "kitchen" null "299"];
+          };
+        };
+      };
+      assertions = [
+        "pbx.phones.devices.299: endpoints must exist in pjsip.endpoints, have `auth` set and an `aor` named like the endpoint, since the device registers each line with one user name for both: `299`."
+        "pbx.phones.devices.garage: endpoints must exist in pjsip.endpoints, have `auth` set and an `aor` named like the endpoint, since the device registers each line with one user name for both: `kitchen`, `299`."
+        "services.asterisk: PJSIP endpoint(s) kitchen have neither auth nor identify, so anyone who reaches the SIP port can register as them, and call from their context by naming them in From. Give each a password (pjsip.endpoints.<name>.auth.password) or an identify for a device known by its address, or set open = true where anyone may use them on purpose."
+      ];
+    };
+
+    # P47 and P747 name where the adapter registers and P237 where it fetches
+    # its file; a socket on 0.0.0.0 or :: listens on every address, which no
+    # device can connect to
+    grandstreamWildcardServers = {
+      module = {
+        imports = [phones];
         pbx.phones = {
-          listenAddress = "10.0.20.10";
-          allowedNetworks = ["10.0.20.0/24"];
-          grandstream.ht801 = {
-            enable = true;
-            devices = {
-              "299".mac = "c0:74:ad:00:02:99";
-              kitchen.mac = "c0:74:ad:00:02:98";
+          listenAddress = lib.mkForce "::";
+          port = 8080;
+          devices = {
+            "201" = {
+              model = "grandstream-ht801";
+              mac = "c0:74:ad:00:02:01";
+            };
+            "202" = {
+              model = "grandstream-ht802";
+              mac = "c0:74:ad:00:02:02";
+              lines = ["202" "201"];
+              settings = {
+                P47 = "0.0.0.0:5060";
+                P237 = "[fd00:20::10]:8080";
+              };
+            };
+          };
+        };
+      };
+      assertions = ["pbx.phones.devices: P-values that send devices to 0.0.0.0 or ::, which no device can reach: 201 P47, 201 P237, 202 P47, 202 P747. Set pbx.phones.listenAddress to the PBX's address on the devices' network, or give that address in pbx.phones.sipServer and settings.P237."];
+    };
+
+    # a phone's account 7 registers at P50602
+    grandstreamPhoneWildcardServers = {
+      module = {
+        imports = [phones];
+        pbx.phones = {
+          listenAddress = lib.mkForce "::";
+          devices.desk = {
+            model = "grandstream-grp2614";
+            mac = "c0:74:ad:00:02:01";
+            lines = ["201" null null null null null "202"];
+          };
+        };
+      };
+      assertions = ["pbx.phones.devices: P-values that send devices to 0.0.0.0 or ::, which no device can reach: desk P47, desk P237, desk P50602. Set pbx.phones.listenAddress to the PBX's address on the devices' network, or give that address in pbx.phones.sipServer and settings.P237."];
+    };
+
+    # the adapters' rule on the admin password is not the phones'
+    grandstreamPhoneAdminPassword = {
+      module = {
+        imports = [phones];
+        pbx.phones = {
+          adminPassword = "open sesame";
+          devices.desk = {
+            model = "grandstream-gxp2130";
+            mac = "c0:74:ad:00:02:01";
+            lines = ["201"];
+          };
+        };
+      };
+      assertions = [];
+    };
+
+    # a file sets a password of 1 to 32 characters from ! to ~ but the colon,
+    # after the user name: from adminPassword or a phone's own setting
+    yealinkAdminPassword = {
+      module = {config, ...}: {
+        imports = [phones];
+        pbx.phones = {
+          adminPassword = 123;
+          devices = lib.mapAttrs (_: device:
+            device
+            // {
+              model = "yealink-t30";
+              lines = ["201"];
+            }) {
+            integer.mac = "80:5e:c0:00:02:01";
+            four = {
+              mac = "80:5e:c0:00:02:02";
+              settings."static.security.user_password" = "admin:abcd";
+            };
+            thirtyTwo = {
+              mac = "80:5e:c0:00:02:03";
+              settings."static.security.user_password" = "admin:${lib.strings.replicate 32 "x"}";
+            };
+            secret = {
+              mac = "80:5e:c0:00:02:04";
+              settings."static.security.user_password" = "admin:${config.lib.asterisk.secret "/run/secrets/yealink-admin"}";
+            };
+            long = {
+              mac = "80:5e:c0:00:02:05";
+              settings."static.security.user_password" = "admin:${lib.strings.replicate 33 "x"}";
+            };
+            space = {
+              mac = "80:5e:c0:00:02:06";
+              settings."static.security.user_password" = "admin:open sesame";
+            };
+            colon = {
+              mac = "80:5e:c0:00:02:07";
+              settings."static.security.user_password" = "admin:a:b";
+            };
+            empty = {
+              mac = "80:5e:c0:00:02:08";
+              settings."static.security.user_password" = "admin:";
+            };
+            noUser = {
+              mac = "80:5e:c0:00:02:09";
+              settings."static.security.user_password" = "abcd";
+            };
+            umlaut = {
+              mac = "80:5e:c0:00:02:0a";
+              settings."static.security.user_password" = builtins.fromJSON ''"admin:käse"'';
+            };
+          };
+        };
+      };
+      assertions = ["pbx.phones: static.security.user_password of colon, empty, long, noUser, space, umlaut is not <user name>:<password> with a password of 1 to 32 characters from ASCII 33 (!) to 126 (~) other than the colon, which is what Yealink phones take from a configuration file."];
+    };
+
+    # a value is one line: from the options, and from the endpoint's user name
+    yealinkControlCharacters = {
+      module = {
+        imports = [phones];
+        # inside the value, since pjsip.conf refuses one at either end
+        services.asterisk.pjsip.endpoints."202".auth.username = lib.mkForce "20${builtins.fromJSON ''"\u0007"''}2";
+        pbx.phones = {
+          yealink.settings."account.1.label" = "Front\n";
+          devices = {
+            "201" = {
+              model = "yealink-t30";
+              mac = "80:5e:c0:00:02:01";
+              settings."lang.gui" = "German\tx";
+            };
+            "202" = {
+              model = "yealink-t30";
+              mac = "80:5e:c0:00:02:02";
+            };
+          };
+        };
+      };
+      assertions = ["pbx.phones.devices: Yealink settings cannot contain control characters: 201 account.1.label, 201 lang.gui, 202 account.1.auth_name, 202 account.1.label."];
+    };
+
+    # the accounts' SIP servers name where the phone registers and the
+    # provisioning URL where it fetches its file; a socket on 0.0.0.0 or ::
+    # listens on every address, which no phone can connect to
+    yealinkWildcardServers = {
+      module = {
+        imports = [phones];
+        pbx.phones = {
+          listenAddress = lib.mkForce "::";
+          port = 8080;
+          devices = {
+            "201" = {
+              model = "yealink-t30";
+              mac = "80:5e:c0:00:02:01";
+            };
+            "202" = {
+              model = "yealink-t31";
+              mac = "80:5e:c0:00:02:02";
+              lines = ["202" "201"];
+              settings = {
+                "account.2.sip_server.2.address" = "0.0.0.0";
+                "static.auto_provision.server.url" = "http://[fd00:20::10]:8080/";
+              };
+            };
+          };
+        };
+      };
+      assertions = ["pbx.phones.devices: Yealink settings that send phones to 0.0.0.0 or ::, which no phone can reach: 201 account.1.sip_server.1.address, 201 static.auto_provision.server.url, 202 account.1.sip_server.1.address, 202 account.2.sip_server.1.address, 202 account.2.sip_server.2.address. Set pbx.phones.listenAddress to the PBX's address on the phones' network, or give that address in pbx.phones.sipServer and settings.\"static.auto_provision.server.url\"."];
+    };
+
+    # listening on :: serves phones that are given the PBX's address
+    yealinkWildcardListenWithAddresses = {
+      module = {
+        imports = [phones];
+        pbx.phones = {
+          listenAddress = lib.mkForce "::";
+          sipServer = "10.0.20.10";
+          yealink.settings."static.auto_provision.server.url" = "http://10.0.20.10/";
+          devices."201" = {
+            model = "yealink-t30";
+            mac = "80:5e:c0:00:02:01";
+          };
+        };
+      };
+      assertions = [];
+    };
+
+    # a key with a model prefix or a space would not be one parameter
+    yealinkSettingsKeys = {
+      module = {
+        imports = [phones];
+        pbx.phones = {
+          yealink.settings = {
+            "account.1.label" = "Front";
+            "[T46S]features.dnd_mode" = 1;
+          };
+          devices."201" = {
+            model = "yealink-t30";
+            mac = "80:5e:c0:00:02:01";
+            settings."lang gui" = "German";
+          };
+        };
+      };
+      assertions = ["pbx.phones: settings of Yealink devices must be configuration parameters such as local_time.time_zone, letters, digits and _ in parts separated by dots."];
+    };
+
+    # 1 to 32 characters of ASCII without < and >, and not the factory default
+    # 456, from adminPassword or a phone's own parameter
+    polyAdminPassword = {
+      module = {
+        imports = [phones];
+        pbx.phones = {
+          adminPassword = "456";
+          devices = lib.mapAttrs (_: device:
+            {
+              model = "poly-vvx150";
+              lines = ["201"];
+            }
+            // device) {
+            default.mac = "64:16:7f:00:02:01";
+            one = {
+              mac = "64:16:7f:00:02:02";
+              settings."device.auth.localAdminPassword" = "x";
+            };
+            thirtyTwo = {
+              mac = "64:16:7f:00:02:03";
+              settings."device.auth.localAdminPassword" = lib.strings.replicate 32 "x";
+            };
+            space = {
+              mac = "64:16:7f:00:02:04";
+              settings."device.auth.localAdminPassword" = "open sesame";
+            };
+            integer = {
+              mac = "64:16:7f:00:02:05";
+              settings."device.auth.localAdminPassword" = 1234;
+            };
+            empty = {
+              mac = "64:16:7f:00:02:06";
+              settings."device.auth.localAdminPassword" = "";
+            };
+            long = {
+              mac = "64:16:7f:00:02:07";
+              settings."device.auth.localAdminPassword" = lib.strings.replicate 33 "x";
+            };
+            chevron = {
+              mac = "64:16:7f:00:02:08";
+              settings."device.auth.localAdminPassword" = "a<b";
+            };
+            umlaut = {
+              mac = "64:16:7f:00:02:09";
+              settings."device.auth.localAdminPassword" = builtins.fromJSON ''"k\u00e4se"'';
+            };
+          };
+        };
+      };
+      assertions = ["pbx.phones: the admin password (device.auth.localAdminPassword) of chevron, default, empty, long, umlaut is not 1 to 32 characters of ASCII without < and >, or is 456, the factory default, none of which Poly phones take."];
+    };
+
+    # an attribute value holds no control character, from the options and from
+    # the endpoint's user name
+    polyControlCharacters = {
+      module = {
+        imports = [phones];
+        # inside the value, since pjsip.conf refuses one at either end
+        services.asterisk.pjsip.endpoints."202".auth.username = lib.mkForce "20${builtins.fromJSON ''"\u0007"''}2";
+        pbx.phones = {
+          poly.settings."lcl.ml.lang" = "German\tGermany";
+          devices = {
+            "201" = {
+              model = "poly-vvx150";
+              mac = "64:16:7f:00:02:01";
+              settings."reg.1.label" = "Front\ndesk";
+            };
+            "202" = {
+              model = "poly-edge-e100";
+              mac = "64:16:7f:00:02:02";
+            };
+          };
+        };
+      };
+      assertions = ["pbx.phones.devices: Poly parameters cannot contain control characters: 201 lcl.ml.lang, 201 reg.1.label, 202 lcl.ml.lang, 202 reg.1.auth.userId."];
+    };
+
+    # device.prov.serverName names where the phone fetches its files and
+    # reg.x.server.y.address where it registers; a socket on 0.0.0.0 or ::
+    # listens on every address, which no phone can connect to
+    polyWildcardServers = {
+      module = {
+        imports = [phones];
+        pbx.phones = {
+          listenAddress = lib.mkForce "::";
+          port = 8080;
+          devices = {
+            "201" = {
+              model = "poly-vvx150";
+              mac = "64:16:7f:00:02:01";
+            };
+            "202" = {
+              model = "poly-edge-e100";
+              mac = "64:16:7f:00:02:02";
+              lines = ["202" "201"];
+              settings = {
+                "device.prov.serverName" = "http://[fd00:20::10]:8080";
+                "reg.1.server.2.address" = "0.0.0.0";
+              };
+            };
+          };
+        };
+      };
+      assertions = [''pbx.phones.devices: Poly parameters that send phones to 0.0.0.0 or ::, which no phone can reach: 201 device.prov.serverName, 201 reg.1.server.1.address, 202 reg.1.server.1.address, 202 reg.1.server.2.address, 202 reg.2.server.1.address. Set pbx.phones.listenAddress to the PBX's address on the phones' network, or give that address in pbx.phones.sipServer and settings."device.prov.serverName".''];
+    };
+
+    # listening on :: serves phones that are given the PBX's address
+    polyWildcardListenWithAddresses = {
+      module = {
+        imports = [phones];
+        pbx.phones = {
+          listenAddress = lib.mkForce "::";
+          sipServer = "10.0.20.10";
+          poly.settings."device.prov.serverName" = "http://10.0.20.10";
+          devices."201" = {
+            model = "poly-vvx150";
+            mac = "64:16:7f:00:02:01";
+          };
+        };
+      };
+      assertions = [];
+    };
+
+    # parameter names become XML attribute names
+    polySettingsKeys = {
+      module = {
+        imports = [phones];
+        pbx.phones = {
+          poly.settings = {
+            "reg.1.label" = "Front";
+            "acd-agent-available" = 1;
+            "1st.key" = 1;
+            "has space" = 1;
+            "a..b" = 1;
+          };
+          devices."201" = {
+            model = "poly-vvx150";
+            mac = "64:16:7f:00:02:01";
+            settings."reg.1.label=x" = 1;
+          };
+        };
+      };
+      assertions = [''pbx.phones: settings of Poly devices must be parameter names such as reg.1.label, parts of letters, digits, _ and - separated by dots and starting with a letter: "1st.key", "a..b", "has space", "reg.1.label=x".''];
+    };
+
+    # a setting is `name` or `name[index]`, without a leading zero, from
+    # snom.settings or a phone's settings
+    snomSettingKeys = {
+      module = {
+        imports = [phones];
+        pbx.phones = {
+          snom.settings."user_active.1" = "on";
+          devices."201" = {
+            model = "snom-d785";
+            mac = "00:04:13:00:02:01";
+            settings."user_realname[01]" = "Reception";
+          };
+        };
+      };
+      assertions = ["pbx.phones: settings of Snom phones must be setting names such as language, or name[index] for an indexed one such as user_realname[1]."];
+    };
+
+    # XML holds no control character but tab and line breaks, and a setting is
+    # one line: from the options, and from the endpoint's user name
+    snomControlCharacters = {
+      module = {
+        imports = [phones];
+        # inside the value, since pjsip.conf refuses one at either end
+        services.asterisk.pjsip.endpoints."202".auth.username = lib.mkForce "20${builtins.fromJSON ''"\u0007"''}2";
+        pbx.phones = {
+          snom.timeZone = "GER+1\n";
+          devices = {
+            "201" = {
+              model = "snom-d785";
+              mac = "00:04:13:00:02:01";
+              settings.language = "Deutsch\tx";
+            };
+            "202" = {
+              model = "snom-d785";
+              mac = "00:04:13:00:02:02";
+            };
+          };
+        };
+      };
+      assertions = ["pbx.phones.devices: Snom settings cannot contain control characters: 201 language, 201 timezone, 202 timezone, 202 user_pname[1]."];
+    };
+
+    # user_host names where a line registers and setting_server where the phone
+    # fetches its file; a socket on 0.0.0.0 or :: listens on every address,
+    # which no phone can connect to
+    snomWildcardServers = {
+      module = {
+        imports = [phones];
+        pbx.phones = {
+          listenAddress = lib.mkForce "::";
+          port = 8080;
+          devices = {
+            "201" = {
+              model = "snom-d785";
+              mac = "00:04:13:00:02:01";
+            };
+            "202" = {
+              model = "snom-d315";
+              mac = "00:04:13:00:02:02";
+              lines = ["202" "201"];
+              settings = {
+                setting_server = "http://[fd00:20::10]:8080/snomD315-{mac}.htm";
+                "user_host[2]" = "0.0.0.0:5060";
+              };
+            };
+          };
+        };
+      };
+      assertions = ["pbx.phones.devices: Snom settings that send phones to 0.0.0.0 or ::, which no phone can reach: 201 setting_server, 201 user_host[1], 202 user_host[1], 202 user_host[2]. Set pbx.phones.listenAddress to the PBX's address on the phones' network, or give that address in pbx.phones.sipServer and settings.setting_server."];
+    };
+
+    # listening on :: serves phones that are given the PBX's address; with no
+    # file name in setting_server a phone requests its own file by name
+    snomWildcardListenWithAddresses = {
+      module = {
+        imports = [phones];
+        pbx.phones = {
+          listenAddress = lib.mkForce "::";
+          sipServer = "10.0.20.10";
+          snom.settings.setting_server = "http://10.0.20.10/";
+          devices."201" = {
+            model = "snom-d785";
+            mac = "00:04:13:00:02:01";
+          };
+        };
+      };
+      assertions = [];
+    };
+
+    # the multiplatform firmware takes 8 to 127 characters from ! to ~ of three
+    # kinds, the ATA 191 and 192 at least 8 and the SPA112 and SPA122 at most
+    # 32, from adminPassword or a device's own setting; the SPA phones have no
+    # rule
+    ciscoAdminPassword = {
+      module = {
+        imports = [phones];
+        pbx.phones = {
+          adminPassword = "Abcdefg1";
+          devices = lib.mapAttrs (_: device: device // {lines = ["201"];}) {
+            good = {
+              model = "cisco-8841";
+              mac = "00:62:ec:00:02:01";
+            };
+            short = {
+              model = "cisco-8841";
+              mac = "00:62:ec:00:02:02";
+              settings.Admin_Password = "Abc!123";
+            };
+            twoKinds = {
+              model = "cisco-8841";
+              mac = "00:62:ec:00:02:03";
+              settings.Admin_Password = "abcdefg1";
+            };
+            space = {
+              model = "cisco-8841";
+              mac = "00:62:ec:00:02:04";
+              settings.Admin_Password = "Abc defg1";
+            };
+            umlaut = {
+              model = "cisco-8841";
+              mac = "00:62:ec:00:02:05";
+              settings.Admin_Password = builtins.fromJSON ''"Käsebrot1"'';
+            };
+            ata = {
+              model = "cisco-ata191";
+              mac = "00:62:ec:00:02:06";
+              settings."router-configuration/Web_Login_Admin_Password" = "1234567";
+            };
+            spa112 = {
+              model = "cisco-spa112";
+              mac = "00:62:ec:00:02:07";
+              settings."router-configuration/Web_Login_Admin_Password" = lib.strings.replicate 33 "x";
+            };
+            spa504g = {
+              model = "cisco-spa504g";
+              mac = "00:62:ec:00:02:08";
+              settings.Admin_Passwd = "x";
             };
           };
         };
       };
       assertions = [
-        "pbx.phones.grandstream.ht801.devices.299: endpoint `299` must exist in pjsip.endpoints, have `auth` set and an `aor` named like the endpoint, since the adapter registers with one user name for both."
-        "pbx.phones.grandstream.ht801.devices.kitchen: endpoint `kitchen` must exist in pjsip.endpoints, have `auth` set and an `aor` named like the endpoint, since the adapter registers with one user name for both."
-        "services.asterisk: PJSIP endpoint(s) kitchen have neither auth nor identify, so anyone who reaches the SIP port can register as them, and call from their context by naming them in From. Give each a password (pjsip.endpoints.<name>.auth.password) or an identify for a device known by its address, or set open = true where anyone may use them on purpose."
+        "pbx.phones: the admin password (router-configuration/Web_Login_Admin_Password) of ata is not at least 8 characters, which the ATA 191 and ATA 192 require."
+        "pbx.phones: the admin password (Admin_Password) of short, space, twoKinds, umlaut is not 8 to 127 characters from ASCII 33 (!) to 126 (~) of three kinds out of capital letters, small letters, digits and others, which the multiplatform firmware requires."
+        "pbx.phones: the admin password (router-configuration/Web_Login_Admin_Password) of spa112 is not at most 32 characters, which the SPA112 and SPA122 take."
       ];
+    };
+
+    # XML holds no control character but tab and line breaks, and a setting is
+    # one line: from the options, and from the endpoint's user name
+    ciscoControlCharacters = {
+      module = {
+        imports = [phones];
+        # inside the value, since pjsip.conf refuses one at either end
+        services.asterisk.pjsip.endpoints."202".auth.username = lib.mkForce "20${builtins.fromJSON ''"\u0007"''}2";
+        pbx.phones = {
+          cisco.settings."router-configuration/Time_Setup/Time_Zone" = "+01 2 2\n";
+          devices = {
+            "201" = {
+              model = "cisco-spa504g";
+              mac = "00:62:ec:00:02:01";
+              settings.Time_Zone = "GMT\t";
+            };
+            "202" = {
+              model = "cisco-ata191";
+              mac = "00:62:ec:00:02:02";
+            };
+          };
+        };
+      };
+      assertions = ["pbx.phones.devices: settings of Cisco devices cannot contain control characters: 201 Time_Zone, 201 router-configuration/Time_Setup/Time_Zone, 202 Auth_ID_1_, 202 router-configuration/Time_Setup/Time_Zone."];
+    };
+
+    # Proxy_n_ names where a line registers and Profile_Rule where the device
+    # fetches its file; a socket on 0.0.0.0 or :: listens on every address,
+    # which no device can connect to
+    ciscoWildcardServers = {
+      module = {
+        imports = [phones];
+        pbx.phones = {
+          listenAddress = lib.mkForce "::";
+          port = 8080;
+          devices = {
+            "201" = {
+              model = "cisco-8841";
+              mac = "00:62:ec:00:02:01";
+            };
+            "202" = {
+              model = "cisco-ata191";
+              mac = "00:62:ec:00:02:02";
+              lines = ["202" "201"];
+              settings = {
+                Proxy_2_ = "0.0.0.0:5060";
+                Profile_Rule = "http://[fd00:20::10]:8080/$MA.xml";
+              };
+            };
+          };
+        };
+      };
+      assertions = ["pbx.phones.devices: settings that send Cisco devices to 0.0.0.0 or ::, which no device can reach: 201 Profile_Rule, 201 Proxy_1_, 202 Proxy_1_, 202 Proxy_2_. Set pbx.phones.listenAddress to the PBX's address on the devices' network, or give that address in pbx.phones.sipServer and settings.Profile_Rule."];
+    };
+
+    # an element name cannot hold a space, start with a digit or be empty
+    ciscoSettingNames = {
+      module = {
+        imports = [phones];
+        pbx.phones = {
+          cisco.settings."Time Zone" = "GMT";
+          devices."201" = {
+            model = "cisco-8841";
+            mac = "00:62:ec:00:02:01";
+            settings = {
+              "1st" = "x";
+              "router-configuration//Time_Zone" = "x";
+            };
+          };
+        };
+      };
+      assertions = ["pbx.phones: settings of Cisco devices must be XML element names such as Primary_NTP_Server, or paths of them such as router-configuration/Time_Setup/Time_Zone."];
+    };
+
+    # every Fanvil firmware takes 1 to 39 letters and digits, from adminPassword
+    # or a device's own web.account.1.Password
+    fanvilAdminPassword = {
+      module = {
+        imports = [phones];
+        pbx.phones = {
+          adminPassword = "abc123";
+          devices = lib.mapAttrs (_: device:
+            device
+            // {
+              model = "fanvil-x301";
+              lines = ["201"];
+            }) {
+            global.mac = "0c:38:3e:00:02:01";
+            integer = {
+              mac = "0c:38:3e:00:02:02";
+              settings."web.account.1.Password" = 1234;
+            };
+            longest = {
+              mac = "0c:38:3e:00:02:03";
+              settings."web.account.1.Password" = lib.strings.replicate 39 "x";
+            };
+            long = {
+              mac = "0c:38:3e:00:02:04";
+              settings."web.account.1.Password" = lib.strings.replicate 40 "x";
+            };
+            empty = {
+              mac = "0c:38:3e:00:02:05";
+              settings."web.account.1.Password" = "";
+            };
+            symbol = {
+              mac = "0c:38:3e:00:02:06";
+              settings."web.account.1.Password" = "pa$$word";
+            };
+            umlaut = {
+              mac = "0c:38:3e:00:02:07";
+              settings."web.account.1.Password" = builtins.fromJSON ''"k\u00e4se"'';
+            };
+          };
+        };
+      };
+      assertions = ["pbx.phones: the admin password (web.account.1.Password) of empty, long, symbol, umlaut is not 1 to 39 letters and digits, which is what every Fanvil firmware takes (the X1S, X1SG, X3SG, X3U and X305 take no symbols)."];
+    };
+
+    # an XML value holds no control character but tab and line breaks, and a
+    # setting is one line: from the options, and from the endpoint's user name
+    fanvilControlCharacters = {
+      module = {
+        imports = [phones];
+        # inside the value, since pjsip.conf refuses one at either end
+        services.asterisk.pjsip.endpoints."202".auth.username = lib.mkForce "20${builtins.fromJSON ''"\u0007"''}2";
+        pbx.phones = {
+          fanvil.settings."phone.display.LCDTitle" = "Front\n";
+          devices = {
+            "201" = {
+              model = "fanvil-x301";
+              mac = "0c:38:3e:00:02:01";
+              settings."sip.line.1.DisplayName" = "Front\tDesk";
+            };
+            "202" = {
+              model = "fanvil-x301";
+              mac = "0c:38:3e:00:02:02";
+            };
+          };
+        };
+      };
+      assertions = ["pbx.phones.devices: Fanvil settings cannot contain control characters: 201 phone.display.LCDTitle, 201 sip.line.1.DisplayName, 202 phone.display.LCDTitle, 202 sip.line.1.RegisterUser."];
+    };
+
+    # ap.FlashServerIP names where the phone fetches its file and each line's
+    # RegisterAddr where it registers, a used line's or one given in settings;
+    # a socket on 0.0.0.0 or :: listens on every address, which no phone can
+    # connect to
+    fanvilWildcardServers = {
+      module = {
+        imports = [phones];
+        pbx.phones = {
+          listenAddress = lib.mkForce "::";
+          port = 8080;
+          devices = {
+            "201" = {
+              model = "fanvil-x301";
+              mac = "0c:38:3e:00:02:01";
+            };
+            "202" = {
+              model = "fanvil-x303";
+              mac = "0c:38:3e:00:02:02";
+              lines = ["202" null "201"];
+              settings = {
+                "ap.FlashServerIP" = "http://[fd00:20::10]:8080";
+                "sip.line.2.RegisterAddr" = "0.0.0.0";
+              };
+            };
+          };
+        };
+      };
+      assertions = ["pbx.phones.devices: Fanvil settings that send devices to 0.0.0.0 or ::, which no device can reach: 201 ap.FlashServerIP, 201 sip.line.1.RegisterAddr, 202 sip.line.1.RegisterAddr, 202 sip.line.2.RegisterAddr, 202 sip.line.3.RegisterAddr. Set pbx.phones.listenAddress to the PBX's address on the devices' network, or give that address in pbx.phones.sipServer and settings.\"ap.FlashServerIP\"."];
+    };
+
+    # listening on :: serves phones that are given the PBX's address
+    fanvilWildcardListenWithAddresses = {
+      module = {
+        imports = [phones];
+        pbx.phones = {
+          listenAddress = lib.mkForce "::";
+          sipServer = "10.0.20.10";
+          fanvil.settings."ap.FlashServerIP" = "http://10.0.20.10";
+          devices."201" = {
+            model = "fanvil-x301";
+            mac = "0c:38:3e:00:02:01";
+          };
+        };
+      };
+      assertions = [];
+    };
+
+    # an element's index follows its name and a value is an element, never an
+    # index
+    fanvilSettingsKeys = {
+      module = {
+        imports = [phones];
+        pbx.phones = {
+          fanvil.settings = {
+            "web.account.1" = "x";
+            "phone..date" = "x";
+            "phone.display.DefaultLanguage" = "en";
+          };
+          devices."201" = {
+            model = "fanvil-x301";
+            mac = "0c:38:3e:00:02:01";
+            settings = {
+              "1st.key" = "x";
+              "sip.line.1.2.DisplayName" = "x";
+              "phone date" = "x";
+              "DHCPOption100-101" = 1;
+            };
+          };
+        };
+      };
+      assertions = [''pbx.phones: settings of Fanvil devices must be paths of sysConf elements such as sip.line.1.DisplayName: "phone..date", "web.account.1", "1st.key", "phone date", "sip.line.1.2.DisplayName".''];
+    };
+
+    # one element cannot hold both a value and other elements
+    fanvilNestedKeys = {
+      module = {
+        imports = [phones];
+        pbx.phones = {
+          ntpServer = "10.0.20.1";
+          fanvil.settings."phone.date" = "x";
+          devices."201" = {
+            model = "fanvil-x301";
+            mac = "0c:38:3e:00:02:01";
+            settings."sip.line.1.PhoneNumber.Extra" = "y";
+          };
+        };
+      };
+      assertions = ["pbx.phones.devices: Fanvil settings that other settings are below, which one XML element cannot be: 201 phone.date, 201 sip.line.1.PhoneNumber."];
     };
 
     ivrDestinations = {

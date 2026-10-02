@@ -15,14 +15,17 @@
     openFirewall = true;
     firewallInterfaces = ["voip"];
 
-    grandstream.ht801 = {
-      enable = true;
-      timeZone = "CET-1CEST-2,M3.5.0/02:00:00,M10.5.0/03:00:00";
-      adminPassword = config.lib.asterisk.secret config.sops.secrets.ht801-admin.path;
+    adminPassword = config.lib.asterisk.secret config.sops.secrets.ht801-admin.path;
+    grandstream.timeZone = "CET-1CEST-2,M3.5.0/02:00:00,M10.5.0/03:00:00";
 
-      devices = {
-        "101".mac = "c0:74:ad:00:01:01";
-        "102".mac = "c0:74:ad:00:01:02";
+    devices = {
+      "101" = {
+        model = "grandstream-ht801";
+        mac = "c0:74:ad:00:01:01";
+      };
+      "102" = {
+        model = "grandstream-ht801";
+        mac = "c0:74:ad:00:01:02";
       };
     };
   };

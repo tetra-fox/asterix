@@ -3,7 +3,8 @@
 {lib}: let
   inherit (lib) mkOption types;
   inherit (import ../lib.nix {inherit lib;}) splitMailbox;
-  inherit ((import ../../lib {inherit lib;}).format) hostPort;
+  inherit (import ../../lib {inherit lib;}) format secrets;
+  inherit (format) hostPort;
 
   mailboxType = types.submodule {
     options = {
@@ -27,6 +28,62 @@
   # not answered yet gets as 603 Decline (channels/chan_pjsip.c hangup_cause2sip)
   unansweredCause = ''''${IF($["''${CHANNEL(state)}" != "Up" & (''${HANGUPCAUSE} = 0 | ''${HANGUPCAUSE} = 16)]?19)}'';
 in rec {
+  # a setting of a device that pbx.phones provisions
+  phoneValue =
+    types.oneOf [
+      types.str
+      types.int
+      format.types.secret
+    ]
+    // {
+      description = "string, integer or secret reference";
+    };
+
+  escapeXml = lib.replaceStrings ["&" "<" ">" "\"" "'"] ["&amp;" "&lt;" "&gt;" "&quot;" "&apos;"];
+
+  # a setting as the text of a provisioning file: a secret becomes its
+  # placeholder, which the provisioning service substitutes and escapes as the
+  # file's `escape` says, and other text is escaped with `escapeText`
+  phoneValueText = escapeText: v:
+    if secrets.isSecret v
+    then secrets.placeholderOf v
+    else if builtins.isInt v
+    then toString v
+    else escapeText v;
+
+  # sipServer and sipPort as one value, `host` or `host:port`, the port left
+  # out when it is SIP's default, which also leaves an IPv6 address bare
+  sipServerText = phones:
+    if phones.sipPort == 5060
+    then phones.sipServer
+    else hostPort phones.sipServer phones.sipPort;
+
+  # a control character in a setting, which XML holds none of but tab and
+  # line breaks, and which a one-line value cannot hold; render-secrets
+  # refuses them in secrets
+  hasControlCharacter = v: builtins.isString v && builtins.match ".*[[:cntrl:]].*" v != null;
+
+  # whether a server setting sends a device to 0.0.0.0 or ::, where a socket
+  # listens on every address of the host but no device can connect: the host
+  # of a URL, of `host:port`, in brackets, or the whole value
+  sendsToWildcard = value: let
+    afterScheme = let
+      m = builtins.match "[a-z]+://(.*)" value;
+    in
+      if m == null
+      then value
+      else builtins.head m;
+    bracketed = builtins.match "[[]([^]]*)[]].*" afterScheme;
+    withPort = builtins.match "([^:/]*)(:[0-9]*)?(/.*)?" afterScheme;
+    host =
+      if bracketed != null
+      then builtins.head bracketed
+      else if withPort != null
+      then builtins.head withPort
+      else afterScheme;
+  in
+    builtins.isString value && (host == "0.0.0.0" || (lib.hasInfix ":" host && builtins.match "[0:.]*" host != null));
+
   destination = types.attrTag {
     extension = mkOption {
       type = types.str;

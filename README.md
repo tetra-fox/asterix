@@ -101,7 +101,8 @@ A full list of options is in the options reference: `nix build .#docs`.
   Asterisk relays the audio between them.
 - **NAT** on either side, plus STUN and TURN.
 - **Sandboxed:** `systemd-analyze security` rates it 1.5.
-- **Phone provisioning** through the pbx layer, see
+- **Phone provisioning** for Cisco, Fanvil, Grandstream, Poly, Snom and
+  Yealink devices through the pbx layer, see
   [PROVISIONING.md](PROVISIONING.md).
 
 ## Secrets

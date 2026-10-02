@@ -55,17 +55,17 @@
   # answered yet whose channel has no cause or normal clearing
   hangup = ''Hangup(''${IF($["''${CHANNEL(state)}" != "Up" & (''${HANGUPCAUSE} = 0 | ''${HANGUPCAUSE} = 16)]?19)})'';
 
-  # an HT801 adapter for extension 201 on the phones' network, which each test
-  # adds to
-  ht801 = module:
+  # a Grandstream adapter for extension 201 on the phones' network, an HT801
+  # unless a test says otherwise, which each test adds to
+  adapter = module:
     configOf {
       imports = [module];
       pbx.phones = {
         listenAddress = lib.mkDefault "10.0.20.10";
         allowedNetworks = lib.mkDefault ["10.0.20.0/24"];
-        grandstream.ht801 = {
-          enable = true;
-          devices."201".mac = lib.mkDefault "c0:74:ad:00:02:01";
+        devices."201" = {
+          model = lib.mkDefault "grandstream-ht801";
+          mac = lib.mkDefault "c0:74:ad:00:02:01";
         };
       };
     };
@@ -81,19 +81,11 @@ in {
   tests = {
     # an adapter registers as the endpoint (and its aor) and authenticates
     # with the auth user name, which may differ
-    testHt801UserIdIsTheEndpoint = {
+    testGrandstreamUserIdIsTheEndpoint = {
       expr = builtins.filter (line: builtins.match " *<P3[56]>.*" line != null) (
         lib.splitString "\n"
-        (configOf {
+        (adapter {
           services.asterisk.pjsip.endpoints."201".auth.username = "kitchen";
-          pbx.phones = {
-            listenAddress = "10.0.20.10";
-            allowedNetworks = ["10.0.20.0/24"];
-            grandstream.ht801 = {
-              enable = true;
-              devices."201".mac = "c0:74:ad:00:02:01";
-            };
-          };
         }).pbx.phones.files."cfgc074ad000201.xml".text
       );
       expected = [
@@ -102,18 +94,21 @@ in {
       ];
     };
 
-    # every P-value the module sets, in numeric order; common settings replace
-    # the module's values and an adapter's settings replace both
-    testHt801File = {
+    # every P-value the module sets for an HT801, in numeric order; common
+    # settings replace the module's values and an adapter's settings replace
+    # both
+    testGrandstreamHt801File = {
       expr =
-        (ht801 {
-          pbx.phones.grandstream.ht801 = {
+        (adapter {
+          pbx.phones = {
             ntpServer = "10.0.20.1";
-            timeZone = "CET-1CEST-2,M3.5.0/02:00:00,M10.5.0/03:00:00";
             adminPassword = self.lib.secret "/run/secrets/ht801-admin";
-            settings = {
-              P238 = 0;
-              P1362 = "de";
+            grandstream = {
+              timeZone = "CET-1CEST-2,M3.5.0/02:00:00,M10.5.0/03:00:00";
+              settings = {
+                P238 = 0;
+                P1362 = "de";
+              };
             };
             devices."201".settings = {
               P47 = "10.0.20.11";
@@ -144,10 +139,81 @@ in {
       '';
     };
 
+    # each line, a port with an account of its own, registers to sipServer
+    testGrandstreamHt802File = {
+      expr =
+        (adapter {
+          pbx.phones.devices."201" = {
+            model = "grandstream-ht802";
+            lines = ["201" "202"];
+          };
+        }).pbx.phones.files."cfgc074ad000201.xml".text;
+      expected = ''
+        <?xml version="1.0" encoding="UTF-8"?>
+        <gs_provision version="1">
+          <mac>c074ad000201</mac>
+          <config version="1">
+            <P34>${placeholderFor "/run/secrets/201"}</P34>
+            <P35>201</P35>
+            <P36>201</P36>
+            <P47>10.0.20.10</P47>
+            <P212>1</P212>
+            <P237>10.0.20.10</P237>
+            <P238>2</P238>
+            <P271>1</P271>
+            <P401>1</P401>
+            <P734>${placeholderFor "/run/secrets/202"}</P734>
+            <P735>202</P735>
+            <P736>202</P736>
+            <P747>10.0.20.10</P747>
+            <P1409>0</P1409>
+          </config>
+        </gs_provision>
+      '';
+    };
+
+    # the ports share profile 1's server; a null line and the ones past the
+    # end of the list are turned off
+    testGrandstreamHt814File = {
+      expr =
+        (adapter {
+          pbx.phones.devices."201" = {
+            model = "grandstream-ht814";
+            lines = ["201" null "202"];
+          };
+        }).pbx.phones.files."cfgc074ad000201.xml".text;
+      expected = ''
+        <?xml version="1.0" encoding="UTF-8"?>
+        <gs_provision version="1">
+          <mac>c074ad000201</mac>
+          <config version="1">
+            <P47>10.0.20.10</P47>
+            <P212>1</P212>
+            <P237>10.0.20.10</P237>
+            <P238>2</P238>
+            <P271>1</P271>
+            <P1409>0</P1409>
+            <P4060>201</P4060>
+            <P4062>202</P4062>
+            <P4090>201</P4090>
+            <P4092>202</P4092>
+            <P4120>${placeholderFor "/run/secrets/201"}</P4120>
+            <P4122>${placeholderFor "/run/secrets/202"}</P4122>
+            <P4150>0</P4150>
+            <P4152>0</P4152>
+            <P4595>1</P4595>
+            <P4596>0</P4596>
+            <P4597>1</P4597>
+            <P4598>0</P4598>
+          </config>
+        </gs_provision>
+      '';
+    };
+
     # a plain admin password is escaped for XML, an integer is written as it
     # is, a secret is left to the service
-    testHt801AdminPassword = {
-      expr = map (adminPassword: pLine "P2" (ht801 {pbx.phones.grandstream.ht801 = {inherit adminPassword;};})) [
+    testGrandstreamAdminPassword = {
+      expr = map (adminPassword: pLine "P2" (adapter {pbx.phones = {inherit adminPassword;};})) [
         "a&b<c>\"d'e]]>"
         1234
         (self.lib.secret "/run/secrets/ht801-admin")
@@ -161,14 +227,15 @@ in {
 
     # every spelling the option takes names the file, and fills <mac>, with the
     # address in lowercase without separators
-    testHt801MacSpellings = {
+    testGrandstreamMacSpellings = {
       expr =
         lib.mapAttrs (_: file: lib.findFirst (lib.hasPrefix "  <mac>") null (lib.splitString "\n" file.text))
-        (ht801 {
-          pbx.phones.grandstream.ht801.devices =
+        (adapter {
+          pbx.phones.devices =
             lib.mapAttrs (_: mac: {
               inherit mac;
-              endpoint = "201";
+              model = "grandstream-ht801";
+              lines = ["201"];
             }) {
               colons = "C0:74:AD:00:02:0A";
               hyphens = "c0-74-ad-00-02-0b";
@@ -187,10 +254,10 @@ in {
 
     # the socket and the configuration server the adapters keep (P237), with
     # an IPv6 address in brackets as in a URL
-    testHt801ConfigServer = {
+    testGrandstreamConfigServer = {
       expr =
         map (listen: let
-          config = ht801 {pbx.phones = listen;};
+          config = adapter {pbx.phones = listen;};
         in {
           socket = config.systemd.sockets.asterisk-provisioning.listenStreams;
           server = pLine "P237" config;
@@ -224,7 +291,7 @@ in {
       expr =
         map (interfaces: let
           inherit
-            (ht801 {
+            (adapter {
               pbx.phones = {
                 port = 8080;
                 openFirewall = true;

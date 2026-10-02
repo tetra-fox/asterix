@@ -12,6 +12,7 @@
 #   asterisk  a single line without leading or trailing whitespace, `;` as `\;`,
 #             in a line of at most 8190 bytes
 #   xml       one line without control characters, `&<>"'` as entities
+#   line      one line without control characters, unchanged
 #   none      unchanged
 #
 # Every file and credential is read once, however many secrets there are.

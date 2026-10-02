@@ -1,6 +1,8 @@
 // The request handling of provisioning-server, a library so that its fuzz
 // target (fuzz/) runs the same code on connections held in memory.
 
+pub mod tftp;
+
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::io::ErrorKind;
@@ -32,28 +34,40 @@ const CONNECTIONS_PER_PEER: usize = 4;
 
 pub struct File {
     allowed: Option<IpAddr>,
+    tftp: bool,
     content_type: &'static str,
     body: Bytes,
 }
 
 pub type Files = HashMap<String, File>;
 
-// one line per file: `NAME`, or `NAME ADDRESS` for a file only ADDRESS may fetch
-fn parse_manifest(text: &str) -> Result<Vec<(String, Option<IpAddr>)>, String> {
+// one line per file: `NAME`, then the ADDRESS that alone may fetch it, if one
+// does, and `tftp` if it is served over TFTP too
+fn parse_manifest(text: &str) -> Result<Vec<(String, Option<IpAddr>, bool)>, String> {
     text.lines()
         .enumerate()
         .map(|(index, line)| {
             let error = |message: String| format!("manifest line {}: {message}", index + 1);
-            match line.split_whitespace().collect::<Vec<_>>().as_slice() {
-                [name] => Ok((name.to_string(), None)),
-                [name, address] => {
+            let words: Vec<_> = line.split_whitespace().collect();
+            let usage = || error("expected a file name, at most one address and `tftp`".into());
+            let Some((name, rest)) = words.split_first() else {
+                return Err(usage());
+            };
+            let (rest, tftp) = match rest {
+                [rest @ .., "tftp"] => (rest, true),
+                rest => (rest, false),
+            };
+            let allowed = match rest {
+                [] => None,
+                [address] => {
                     let address: IpAddr = address
                         .parse()
                         .map_err(|_| error(format!("invalid address `{address}`")))?;
-                    Ok((name.to_string(), Some(address.to_canonical())))
+                    Some(address.to_canonical())
                 }
-                _ => Err(error("expected a file name and at most one address".into())),
-            }
+                _ => return Err(usage()),
+            };
+            Ok((name.to_string(), allowed, tftp))
         })
         .collect()
 }
@@ -62,7 +76,7 @@ pub fn load(root: &Path, manifest: &str) -> Result<Files, String> {
     let text = std::fs::read_to_string(manifest).map_err(|e| format!("{manifest}: {e}"))?;
     parse_manifest(&text)?
         .into_iter()
-        .map(|(name, allowed)| {
+        .map(|(name, allowed, tftp)| {
             let path = root.join(&name);
             let body = std::fs::read(&path).map_err(|e| format!("{}: {e}", path.display()))?;
             let xml = Path::new(&name)
@@ -75,6 +89,7 @@ pub fn load(root: &Path, manifest: &str) -> Result<Files, String> {
             };
             let file = File {
                 allowed,
+                tftp,
                 content_type,
                 body: Bytes::from(body),
             };
@@ -95,11 +110,18 @@ fn route<'a>(
     let Some(file) = path.strip_prefix('/').and_then(|name| files.get(name)) else {
         return Err(StatusCode::NOT_FOUND);
     };
-    match file.allowed {
-        // IPv4 clients show up as ::ffff:a.b.c.d on an IPv6 socket
-        Some(allowed) if allowed != peer.to_canonical() => Err(StatusCode::FORBIDDEN),
-        _ => Ok(file),
+    if permits(file, peer) {
+        Ok(file)
+    } else {
+        Err(StatusCode::FORBIDDEN)
     }
+}
+
+// whether peer may fetch file, over either protocol; IPv4 clients show up as
+// ::ffff:a.b.c.d on an IPv6 socket
+fn permits(file: &File, peer: IpAddr) -> bool {
+    file.allowed
+        .is_none_or(|allowed| allowed == peer.to_canonical())
 }
 
 fn respond(files: &Files, request: &Request<Incoming>, peer: IpAddr) -> Response<Full<Bytes>> {
@@ -204,9 +226,10 @@ mod tests {
         parse_manifest(manifest)
             .unwrap()
             .into_iter()
-            .map(|(name, allowed)| {
+            .map(|(name, allowed, tftp)| {
                 let file = File {
                     allowed,
+                    tftp,
                     content_type: "text/xml",
                     body: Bytes::new(),
                 };
@@ -277,7 +300,28 @@ mod tests {
         );
         assert_eq!(
             parse_manifest("a.xml 10.0.20.1 10.0.20.2").err().as_deref(),
-            Some("manifest line 1: expected a file name and at most one address")
+            Some("manifest line 1: expected a file name, at most one address and `tftp`")
+        );
+        assert_eq!(
+            parse_manifest("a.xml tftp 10.0.20.1").err().as_deref(),
+            Some("manifest line 1: expected a file name, at most one address and `tftp`")
+        );
+    }
+
+    #[test]
+    fn manifest_marks_files_for_tftp_after_the_address() {
+        assert_eq!(
+            parse_manifest("a.xml\nb.xml tftp\nc.xml 10.0.20.1 tftp\ntftp\n").unwrap(),
+            [
+                ("a.xml".to_string(), None, false),
+                ("b.xml".to_string(), None, true),
+                (
+                    "c.xml".to_string(),
+                    Some("10.0.20.1".parse().unwrap()),
+                    true
+                ),
+                ("tftp".to_string(), None, false),
+            ]
         );
     }
 

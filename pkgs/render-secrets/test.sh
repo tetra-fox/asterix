@@ -63,6 +63,7 @@ check asterisk \
 check asterisk "x = $(placeholder xml)"$'\n' $'x = a&b<c>"d\'e]]>\n'
 check xml "<P34>$(placeholder xml)</P34>"$'\n' $'<P34>a&amp;b&lt;c&gt;&quot;d&apos;e]]&gt;</P34>\n'
 check none "$(placeholder lines)|$(placeholder space)" $'one\ntwo| padded'
+check line "account.1.password = $(placeholder xml)"$'\n' $'account.1.password = a&b<c>"d\'e]]>\n'
 check asterisk "password = $(placeholder comma)"$'\n'"101 => $(placeholder pin),Sales"$'\n' $'password = a,b\n101 => 1234,Sales\n'
 
 fails asterisk "x = $(placeholder lines)" "secret /run/secrets/lines contains a line break"
@@ -70,6 +71,8 @@ fails asterisk "x = $(placeholder lines)" "secret /run/secrets/lines contains a 
 # provisioning file is one line
 fails xml "<P34>$(placeholder bell)</P34>" "secret /run/secrets/bell contains a control character"
 fails xml "<P34>$(placeholder lines)</P34>" "secret /run/secrets/lines contains a control character"
+# a line break in a `key = value` file would start a setting of its own
+fails line "account.1.password = $(placeholder lines)" "secret /run/secrets/lines contains a control character"
 fails asterisk "x = $(placeholder space)" "secret /run/secrets/space has leading or trailing whitespace"
 fails asterisk "101 => $(placeholder commapin),Sales" "secret /run/secrets/commapin is one field of a comma-separated value, so it cannot contain a comma"
 # the most bytes a secret can have, before `;` becomes `\;`

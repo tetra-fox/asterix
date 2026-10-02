@@ -2,9 +2,9 @@
 # under it: files are served on the VoIP address only, carry the endpoints'
 # credentials (rendered at runtime, escaped per file format) and respect
 # per-device address restrictions. Hand-written files with odd names, a
-# credential, 10 MB and many files are served as written; hostile requests get
-# nothing they may not have, and 1,000 idle connections from one client do not
-# delay another. Adapters on pjsua register with the credentials of their
+# credential, 10 MB and many files are served as written, those marked for
+# TFTP over it too; hostile requests get nothing they may not have, and 1,000
+# idle connections from one client do not delay another. Adapters on pjsua register with the credentials of their
 # files; a deploy that changes one's password reloads Asterisk and restarts
 # the provisioning service, keeps the process, the calls and the
 # registrations, and the adapter registers again with the password of its
@@ -90,8 +90,17 @@ in
           }
         ];
         pbx.phones = {
-          # adapter 101 has a static lease
-          grandstream.ht801.devices."101".allowedAddress = "10.0.20.21";
+          devices = {
+            # adapter 101 has a static lease
+            "101".allowedAddress = "10.0.20.21";
+            # a Cisco phone on 10.0.20.22, whose model's file goes over TFTP
+            desk = {
+              model = "cisco-8841";
+              mac = "00:62:ec:00:02:01";
+              lines = ["201"];
+              allowedAddress = "10.0.20.22";
+            };
+          };
           files =
             {
               # the admin password as it is, and escaped for XML for one other
@@ -107,6 +116,12 @@ in
               # a credential the unit is given by the configuration, not the module
               "credential.txt".text = "pin=${credential "provisioning-pin"}";
               "big.txt".text = big;
+              # over TFTP too, to 10.0.20.22 only
+              "tftp-22.cfg" = {
+                text = "for 22\n";
+                tftp = true;
+                allowedAddress = "10.0.20.22";
+              };
             }
             // lib.genAttrs sample (name: {text = name;});
         };
@@ -138,10 +153,9 @@ in
         specialisation.dualstack.configuration.pbx.phones = {
           listenAddress = lib.mkForce "::";
           port = 8080;
-          grandstream.ht801 = {
-            sipServer = "10.0.20.10";
-            settings.P237 = "10.0.20.10:8080";
-          };
+          sipServer = "10.0.20.10";
+          grandstream.settings.P237 = "10.0.20.10:8080";
+          cisco.settings.Profile_Rule = "http://10.0.20.10:8080/$MA.xml";
           allowedNetworks = lib.mkForce [
             "10.0.20.0/24"
             "10.0.10.0/24"
@@ -344,6 +358,35 @@ in
             journal = pbx.succeed("journalctl --sync && journalctl -u asterisk-provisioning.service")
             assert "10.0.20.22 GET /cfgc074ad000101.xml 403" in journal, journal
 
+        def tftp(name, source="10.0.20.21"):
+            return adapters.execute(f"curl -s --max-time 10 --interface {source} -o /tmp/tftp tftp://10.0.20.10/{name}")[0]
+
+        with subtest("files marked for TFTP are served over it to the addresses allowed, other files are not"):
+            # curl's exit codes for a TFTP access violation and a file TFTP does not have
+            assert tftp("tftp-22.cfg") == 69
+            assert tftp("tftp-22.cfg", source="10.0.20.22") == 0
+            assert adapters.succeed("cat /tmp/tftp") == "for 22\n"
+            assert tftp("cfgc074ad000102.xml") == 68
+            journal = pbx.succeed("journalctl --sync && journalctl -u asterisk-provisioning.service")
+            assert "10.0.20.21 TFTP tftp-22.cfg forbidden" in journal, journal
+
+        with subtest("a factory Cisco phone fetches its model's file over TFTP, which sends it to its own file over HTTP"):
+            # the phone's default rule names the file from the root, /$PSN.xml
+            assert tftp("/8841-3PCC.xml", source="10.0.20.22") == 0
+            bootstrap = adapters.succeed("cat /tmp/tftp")
+            found = re.search(r"<Profile_Rule_B>([^<]*)</Profile_Rule_B>", bootstrap)
+            assert found, bootstrap
+            rule = found.group(1)
+            assert rule == "http://10.0.20.10/$MA.xml", bootstrap
+            profile = adapters.succeed(f"curl -sf --interface 10.0.20.22 {rule.replace('$MA', '0062ec000201')}")
+            for expected in [
+                "<User_ID_1_>201</User_ID_1_>",
+                "<Password_1_>soft-201-pw</Password_1_>",
+                "<Profile_Rule>http://10.0.20.10/$MA.xml</Profile_Rule>",
+                "<Profile_Rule_B></Profile_Rule_B>",
+            ]:
+                assert expected in profile, f"{expected} missing from {profile}"
+
         with subtest("hostile requests get no file they may not have and do not delay others"):
             def http_code(arguments, source="10.0.20.22"):
                 return adapters.succeed(
@@ -428,9 +471,13 @@ in
 
         with subtest("the firewall is open on the phones' interface only"):
             url = "http://10.0.10.10:8080/cfgc074ad000102.xml"
+            bootstrap_url = "tftp://10.0.10.10/8841-3PCC.xml"
             softphone.fail(f"curl -s --max-time 3 {url}")
-            # the socket would take it: only the firewall keeps the LAN out
+            softphone.fail(f"curl -s --max-time 3 -o /dev/null {bootstrap_url}")
+            # the sockets would take them: only the firewall keeps the LAN out
             pbx.succeed("iptables -I nixos-fw -i lan -p tcp --dport 8080 -j nixos-fw-accept")
+            pbx.succeed("iptables -I nixos-fw -i lan -p udp --dport 69 -j nixos-fw-accept")
             softphone.succeed(f"curl -sf --max-time 3 -o /dev/null {url}")
+            softphone.succeed(f"curl -sf --max-time 3 -o /dev/null {bootstrap_url}")
       '';
   }

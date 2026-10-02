@@ -4,6 +4,13 @@ description: Install Nix and restore the nix store from the GitHub Actions cache
 runs:
   using: composite
   steps:
+    # ubuntu's apparmor lets an unprivileged process create a user namespace but not
+    # map ids in it, and the config check runs asterisk in a namespace of its own
+    # from inside the build sandbox. https://github.com/actions/runner-images/issues/10443
+    - name: Allow unprivileged user namespaces
+      shell: bash
+      run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
     # also opens /dev/kvm to the build users, which the vm tests need
     - name: Install Nix
       uses: cachix/install-nix-action@v31

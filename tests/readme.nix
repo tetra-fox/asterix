@@ -303,11 +303,11 @@
       };
     };
 
-  # the rows of the HT8xx section's tables that start with one P-value, those
-  # of every adapter and of port 1, are what the HT801's file has, except the
-  # ones set only on request
+  # the rows of the Grandstream adapters' tables that start with one P-value,
+  # those of every adapter and of port 1, are what the HT801's file has,
+  # except the ones set only on request
   tableProblems = let
-    section = builtins.head (lib.splitString "\n## " (builtins.elemAt (lib.splitString "\n## Grandstream HT8xx\n" (builtins.readFile ../PROVISIONING.md)) 1));
+    section = builtins.head (lib.splitString "\n## " (builtins.elemAt (lib.splitString "\n## Grandstream adapters\n" (builtins.readFile ../PROVISIONING.md)) 1));
     rows = lib.filter (line: builtins.match "[|] P[0-9]+ +[|].*" line != null && !(lib.hasInfix "if set" line)) (lib.splitString "\n" section);
     listed = map (row: builtins.head (builtins.match "[|] (P[0-9]+) .*" row)) rows;
     files = lib.filterAttrs (name: _: lib.hasPrefix "cfg" name) systems.phones.pbx.phones.files;

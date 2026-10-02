@@ -120,8 +120,10 @@ def place(asterisk, spool, name, text, limit):
     """Places a call and waits until it has ended and every channel is gone."""
     done = spool / "outgoing_done" / name
     start = time.monotonic()
-    # pbx_spool reads a file once it is moved into outgoing/
+    # pbx_spool reads a file once it is moved into outgoing/, and holds it until
+    # time(2) reaches its mtime, which for a file written just now can be the next second
     (spool / name).write_text(text)
+    os.utime(spool / name, (0, 0))
     os.rename(spool / name, spool / "outgoing" / name)
     limit_reached = False
     while not done.exists() or active_channels(asterisk) > 0:

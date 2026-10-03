@@ -1,5 +1,4 @@
-// The request handling of provisioning-server, a library so that its fuzz
-// target (fuzz/) runs the same code on connections held in memory.
+// The request handling of provisioning-server, over HTTP and TFTP.
 
 pub mod tftp;
 
@@ -146,7 +145,7 @@ fn respond(files: &Files, request: &Request<Incoming>, peer: IpAddr) -> Response
 }
 
 // answers one request from peer and logs it, or logs what ended the connection
-pub async fn serve_connection(
+async fn serve_connection(
     stream: impl AsyncRead + AsyncWrite + Unpin,
     peer: IpAddr,
     files: &Files,

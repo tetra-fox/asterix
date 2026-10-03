@@ -335,19 +335,3 @@ nix run nixpkgs#nix-fast-build -- --flake .#checks.x86_64-linux
 | run every non-VM check against all of them | `python3 tests/campaign/packages.py DIR`, logs in `DIR`. Add `--nixpkgs REF` for another nixpkgs |
 
 The checks build against nixpkgs' `asterisk` otherwise.
-
-### Fuzzing
-
-1. Build the provisioning server's libFuzzer target:
-   `nix build .#provisioning-server-fuzz`.
-2. Fuzz on 8 cores until stopped:
-
-```sh
-mkdir -p DIR/corpus
-result/bin/connection -fork=8 -ignore_crashes=1 -close_fd_mask=2 \
-  -dict=pkgs/provisioning-server/fuzz/connection.dict -artifact_prefix=DIR/ \
-  DIR/corpus pkgs/provisioning-server/fuzz/seeds/connection
-```
-
-1. Crashes land in `DIR`. `result/bin/connection DIR/crash-<hash>` replays one
-   with the server's log.

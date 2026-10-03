@@ -31,7 +31,7 @@ const FILE_NOT_FOUND: u16 = 1;
 const ACCESS_VIOLATION: u16 = 2;
 
 #[derive(Debug, PartialEq)]
-pub enum Packet<'a> {
+enum Packet<'a> {
     Read { name: &'a str, netascii: bool },
     Write,
     Ack(u16),
@@ -39,7 +39,7 @@ pub enum Packet<'a> {
     Invalid,
 }
 
-pub fn parse(datagram: &[u8]) -> Packet<'_> {
+fn parse(datagram: &[u8]) -> Packet<'_> {
     let Some((opcode, rest)) = datagram.split_first_chunk() else {
         return Packet::Invalid;
     };
@@ -101,7 +101,7 @@ fn netascii(body: &[u8]) -> Bytes {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum Reply<'a> {
+enum Reply<'a> {
     Transfer { name: &'a str, body: Bytes },
     Refuse(u16, &'static str),
     Ignore,
@@ -110,7 +110,7 @@ pub enum Reply<'a> {
 // the answer to a packet from peer, which has no transfer running. Only
 // requests are answered, so that a packet with a forged source address draws
 // no more than its own length, or a file
-pub fn respond<'a>(files: &Files, packet: &Packet<'a>, peer: IpAddr) -> Reply<'a> {
+fn respond<'a>(files: &Files, packet: &Packet<'a>, peer: IpAddr) -> Reply<'a> {
     match *packet {
         Packet::Read {
             name,

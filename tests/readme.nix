@@ -121,10 +121,6 @@
       lang = "sh";
       start = "nix flake check";
     }
-    {
-      lang = "sh";
-      start = "mkdir -p DIR/corpus\n";
-    }
   ];
   provisioningOutline = [
     {
@@ -289,20 +285,6 @@
       };
     };
 
-  # the fuzzing commands name files of this repository and the fuzz target's
-  # program, as `nix build` links it to result/
-  fuzzingProblems = let
-    words = lib.filter (word: builtins.isString word && word != "") (builtins.split "[[:space:]=\\]+" (elemAt readme 11).text);
-    missing = lib.filter (word: lib.hasPrefix "pkgs/" word && !builtins.pathExists (../. + "/${word}")) words;
-    programs = map (lib.removePrefix "result/") (lib.filter (lib.hasPrefix "result/") words);
-    program = "bin/${baseNameOf (lib.getExe self.packages.${pkgs.stdenv.hostPlatform.system}.provisioning-server-fuzz)}";
-  in
-    lib.optional (missing != [] || lib.unique programs != [program]) {
-      fuzzing = {
-        inherit missing programs program;
-      };
-    };
-
   # the rows of the Grandstream adapters' tables that start with one P-value,
   # those of every adapter and of port 1, are what the HT801's file has,
   # except the ones set only on request
@@ -330,7 +312,6 @@ in {
       ++ flakeProblems
       ++ escapingProblems
       ++ renderedProblems
-      ++ fuzzingProblems
       ++ tableProblems;
 
   derivations = lib.mapAttrs (_: systemBuild) {

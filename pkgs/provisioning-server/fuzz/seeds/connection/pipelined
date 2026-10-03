@@ -1,6 +1,0 @@
-0?GET /cfgc074ad000102.xml HTTP/1.1
-Host: 10.0.20.10
-
-GET /cfgc074ad000101.xml HTTP/1.1
-Host: 10.0.20.10
-

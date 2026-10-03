@@ -1,10 +1,19 @@
 # asterix
 
-NixOS module for [Asterisk](https://www.asterisk.org/), with a provisioning server for phones and an optional, opinionated layer for common setups such as ring groups and business hours.
+NixOS module for Asterisk, with a provisioning server for phones and an optional, opinionated layer for common setups such as ring groups and business hours.
 
 Intended for anything from a household intercom to a small office PBX with SIP trunks, conferences and queues.
 
+| Docs                               | What                                        |
+| ---------------------------------- | ------------------------------------------- |
+| [Quick start](#quick-start)        | two phones calling each other               |
+| [examples/](examples/)             | complete configs, each run in a VM test     |
+| [PROVISIONING.md](PROVISIONING.md) | phones that fetch their config from the PBX |
+| `nix build .#docs`                 | the reference of every option               |
+
 ## Quick start
+
+1. **Add asterix to your flake.** And optionally, a secrets manager such as sops-nix or agenix.
 
 ```nix
 # flake.nix
@@ -37,6 +46,9 @@ Intended for anything from a household intercom to a small office PBX with SIP t
   };
 }
 ```
+
+1. **Write `pbx.nix`**: two phones that call each other by dialing 101 and
+   102, with their passwords in `secrets.yaml`.
 
 ```nix
 # pbx.nix: two phones that call each other by dialing 101 and 102
@@ -76,34 +88,32 @@ in
 }
 ```
 
-Phones register as user `101`/`102` with the password from `secrets.yaml`, at
-the host's address on port 5060, over UDP or TCP.
-`asterisk -rx "pjsip show endpoints"` shows them.
+1. **Deploy, then register a phone:**
 
-`openFirewall` opens SIP and RTP on every interface. On a host with a public
-address, limit it with `firewallInterfaces` and a SIP ACL (`pjsip.acls`), as
-[the intercom example](examples/household-intercom.nix) does.
+   | Setting  | Value                                      |
+   | -------- | ------------------------------------------ |
+   | Server   | the host's address, port 5060, UDP or TCP  |
+   | User     | `101` or `102`                             |
+   | Password | `sip-101` or `sip-102` from `secrets.yaml` |
 
-See [examples](examples/) for more.
+   `asterisk -rx "pjsip show endpoints"` shows them.
 
-A full list of options is in the options reference: `nix build .#docs`.
+2. **On a host with a public address, narrow the firewall.** `openFirewall`
+   opens SIP and RTP on every interface. Add `firewallInterfaces` and a SIP
+   ACL (`pjsip.acls`), as [the intercom example](examples/household-intercom.nix)
+   does.
 
 ## Features
 
-- **Asterisk as Nix options:** PJSIP phones and trunks, dialplan, voicemail,
-  conferences, queues, music on hold, call features, AMI, ARI and call
-  records. Anything else goes in `settings`.
-- **A bad config fails the build.** Asterisk boots the new config in the build
-  sandbox, and any error or warning fails it, as does a dialplan that uses a
-  missing application, sound or extension. See `checkConfig`.
-- **Deploys reload instead of restart** where they can, so calls stay up.
-- **Several networks:** give each its own transport and pin phones to it.
-  Asterisk relays the audio between them.
-- **NAT** on either side, plus STUN and TURN.
-- **Sandboxed:** `systemd-analyze security` rates it 1.5.
-- **Phone provisioning** for Cisco, Fanvil, Grandstream, Poly, Snom and
-  Yealink devices through the pbx layer, see
-  [PROVISIONING.md](PROVISIONING.md).
+| Feature                          | What                                                                                                                                                                          |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Asterisk as Nix options**      | PJSIP phones and trunks, dialplan, voicemail, conferences, queues, music on hold, call features, AMI, ARI and call records. Anything else goes in `settings`                  |
+| **A bad config fails the build** | Asterisk boots the new config in the build sandbox, and any error or warning fails it, as does a dialplan that uses a missing application, sound or extension (`checkConfig`) |
+| **Reloads, not restarts**        | deploys reload where they can, so calls stay up                                                                                                                               |
+| **Several networks**             | each gets its own transport and phones are pinned to it. Asterisk relays the audio between them                                                                               |
+| **NAT**                          | on either side, plus STUN and TURN                                                                                                                                            |
+| **Sandboxed**                    | `systemd-analyze security` rates it 1.5                                                                                                                                       |
+| **Phone provisioning**           | Cisco, Fanvil, Grandstream, Poly, Snom and Yealink devices, through the pbx layer: [PROVISIONING.md](PROVISIONING.md)                                                         |
 
 ## Secrets
 
@@ -117,35 +127,30 @@ sops.secrets.sip-101.reloadUnits = [ "asterisk.service" ]; # reload on change, n
 services.asterisk.pjsip.endpoints."101".auth.password = config.lib.asterisk.secret config.sops.secrets.sip-101.path;
 ```
 
-Plain strings work too, but they land in the world-readable Nix store, and the
-module warns about them.
+| Case                                                           | What happens                                                                                                                                                                                                                                 |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| a plain string instead                                         | works, but lands in the world-readable Nix store, and the module warns                                                                                                                                                                       |
+| a secret in a longer value, like `"${secret path},Front desk"` | works, but Asterisk splits it at commas, so it won't start if the secret has one                                                                                                                                                             |
+| a secret in a dialplan argument                                | Asterisk logs it everywhere (verbose output, `core show channels`, CDR, CEL, AMI). To check a PIN, use `Authenticate(/run/credentials/asterisk.service/<name>)` with `services.asterisk.credentials.<name>` and `app_authenticate.so` loaded |
+| more than 256 secret files and credentials                     | the build fails: that's systemd's cap per service                                                                                                                                                                                            |
+| a crash                                                        | core dumps are off, since they'd hold every secret. `systemd.services.asterisk.serviceConfig.LimitCORE = "infinity";` turns them on                                                                                                          |
 
-- A secret can be part of a longer value, like `"${secret path},Front desk"`,
-  but Asterisk splits that at commas, so it won't start if the secret has
-  one.
-- Keep secrets out of dialplan arguments. Asterisk logs those everywhere
-  (verbose output, `core show channels`, CDR, CEL, AMI). To check a PIN, use
-  `Authenticate(/run/credentials/asterisk.service/<name>)` with
-  `services.asterisk.credentials.<name>` and `app_authenticate.so` loaded.
-- At runtime, secrets are readable by root, the `asterisk` user and group,
-  programs the dialplan starts, AMI users with the write classes listed in
-  `services.asterisk.ami.users.<name>.write`, and ARI users (voicemail PINs
-  during a call, every PJSIP password if `res_ari_asterisk.so` is loaded).
-- Secret files and `services.asterisk.credentials` entries share systemd's
-  cap of 256 credentials per service. Past that, the build fails.
-- Core dumps are off since they'd hold every secret. To debug a crash, set
-  `systemd.services.asterisk.serviceConfig.LimitCORE = "infinity";`.
+At runtime, secrets are readable by root, the `asterisk` user and group,
+programs the dialplan starts, AMI users with the write classes listed in
+`services.asterisk.ami.users.<name>.write`, and ARI users (voicemail PINs
+during a call, every PJSIP password if `res_ari_asterisk.so` is loaded).
 
 ## Custom config
 
-Any Asterisk config file can be written in `settings`, one attribute per
-section:
+| To                                    | Use                                                              |
+| ------------------------------------- | ---------------------------------------------------------------- |
+| write any Asterisk config file        | `services.asterisk.settings."<file>"`, one attribute per section |
+| change a section the options generate | the same, with the section's id from the table below             |
+| add raw text                          | `services.asterisk.extraConfig."<file>"`                         |
 
 ```nix
 services.asterisk.settings."followme.conf"."101".number = [ "5551234,30" ];
 ```
-
-The same works on what the options generate, by section id:
 
 | File            | Section ids                                                                                                                                        |
 | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -157,12 +162,10 @@ The same works on what the options generate, by section id:
 services.asterisk.settings."pjsip.conf"."endpoint:101".direct_media = true;
 ```
 
-For raw text there's `extraConfig."<file>"`.
-
 ## Dialplan
 
-Asterisk's `${VAR}` looks like Nix interpolation, so escape it. Each of these
-produces `Dial(PJSIP/${EXTEN},30)`:
+Asterisk's `${VAR}` looks like Nix interpolation, so escape it. Semicolons
+need no escaping. Each of these produces `Dial(PJSIP/${EXTEN},30)`:
 
 ```nix
 "Dial(PJSIP/\${EXTEN},30)"
@@ -170,7 +173,12 @@ produces `Dial(PJSIP/${EXTEN},30)`:
 "Dial(PJSIP/${var "EXTEN"},30)"   # var = config.lib.asterisk.dialplan.var
 ```
 
-Semicolons don't need escaping.
+| Helper              | Gives                       | From                                                           |
+| ------------------- | --------------------------- | -------------------------------------------------------------- |
+| `var "NAME"`        | `${NAME}`                   | `config.lib.asterisk.dialplan`, or `asterix.lib` outside NixOS |
+| `app "Name" [args]` | a step calling `Name(args)` | the same                                                       |
+
+A dialplan with both:
 
 ```nix
 { config, ... }:
@@ -215,15 +223,24 @@ exten => 800,1,Answer()
  same => n,ConfBridge(800)
 ```
 
-`var` and `app` are in `config.lib.asterisk.dialplan`, or `asterix.lib`
-outside NixOS.
-
 ## PBX layer
 
-`nixosModules.pbx` adds `pbx.*`: extensions with voicemail, ring groups,
-queues, conference rooms, voice menus, paging, opening hours and trunk routes,
-the way a PBX admin thinks of them. It includes the core, so use it in place
-of `asterix.nixosModules.default` in the quick start's flake.nix:
+`nixosModules.pbx` adds `pbx.*`, the objects a PBX admin thinks in. It
+includes the core, so use it in place of `asterix.nixosModules.default` in the
+quick start's flake.nix.
+
+| Object                    | Option            |
+| ------------------------- | ----------------- |
+| extensions with voicemail | `pbx.extensions`  |
+| ring groups               | `pbx.ringGroups`  |
+| queues                    | `pbx.queues`      |
+| conference rooms          | `pbx.conferences` |
+| voice menus               | `pbx.ivrs`        |
+| paging groups             | `pbx.paging`      |
+| opening hours             | `pbx.hours`       |
+| calls in, by number       | `pbx.inbound`     |
+| calls out, by prefix      | `pbx.outbound`    |
+| emergency numbers         | `pbx.emergency`   |
 
 ```nix
 # pbx.nix: extensions 201 and 202, and calls to and from a provider
@@ -268,16 +285,14 @@ in
 }
 ```
 
-Each object becomes its own context, `pbx-<kind>-<name>`, and phones dial from
-`pbx-internal`. Everything the layer generates is a default on the core
-options, so those or `settings` can override it.
+| Rule                  | What                                                                                                                                               |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| contexts              | each object gets its own, `pbx-<kind>-<name>`. phones dial from `pbx-internal`                                                                     |
+| overrides             | everything the layer generates is a default on the core options, which or `settings` override                                                      |
+| refused at evaluation | a number with two owners, a missing trunk, member or destination, a loop of destinations that no key press breaks                                  |
+| emergency numbers     | no default, since they depend on where the PBX is. `outbound` requires them, or `emergency.numbers = [ ];` for a PBX that makes no emergency calls |
 
-Evaluation fails on a number with two owners, a missing trunk, member or
-destination, or a loop of destinations that no key press breaks.
-
-A voice menu plays a prompt, recorded or spoken by flite at build time, and
-sends each key to a destination. A paging group calls several phones and asks
-them to auto-answer:
+Voice menus and paging groups:
 
 ```nix
 pbx = {
@@ -295,15 +310,13 @@ pbx = {
 };
 ```
 
-`{ ivr = "main"; }` works as a destination anywhere, like in `inbound`. After
-`attempts` prompts, a caller who pressed nothing goes to `noInput`, one who
-pressed an unknown key to `invalid`. Pages are one-way unless `duplex` is set,
-skip phones in a call, and only work on phones set to allow auto-answer.
+| Object     | What                                                                                                                                                                   |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| voice menu | plays a prompt, recorded or spoken by flite at build time, and sends each key to a destination. `{ ivr = "main"; }` works as a destination anywhere, like in `inbound` |
+|            | after `attempts` prompts, a caller who pressed nothing goes to `noInput`, one who pressed an unknown key to `invalid`                                                  |
+| paging     | calls several phones and asks them to auto-answer. Pages are one-way unless `duplex` is set, skip phones in a call, and only reach phones set to allow auto-answer     |
 
-Emergency numbers have no default, since they depend on where the PBX is.
-`outbound` requires them, or `emergency.numbers = [ ];` for a PBX that makes
-no emergency calls. See `pbx.emergency`, and
-[small-office.nix](examples/small-office.nix) for a complete example.
+[small-office.nix](examples/small-office.nix) is a complete example.
 
 ## Development
 
@@ -316,16 +329,18 @@ nix develop       # Rust toolchain for the provisioning server
 nix run nixpkgs#nix-fast-build -- --flake .#checks.x86_64-linux
 ```
 
-The checks build against nixpkgs' `asterisk`. To try another version:
-`nix build .#packageChecks.asterisk_23.probe` (also `asterisk_20`,
-`asterisk_22`). `python3 tests/campaign/packages.py DIR` runs every non-VM
-check against all of them, logs in `DIR`; add `--nixpkgs REF` for another
-nixpkgs.
+| To                                         | Run                                                                                              |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| build the checks against another Asterisk  | `nix build .#packageChecks.asterisk_23.probe` (also `asterisk_20`, `asterisk_22`)                |
+| run every non-VM check against all of them | `python3 tests/campaign/packages.py DIR`, logs in `DIR`. Add `--nixpkgs REF` for another nixpkgs |
+
+The checks build against nixpkgs' `asterisk` otherwise.
 
 ### Fuzzing
 
-`nix build .#provisioning-server-fuzz` builds a libFuzzer target for the
-provisioning server. To fuzz on 8 cores until stopped:
+1. Build the provisioning server's libFuzzer target:
+   `nix build .#provisioning-server-fuzz`.
+2. Fuzz on 8 cores until stopped:
 
 ```sh
 mkdir -p DIR/corpus
@@ -334,5 +349,5 @@ result/bin/connection -fork=8 -ignore_crashes=1 -close_fd_mask=2 \
   DIR/corpus pkgs/provisioning-server/fuzz/seeds/connection
 ```
 
-Crashes land in `DIR`. `result/bin/connection DIR/crash-<hash>` replays one
-with the server's log.
+1. Crashes land in `DIR`. `result/bin/connection DIR/crash-<hash>` replays one
+   with the server's log.

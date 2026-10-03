@@ -1,7 +1,7 @@
 # Provisioning phones
 
 The PBX writes each phone's and adapter's config, SIP accounts included, and
-serves it over HTTP. You list the devices; they fetch their file on boot.
+serves it over HTTP. You list the devices, and they fetch their file on boot.
 
 ## Quick start
 
@@ -57,7 +57,7 @@ All under `pbx.phones`.
 | `adminPassword`                         | device's own            | web interface password, normally a secret reference                     |
 | `devices.<name>.model`                  | required                | `<vendor>-<model>`, from [Supported devices](#supported-devices)        |
 | `devices.<name>.mac`                    | required                | any spelling: `c0:74:ad:00:01:01`, `C0-74-AD-00-01-01`, `c074ad000101`  |
-| `devices.<name>.lines`                  | `[ <name> ]`            | the endpoint each line registers as, from line 1; `null` leaves one off |
+| `devices.<name>.lines`                  | `[ <name> ]`            | the endpoint each line registers as, from line 1. `null` leaves one off |
 | `devices.<name>.allowedAddress`         | anyone                  | the only address that may fetch the device's file                       |
 | `devices.<name>.settings`               | `{}`                    | raw settings in the vendor's keys, over everything else                 |
 | `<vendor>.settings`                     | `{}`                    | raw settings for all of a vendor's devices                              |
@@ -441,7 +441,7 @@ HT812, HT814 and HT818: every port registers with profile 1, which gets P271
   P1414 (turning it off might stop provisioning).
 - Web interface password: 4 to 30 characters on V2 hardware, no spaces on V1.
 - IPv6 goes into P47 bare and into P237 in brackets.
-- Calls ring the phone; it can't auto-answer.
+- Calls ring the phone. It can't auto-answer.
 
 ## Grandstream phones
 
@@ -464,7 +464,7 @@ GXV33xx, GXV34xx) take a zone name like `Europe/Berlin` in P64, from
 
 - The GRP260x has accounts 5 and 6 at P701 to P706 and P801 to P806.
 - W, P and G variants take the model they extend, except the GRP2613W.
-- The GXP1610/1615 get 1 line, as their template says; their datasheet says 2.
+- The GXP1610/1615 get 1 line, as their template says. Their datasheet says 2.
 - Older GRP2612/2613 hardware has 2 and 3 accounts.
 
 ## Poly
@@ -485,7 +485,7 @@ VVX phones on UC Software, Edge E phones on PVOS. `<mac>.cfg` names
 | `reg.n.auth.userId`, `reg.n.auth.password`                              | auth user, password                  | the endpoint's                       |
 | `reg.n.server.1.address`, `port`                                        | SIP server                           | `sipServer`, `sipPort`               |
 
-- Each `device.*` parameter comes with its `.set` at `1`; one from `settings`
+- Each `device.*` parameter comes with its `.set` at `1`. One from `settings`
   needs that too.
 - Changes on the phone win over provisioning until they're reset (Settings >
   Advanced > Administration Settings > Reset to Defaults).
@@ -512,7 +512,7 @@ D series desk phones on firmware 10.1. The file name has the MAC in uppercase.
 
 - `settings` keys are a setting's name, or `name[index]` for an indexed one:
   `"user_realname[1]" = "Reception"`.
-- What the module sets is read-only on the phone; `setting_server` and
+- What the module sets is read-only on the phone. `setting_server` and
   `settings` are writable.
 - A setting removed from the config keeps its last value on the phone.
 - The D862 and D865 show a welcome screen until `language` is set.
@@ -539,7 +539,7 @@ Desk and conference phones on firmware V84 or later.
 - Admin password: 1 to 32 characters from `!` to `~`, no colon. V87 firmware
   makes you change the default one on first use.
 - A phone a reseller put in Yealink's RPS can be set up from the reseller's
-  server after a factory reset; Yealink's RPS MAC removal tool takes it out.
+  server after a factory reset. Yealink's RPS MAC removal tool takes it out.
 - DECT base stations (W60B, W70B, W80B) aren't supported.
 
 ## Other devices
@@ -557,7 +557,7 @@ pbx.phones.files."0015651234ab.cfg" = {
 
 | Option           | Default | What                                                              |
 | ---------------- | ------- | ----------------------------------------------------------------- |
-| `text`           |         | contents; secret references are filled in when the service starts |
+| `text`           |         | contents. Secret references are filled in when the service starts |
 | `escape`         | `none`  | `xml` escapes secrets, `line` refuses one with a line break       |
 | `allowedAddress` | anyone  | the only address that may fetch the file                          |
 | `tftp`           | off     | serve it over TFTP too, on UDP port 69                            |
@@ -584,8 +584,8 @@ counts against the vendors' datasheets.
 | Vendor      | Documents                                                                                                                                                                                                                                                                                                                                                                                                                |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Cisco       | Multiplatform desk and conference phone admin guides (12.0(7)SR3), ATA 191/192 provisioning guide (11.3(1)), SPA100 provisioning guide (1.3), SPA300/SPA500 admin guide (OL-19749-09), SPA8000 admin guide (OL-17901-01)                                                                                                                                                                                                 |
-| Fanvil      | the key maps and help texts inside the firmware images at download.fanvil.com (2.4 to 2.14); Fanvil's public guides don't list the keys                                                                                                                                                                                                                                                                                  |
+| Fanvil      | the key maps and help texts inside the firmware images at download.fanvil.com (2.4 to 2.14). Fanvil's public guides don't list the keys                                                                                                                                                                                                                                                                                  |
 | Grandstream | `config-template.zip` from grandstream.com/support/tools: ht80x 1.0.65.3, ht80x_v2 1.0.15.3, ht81x 1.0.65.3, ht81x_v2 1.0.15.3, ht813 1.0.19.6, ht818 1.0.65.1, gxp16xx 1.0.7.81, gxp17xx 1.0.1.133, gxp2130_40_60_70_35 1.0.11.106, grp260x 1.0.7.71, grp26xx 1.0.15.19, wp810_822_825 1.0.11.83, wp8x6 1.0.3.39, wp820 1.0.7.90, wp856 1.0.3.16, ghp6xx 1.0.1.101, ghp63x 1.0.1.50, gxv33xx 1.0.3.57, gxv34x0 1.0.5.40 |
 | Poly        | UC Software 6.4.0 administrator guide, Edge E parameter reference (PVOS 8.2.1)                                                                                                                                                                                                                                                                                                                                           |
 | Snom        | settings reference at service.snom.com (10.1.226.16)                                                                                                                                                                                                                                                                                                                                                                     |
-| Yealink     | SIP-T2/T3/T4/T5/CP920 administrator guide (V86.60), VP59/T58/CP96X administrator guide (V86.11); the T31W and T34W take the keys FusionPBX and Wazo set                                                                                                                                                                                                                                                                  |
+| Yealink     | SIP-T2/T3/T4/T5/CP920 administrator guide (V86.60), VP59/T58/CP96X administrator guide (V86.11). The T31W and T34W take the keys FusionPBX and Wazo set                                                                                                                                                                                                                                                                  |

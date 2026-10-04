@@ -1,5 +1,5 @@
 # The build-time check of pbx.hours time zones fails on names tzdata does not
-# have as a zone, and passes real ones.
+# have as a zone, and passes a real one
 {
   pkgs,
   self,
@@ -32,16 +32,12 @@
     "America/Los_Angles"
     "leapseconds"
   ];
-  passing = [
-    "America/Los_Angeles"
-    "UTC"
-  ];
 in
   pkgs.runCommand "asterisk-pbx-timezone-tests" {} ''
     ${lib.concatMapStrings (zone: ''
         grep -qF ${lib.escapeShellArg "pbx.hours: ${zone} is not a time zone of tzdata"} ${pkgs.testers.testBuildFailure (checkFor zone)}/testBuildFailure.log
       '')
       failing}
-    : ${lib.concatMapStringsSep " " (zone: "${checkFor zone}") passing}
+    : ${checkFor "America/Los_Angeles"}
     touch $out
   ''

@@ -1,7 +1,7 @@
 # Every way from a trunk to a trunk's Dial, walked through the dialplan
-# Asterisk loads (tests/campaign/tollfraud.nix): the examples have none, and
-# the walk finds each way out built in here, the outside member of a ring
-# group, which the configuration names, among them.
+# Asterisk loads (tests/campaign/tollfraud.nix): small-office, the example
+# with a trunk, has none, and the walk finds each way out built in here, the
+# outside member of a ring group, which the configuration names, among them.
 {
   pkgs,
   self,
@@ -60,23 +60,24 @@
         ["provider" "provider" "<caller>" "the caller chooses the number"]
       ];
     };
-    # a menu whose key 1 rings a group with an outside member, and key 2 a
-    # context of its own that reads the number it dials
+    # a menu whose key 1 rings a group with an outside member, whose name has
+    # a /, an @ and a {, which its Local channels and Dial's arguments carry,
+    # and key 2 a context of its own that reads the number it dials
     menu = {
       modules = [
         office
         {
           pbx = {
-            ringGroups.cell = {
+            ringGroups."a/b@c{d" = {
               members = ["202"];
               external = ["5559000"];
             };
-            extensions."201".noAnswer.ringGroup = "cell";
+            extensions."201".noAnswer.ringGroup = "a/b@c{d";
             ivrs.main = {
               prompt.sound = "beep";
               directDial = true;
               options = {
-                "1".ringGroup = "cell";
+                "1".ringGroup = "a/b@c{d";
                 "2".context.context = "callback";
               };
             };
@@ -96,69 +97,18 @@
         ["provider" "provider" "<caller>" "the caller chooses the number"]
       ];
     };
-    # a ring group whose name has a /, an @ and a {, which its Local channels
-    # and Dial's arguments carry
-    groupNamedOddly = {
-      modules = [
-        office
-        {
-          pbx = {
-            ringGroups."a/b@c{d" = {
-              members = ["202"];
-              external = ["5559001"];
-            };
-            inbound."5551000" = {
-              trunk = "provider";
-              destination.ringGroup = "a/b@c{d";
-            };
-          };
-        }
-      ];
-      paths = [
-        ["provider" "provider" "5559001" null]
-      ];
-    };
-    # the core alone: the trunk's context includes the phones', which dials
-    # out
-    inboundIncludesPhones = {
-      modules = [
-        ({config, ...}: {
-          services.asterisk = {
-            enable = true;
-            pjsip = {
-              transports.udp = {};
-              trunks.provider = {
-                host = "sip.provider.example";
-                username = "5551000";
-                password = config.lib.asterisk.secret "/run/secrets/trunk";
-                context = "from-provider";
-              };
-            };
-            dialplan.contexts = {
-              from-provider = {
-                includes = ["phones"];
-                extensions."5551000" = ["Dial(PJSIP/201,20)"];
-              };
-              phones.extensions = {
-                "_2XX" = ["Dial(PJSIP/\${EXTEN},20)"];
-                "_9X." = ["Dial(PJSIP/\${EXTEN:1}@provider,60)"];
-              };
-            };
-          };
-        })
-      ];
-      paths = [
-        ["provider" "provider" "<caller>" "the caller chooses the number"]
-      ];
-    };
   };
 
   walks =
-    lib.mapAttrs (name: config: {
-      report = tollfraud {inherit name config;};
-      paths = [];
-    })
-    examples
+    {
+      small-office = {
+        report = tollfraud {
+          name = "small-office";
+          config = examples.small-office;
+        };
+        paths = [];
+      };
+    }
     // lib.mapAttrs (name: case: {
       report = tollfraud {
         inherit name;

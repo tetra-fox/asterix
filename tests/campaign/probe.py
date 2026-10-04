@@ -33,11 +33,10 @@ probe.json holds each command with its output, and for each call:
   channel, context, extension, priority, application and data
 - `ended`: the step each channel's dialplan ended in, and `how`: `hangup`
   (an application ended the call, or the call ended while it ran),
-  `fallthrough` (no step came next; `status` is DIALSTATUS), `invalid` (an
-  extension that does not exist), `timeout` (no key and no `t` extension) or
-  `error`
-- `answered`, `limitReached`, `seconds`, and `log`: every message Asterisk
-  logged during the call
+  `fallthrough` (no step came next), `invalid` (an extension that does not
+  exist), `timeout` (no key and no `t` extension) or `error`
+- `answered`, `limitReached`, and `log`: every message Asterisk logged during
+  the call
 
 Asterisk's JSON log format drops a message that is not valid UTF-8, so such
 a step is missing, and cuts one longer than 8 KiB, which fails the report.
@@ -135,11 +134,7 @@ def place(asterisk, spool, name, text, limit):
             raise RuntimeError(f"call {name} did not end 30 s after it was hung up")
         time.sleep(0.05)
     status = re.search(r"^Status: (.*)$", done.read_text(), re.M).group(1)
-    return {
-        "answered": status == "Completed",
-        "limitReached": limit_reached,
-        "seconds": round(time.monotonic() - start, 1),
-    }
+    return {"answered": status == "Completed", "limitReached": limit_reached}
 
 
 def drive(spec_path, out, asterisk):
@@ -194,7 +189,7 @@ ENDS = [
         "hangup",
     ),
     (re.compile(r"Spawn extension \(.*\) exited ERROR while already on 'e' exten on '(?P<channel>.*)'"), "error"),
-    (re.compile(r"Auto fallthrough, channel '(?P<channel>.*)' status is '(?P<status>.*)'"), "fallthrough"),
+    (re.compile(r"Auto fallthrough, channel '(?P<channel>.*)' status is '.*'"), "fallthrough"),
     (re.compile(r"Channel '(?P<channel>.*)' sent to invalid extension but no invalid handler: .*"), "invalid"),
     # these two name no channel: it is the one the thread last ran a step of
     (re.compile(r"Invalid extension '.*', but no rule 'i' or 'e' in context '.*'"), "invalid"),
@@ -235,7 +230,7 @@ def summary(call, window):
                 # the caller's own end, in the probe's context, has no step
                 # here, and an `h` extension can end a second time
                 if ran and all(e["channel"] != channel for e in ended):
-                    ended.append(ran[-1] | {"how": how} | ({"status": match["status"]} if how == "fallthrough" else {}))
+                    ended.append(ran[-1] | {"how": how})
                 break
     # a channel hung up in an application that then returns normally, such as
     # ConfBridge, ends with a debug message only (main/pbx.c __ast_pbx_run)

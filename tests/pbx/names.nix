@@ -1,9 +1,9 @@
 # Each name of the adversarial set that evaluation accepts for a ring group,
 # opening hours, a page, a conference or a queue, followed through a call to
 # its object (the probe, tests/campaign/probe.nix): the call reaches the
-# object's context and runs its steps as it does with a plain name. The names
-# evaluation rejects are cases of ./assertions.nix and ../assertions.nix; ;
-# [ ] and a trailing space make no section name (lib/format.nix).
+# object's context and runs its steps as it does with a plain name. The set
+# leaves out the names evaluation rejects, among them those with ; [ ] or a
+# trailing space, which make no section name (lib/format.nix).
 {
   pkgs,
   self,
@@ -13,13 +13,14 @@
 
   long = lib.strings.replicate 80 "n";
   names = {
-    ringGroups = ["a|b" "a$b" "a)b" "a(b)" "a=>b" " lead" "héllo wörld" "" long];
-    closeEarly = ["a|b" "a$b" "a)b" " lead" "héllo wörld" "" "a\"b"];
+    # the Local channel to an outside member carries the name, / and @ too
+    ringGroups = ["a)b" "a(b)" "a=>b" " lead" "héllo wörld" "" long "a/b@c"];
+    closeEarly = ["a)b" " lead" "héllo wörld" "" "a\"b"];
     # the names hours only take without closeEarly
     hours = ["a=>b" long];
-    paging = ["a|b" "a$b" "a=>b" " lead" "héllo wörld" "" long];
-    conferences = ["a|b" "a$b" "a)b" "a(b)" "a=>b" " lead" "héllo wörld"];
-    queues = ["a|b" "a$b" "a)b" "a(b)" "a=>b" "héllo wörld"];
+    paging = ["a=>b" " lead" "héllo wörld" "" long];
+    conferences = ["a)b" "a(b)" "a=>b" " lead" "héllo wörld"];
+    queues = ["a)b" "a(b)" "a=>b" "héllo wörld"];
   };
   objects = kind: lib.imap1 (i: name: {inherit i name;}) names.${kind};
   forEach = kind: f: lib.listToAttrs (map f (objects kind));

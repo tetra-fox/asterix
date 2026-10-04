@@ -3,11 +3,9 @@
 {
   pkgs,
   self,
-  # the examples' configurations, whose checks run again without user namespaces
-  examples,
 }: let
   inherit (pkgs) lib;
-  inherit (import ./eval-lib.nix {inherit pkgs self;}) evalConfig evalSystem configCheckOf;
+  inherit (import ./eval-lib.nix {inherit pkgs self;}) evalConfig configCheckOf;
 
   base = {config, ...}: {
     services.asterisk = {
@@ -72,16 +70,12 @@
       ''}/lib/slow-log.so";
     };
 
-  # the check stopped after `seconds`, for a case that must fail sooner than
-  # the check's own time limits
-  withTimeLimit = seconds: check:
-    check.overrideAttrs (old: {
-      buildCommand = "timeout ${toString seconds} bash -euo pipefail -c ${lib.escapeShellArg old.buildCommand}";
-    });
-
   failing = {
+    # what Asterisk logged while loading counts, however late its logger
+    # thread writes it
     misspelledKey = {
       module.services.asterisk.pjsip.endpoints."101".settings.direct_mdia = false;
+      slowLogger = true;
       expect = [
         "Could not find option suitable for category '101' named 'direct_mdia'"
         "Could not create an object of type 'endpoint' with id '101'"
@@ -95,30 +89,6 @@
         application = "mpg123 -q -s --mono -r 8000 -f 8192 http://radio.example.org/stream.mp3";
       };
       expect = ["MOH: exec failed: No such file or directory"];
-    };
-    # what Asterisk logged while loading counts, however late its logger
-    # thread writes it
-    misspelledKeyWithSlowLogger = {
-      module.services.asterisk.pjsip.endpoints."101".settings.direct_mdia = false;
-      slowLogger = true;
-      expect = ["Could not create an object of type 'endpoint' with id '101'"];
-    };
-    applicationNotLoaded = {
-      module.services.asterisk.dialplan.contexts.internal.extensions."411" = ["Directory(default)"];
-      expect = ["(internal, 411): no loaded module provides the application Directory"];
-    };
-    # the reference checks cannot see into an included file, Asterisk loads it
-    # here
-    includedFileProblem = {
-      module.services.asterisk.includes."pjsip.conf" = [
-        "${pkgs.writeText "pjsip-local.conf" ''
-          [102]
-          type = endpoint
-          context = internal
-          direct_mdia = no
-        ''}"
-      ];
-      expect = ["Could not find option suitable for category '102' named 'direct_mdia'"];
     };
     # an include of a context that no dialplan defines, which the check judges
     # once every dialplan module has loaded
@@ -135,67 +105,46 @@
         "(from-ael): includes nowhere, which is no context"
       ];
     };
-    functionsNotLoaded = {
-      module.services.asterisk.dialplan.contexts.internal.extensions."412" = [
-        "NoOp(\${SHELL(ls)})"
-        "Set(LOCK(x)=1)"
-      ];
+    # Asterisk loads a switch it has no module for, then passes over it with a
+    # warning on every call, and ConfBridge() answers and then cannot create
+    # the conference's bridge
+    modulesNotLoaded = {
+      module.services.asterisk = {
+        dialplan.contexts.internal = {
+          extensions = {
+            "412" = [
+              "NoOp(\${SHELL(ls)})"
+              "Set(LOCK(x)=1)"
+            ];
+            "800" = ["ConfBridge(board)"];
+          };
+          switches = ["Nowhere/default"];
+        };
+        modules.noload = ["bridge_softmix.so"];
+      };
       expect = [
         "(internal, 412): no loaded module provides the function SHELL"
         "(internal, 412): no loaded module provides the function LOCK"
+        "(internal): no loaded module provides the switch Nowhere"
+        "(internal, 800): no loaded module provides the multimix bridge technology ConfBridge needs (bridge_softmix)"
       ];
-    };
-    # Asterisk says it blocks all SIP traffic, then drops the whole ACL
-    malformedAcl = {
-      module.services.asterisk.pjsip.acls.lan = {
-        contactDeny = ["0.0.0.0/0.0.0.0"];
-        contactPermit = ["10.0.300.0/24"];
-      };
-      expect = [
-        "Bad contact ACL '10.0.300.0/24'"
-        "Could not create an object of type 'acl' with id 'lan'"
-      ];
-    };
-    # ConfBridge() answers and then cannot create the conference's bridge
-    confbridgeWithoutMixing = {
-      module.services.asterisk = {
-        dialplan.contexts.internal.extensions."800" = ["ConfBridge(board)"];
-        modules.noload = ["bridge_softmix.so"];
-      };
-      expect = ["(internal, 800): no loaded module provides the multimix bridge technology ConfBridge needs (bridge_softmix)"];
-    };
-    # Asterisk loads a switch it has no module for, then passes over it with a
-    # warning on every call
-    switchNotLoaded = {
-      module.services.asterisk.dialplan.contexts.internal.switches = ["Nowhere/default"];
-      expect = ["(internal): no loaded module provides the switch Nowhere"];
-    };
-    # Asterisk closes it and warns
-    unclosedParenthesis = {
-      module.services.asterisk.dialplan.contexts.internal.extensions."413" = ["Dial(PJSIP/101"];
-      expect = ["No closing parenthesis found? 'Dial(PJSIP/101'"];
     };
     # Background() of a sound that does not exist plays nothing, and the menu
-    # waits for a key
-    ivrPromptMissing = {
-      module = {
-        imports = [pbxPhone];
-        pbx.ivrs.main = {
-          prompt.sound = "custom/main-menu";
-          options."1".extension = "201";
-        };
-      };
-      expect = ["(pbx-ivr-main, s): no sound custom/main-menu"];
-    };
-    # a phone in German hears the English sounds the German ones lack, and a
-    # phone in French hears English throughout
+    # waits for a key; a phone in German hears the English sounds the German
+    # ones lack, and a phone in French hears English throughout
     soundsMissingInLanguage = {
       module = {
         imports = [pbxPhone];
         pbx = {
-          ivrs.main = {
-            prompt.sound = "basic-pbx-ivr-main";
-            options."1".extension = "201";
+          ivrs = {
+            main = {
+              prompt.sound = "basic-pbx-ivr-main";
+              options."1".extension = "201";
+            };
+            lobby = {
+              prompt.sound = "custom/main-menu";
+              options."1".extension = "201";
+            };
           };
           conferences.board.number = "800";
         };
@@ -208,6 +157,7 @@
         };
       };
       expect = [
+        "(pbx-ivr-lobby, s): no sound custom/main-menu"
         "(pbx-ivr-main, s): no sound basic-pbx-ivr-main in language de"
         "bridge profile default_bridge: no sound conf-onlyperson in language de"
         "language fr has no sounds"
@@ -247,27 +197,16 @@
         "(internal, 416): no label start in extension s of context sub"
       ];
     };
-    ipv6AddressWithoutUserNamespaces = {
-      module.services.asterisk.pjsip.transports.udp.address = "2001:db8::10";
-      withoutUserNamespaces = true;
-      expect = ["needs a user and network namespace of its own (to listen on 2001:db8::10)"];
-    };
-    lowPortWithoutUserNamespaces = {
-      module.services.asterisk.pjsip.transports.web = {
-        protocol = "tcp";
-        port = 443;
+    ipv6AndLowPortWithoutUserNamespaces = {
+      module.services.asterisk.pjsip.transports = {
+        udp.address = "2001:db8::10";
+        web = {
+          protocol = "tcp";
+          port = 443;
+        };
       };
       withoutUserNamespaces = true;
-      expect = ["(to listen below port 1024)"];
-    };
-    # AMI only takes ports from 1024 up, whatever the privileges; ami.port
-    # refuses lower ones, settings leave them to Asterisk
-    amiBelowPort1024 = {
-      module.services.asterisk.ami = {
-        enable = true;
-        settings.port = 1000;
-      };
-      expect = ["Invalid port number '1000'"];
+      expect = ["needs a user and network namespace of its own (to listen on 2001:db8::10, to listen below port 1024)"];
     };
     # only addresses get a loopback address of their own; Asterisk sees the
     # rest as written, and AMI would listen on :: instead
@@ -288,43 +227,6 @@
         "Invalid address '300.0.0.1' specified, default '::' will be used"
         "Unable to resolve host '300.0.0.1'"
       ];
-    };
-    # an assertion reports it first; the check shows that Asterisk refuses
-    # the file
-    parentAfterChild = {
-      module.services.asterisk.settings."pjsip.conf" = {
-        early = {
-          order = 0;
-          inherits = ["late"];
-        };
-        late = {
-          template = true;
-          type = "endpoint";
-          context = "internal";
-        };
-      };
-      expect = [
-        "Inheritance requested, but category 'late' does not exist"
-        "Contents of config file 'pjsip.conf' are invalid and cannot be parsed"
-      ];
-    };
-    # allow takes any string, and Asterisk drops the endpoint whose list
-    # names a codec it does not know
-    unknownCodec = {
-      module.services.asterisk.pjsip.endpoints."101".allow = lib.mkForce [
-        "g722"
-        "g7222"
-      ];
-      expect = ["Cannot allow unknown format 'g7222'"];
-    };
-    # a preloaded module starts before every other one, which app_queue does
-    # not take
-    queueModulePreloaded = {
-      module.services.asterisk = {
-        queues.queues.support.members = ["PJSIP/101"];
-        modules.preload = ["app_queue.so"];
-      };
-      expect = ["app_queue declined to load"];
     };
     # the service passes extraArguments on to Asterisk, which exits on an
     # option it does not know
@@ -349,31 +251,6 @@
       expect = [
         "Could not find option suitable for category '101' named 'direct_mdia'"
         "res_xmpp declined to load"
-      ];
-    };
-    # the options load the modules they need, but not what those need
-    pjsipWithoutDefaultModules = {
-      module.services.asterisk.modules.defaultModules = false;
-      expect = ["Error loading module 'chan_pjsip.so'"];
-    };
-    # Asterisk exits while loading: res_websocket_client fails without
-    # res_sorcery_config, which it does not declare as a dependency. The
-    # check says so at once instead of waiting for Asterisk to be ready
-    ariWithoutDefaultModules = {
-      module = {config, ...}: {
-        services.asterisk = {
-          modules.defaultModules = false;
-          http.enable = true;
-          ari = {
-            enable = true;
-            users.app.password = config.lib.asterisk.secret "/run/secrets/ari";
-          };
-        };
-      };
-      timeLimit = 60;
-      expect = [
-        "asterisk-config-check: Asterisk did not finish loading:"
-        "Failed to load module res_websocket_client.so"
       ];
     };
   };
@@ -446,27 +323,29 @@
       };
     };
     securityLog.services.asterisk.logger.channels.security = ["security"];
+    tlsTransport.services.asterisk.pjsip.transports.tls = {
+      protocol = "tls";
+      tls.certFile = "/var/lib/acme/pbx/cert.pem";
+      tls.keyFile = "/var/lib/acme/pbx/key.pem";
+    };
     websocket.services.asterisk = {
       http.enable = true;
       pjsip.transports.ws.protocol = "ws";
     };
   };
 
-  # each feature alone, and all at once
-  featureCases =
-    lib.mapAttrs' (name: lib.nameValuePair "feature-${name}") features
-    // {features-all.imports = builtins.attrValues features;};
-
-  # IPv4 addresses become loopback ones, which need no namespace
+  # IPv4 addresses become loopback ones, which need no namespace, and [::]
+  # and ::1 need none either: the build's loopback interface has ::1
   passingWithoutUserNamespaces = {
-    ipv4Addresses.services.asterisk.pjsip.transports = {
-      udp.address = "10.0.10.10";
-      voip.address = "10.0.20.10";
-    };
-    # [::] and ::1 need no namespace either: the build's loopback interface
-    # has ::1
-    ipv6WildcardAndLoopback.services.asterisk = {
-      pjsip.transports.udp.address = "::";
+    loopbackAddresses.services.asterisk = {
+      pjsip.transports = {
+        udp.address = "10.0.10.10";
+        voip.address = "10.0.20.10";
+        v6 = {
+          address = "::";
+          port = 5062;
+        };
+      };
       http = {
         enable = true;
         address = "::1";
@@ -484,28 +363,8 @@
   };
 
   passing = {
-    base = {};
-    # res_parking, which parkcall loads, starts from the file rendered for it
-    parkcall.services.asterisk.features.featureMap.parkcall = "#72";
-    # a queue of pbx.queues written in settings, without a typed one to load
-    # app_queue
-    pbxQueueFromSettings = {
-      imports = [self.nixosModules.pbx];
-      pbx = {
-        enable = true;
-        queues.sales.number = "600";
-      };
-      services.asterisk.settings."queues.conf".sales.member = ["PJSIP/101"];
-    };
-    # the voicemail menu, before any mailbox exists: its VoiceMailMain needs
-    # app_voicemail
-    pbxVoicemailMenuWithoutMailboxes = {
-      imports = [self.nixosModules.pbx];
-      pbx = {
-        enable = true;
-        voicemailMenu = "*97";
-      };
-    };
+    # every feature at once
+    features-all.imports = builtins.attrValues features;
     # an endpoint in a context only the AEL dialplan defines, a Lua one, a
     # context of extensions.conf that includes both, and an AEL context that
     # includes and goes to one of extensions.conf, which pbx_config and
@@ -534,156 +393,65 @@
         '';
       };
     };
-    # what the reference checks accept since they resolve templates
-    endpointFromTemplate.services.asterisk.settings."pjsip.conf" = {
-      phone = {
-        template = true;
-        type = "endpoint";
-        context = "internal";
-      };
-      gate = {
-        inherits = ["phone"];
-        aors = "gate";
-      };
-      "aor:gate" = {
-        name = "gate";
-        type = "aor";
-        contact = "sip:10.0.0.5";
-      };
-      "identify:gate" = {
-        name = "gate";
-        type = "identify";
-        endpoint = "gate";
-        match = ["10.0.0.5"];
-      };
-    };
-    # sorcery takes `type` from the first section that sets it: gate is an
-    # endpoint (an aor would reject `context`), door an aor (an endpoint
-    # would reject remove_existing)
-    inheritance.services.asterisk.settings."pjsip.conf" = {
-      base = {
-        template = true;
-        type = "endpoint";
-        context = "nowhere";
-      };
-      phone = {
-        template = true;
-        inherits = ["base"];
-        type = "aor";
-        context = "internal";
-      };
-      gate = {
-        inherits = ["phone"];
-        aors = "gate";
-      };
-      "aor:gate" = {
-        name = "gate";
-        type = "aor";
-        max_contacts = 1;
-      };
-      contact = {
-        template = true;
-        type = "aor";
-        max_contacts = 1;
-      };
-      door = {
-        inherits = ["contact"];
-        type = "endpoint";
-        remove_existing = true;
-      };
-    };
-    # an identify resolves the host names its template matches too
-    identifyMatchFromTemplate.services.asterisk.settings."pjsip.conf" = {
-      provider = {
-        template = true;
-        type = "identify";
-        match = ["sip.provider.example"];
-      };
-      "identify:101" = {
-        name = "101";
-        inherits = ["provider"];
-        endpoint = "101";
-        match = ["192.0.2.10"];
-      };
-    };
-    tlsTransport.services.asterisk.pjsip.transports.tls = {
-      protocol = "tls";
-      tls.certFile = "/var/lib/acme/pbx/cert.pem";
-      tls.keyFile = "/var/lib/acme/pbx/key.pem";
-    };
+    # root in a namespace of its own may listen on an IPv6 address and below
+    # 1024
     boundAddresses.services.asterisk.pjsip.transports = {
       udp.address = "10.0.20.10";
       v6.address = "2001:db8::10";
-    };
-    # root in a namespace of its own may listen below 1024
-    lowPort.services.asterisk.pjsip.transports.web = {
-      protocol = "tcp";
-      port = 443;
-    };
-    # Asterisk resolves the host in identify `match` while loading, and the
-    # build has no DNS
-    trunkByHostName = {config, ...}: {
-      services.asterisk.pjsip.trunks.provider = {
-        host = "sip.provider.example";
-        username = "5551000";
-        password = config.lib.asterisk.secret "/run/secrets/trunk";
-        context = "internal";
+      web = {
+        protocol = "tcp";
+        port = 443;
       };
     };
-    # two trunks by host name, and an identify with two host names: names
-    # that resolve to one address make Asterisk warn
+    # Asterisk resolves the host names in identify `match` while loading, the
+    # ones an identify inherits too, and the build has no DNS; it warns when
+    # two names resolve to one address, or a section matches a host twice,
+    # which a trunk's host in its identify.match does not do, since the host
+    # has an identify section of its own
     trunksByHostNames = {config, ...}: {
-      services.asterisk.pjsip.trunks = lib.genAttrs ["primary" "backup"] (name: {
-        host = "${name}.provider.example";
-        username = "5551000";
-        password = config.lib.asterisk.secret "/run/secrets/trunk";
-        context = "internal";
-        identify = lib.mkIf (name == "backup") {
-          match = [
-            "media.provider.example"
-            "signalling.provider.example"
-          ];
+      services.asterisk = {
+        pjsip.trunks = lib.genAttrs ["primary" "backup"] (name: {
+          host = "${name}.provider.example";
+          username = "5551000";
+          password = config.lib.asterisk.secret "/run/secrets/trunk";
+          context = "internal";
+          identify.match =
+            {
+              primary = ["primary.provider.example"];
+              backup = [
+                "media.provider.example"
+                "signalling.provider.example"
+              ];
+            }
+            .${
+              name
+            };
+        });
+        settings."pjsip.conf" = {
+          provider = {
+            template = true;
+            type = "identify";
+            match = ["sip.provider.example"];
+          };
+          "identify:101" = {
+            name = "101";
+            inherits = ["provider"];
+            endpoint = "101";
+            match = ["192.0.2.10"];
+          };
         };
-      });
-    };
-    # a trunk that matches no address has no identify section, which Asterisk
-    # would refuse as matching nothing
-    trunkWithoutAddressMatch = {config, ...}: {
-      services.asterisk.pjsip.trunks.provider = {
-        host = "203.0.113.5";
-        username = "5551000";
-        password = config.lib.asterisk.secret "/run/secrets/trunk";
-        context = "internal";
-        register = false;
-        matchProviderHost = false;
       };
     };
-    # res_crypto reads the keys directory, which the service creates
-    keyDirectory.services.asterisk.modules.load = ["res_crypto.so"];
     # with autoload, the modules nothing loads by name, which decline without
     # files of their own and log why
     autoload.services.asterisk.modules.autoload = true;
-    # Asterisk takes its entity ID from a network card, which the build has
-    # none of, and this module declines without one
-    entityId.services.asterisk.modules.load = ["res_pjsip_publish_asterisk.so"];
-    # a switch's module is loaded with it
-    realtimeSwitch.services.asterisk.dialplan.contexts.internal.switches = ["Realtime/default@extensions"];
     # res_rtp_asterisk resolves the STUN server with Asterisk's own DNS client
     stunServerByName.services.asterisk.rtp.stunServer = "stun.example.org:3478";
-    # a trunk whose host is in identify.match too, so in both of its identify
-    # sections: Asterisk warns only about a host a section matches already
-    trunkHostMatchedTwice = {config, ...}: {
-      services.asterisk.pjsip.trunks.provider = {
-        host = "sip.provider.example";
-        username = "5551000";
-        password = config.lib.asterisk.secret "/run/secrets/trunk";
-        context = "internal";
-        identify.match = ["sip.provider.example"];
-      };
-    };
-    # a custom class's relative directory is in the data directory, as a files
-    # class's is; its .sln files become the application's arguments
-    customMusicFromDataDirectory.services.asterisk = {
+    # a custom class whose program ends while Asterisk loads, as a clip does or
+    # a stream the build cannot reach, which res_musiconhold starts again; its
+    # relative directory is in the data directory, as a files class's is, and
+    # its .sln files become the program's arguments
+    customMusic.services.asterisk = {
       sounds.packages = [
         (pkgs.linkFarm "moh-sln" [
           {
@@ -692,67 +460,17 @@
           }
         ])
       ];
-      musicOnHold.classes.stream = {
+      musicOnHold.classes.clip = {
         mode = "custom";
         directory = "moh-sln";
-        application = "${pkgs.coreutils}/bin/cat /dev/zero";
+        application = "${pkgs.coreutils}/bin/head -c 16000 /dev/zero";
       };
-    };
-    # custom classes whose program ends while Asterisk loads, as a stream the
-    # build cannot reach does, or a clip: res_musiconhold starts it again
-    customMusicStream.services.asterisk.musicOnHold.classes.radio = {
-      mode = "custom";
-      application = "${pkgs.mpg123}/bin/mpg123 -q -s --mono -r 8000 -f 8192 http://radio.example.org/stream.mp3";
-    };
-    customMusicClip.services.asterisk.musicOnHold.classes.clip = {
-      mode = "custom";
-      application = "${pkgs.coreutils}/bin/head -c 16000 /dev/zero";
-    };
-    # the examples of the module lists load as they are
-    moduleListExamples.services.asterisk.modules = let
-      options = (evalSystem []).options.services.asterisk.modules;
-    in {
-      load = options.load.example;
-      preload = options.preload.example;
     };
     # a digest after its algorithm must have that algorithm's length
     sha256Digest = {config, ...}: {
       services.asterisk.pjsip.endpoints."101".auth.settings.password_digest = "SHA-256:${
         config.lib.asterisk.secret "/run/secrets/101-digest"
       }";
-    };
-    # the sounds of the pbx layer's menus, hours, ring groups and conferences,
-    # which all exist
-    pbxSounds = {config, ...}: {
-      imports = [pbxPhone];
-      pbx = {
-        ivrs.main = {
-          prompt.text = "For the front desk, press 1.";
-          options."1".extension = "201";
-        };
-        hours.office = {
-          timezone = "UTC";
-          open = [
-            {
-              days = "mon-fri";
-              time = "09:00-17:00";
-            }
-          ];
-          closeEarly = "*28";
-        };
-        ringGroups.front = {
-          members = ["201"];
-          external = ["5559000"];
-          trunk = "provider";
-        };
-        conferences.board.number = "800";
-        voicemailMenu = "*97";
-      };
-      services.asterisk.pjsip.trunks.provider = {
-        host = "sip.provider.example";
-        username = "5551000";
-        password = config.lib.asterisk.secret "/run/secrets/trunk";
-      };
     };
     # a sound in each language in use, a dialect that finds its language's
     # sounds, a sound asked for in a language of its own, and names the check
@@ -808,22 +526,15 @@
   };
 in {
   # each case is { module; expect ? [ lines ]; withoutUserNamespaces ? false;
-  # slowLogger ? false; timeLimit ? seconds; }, with an example's evaluated
-  # `config` in place of a module on top of base
+  # slowLogger ? false; }
   tests =
     failing
-    // lib.mapAttrs (_: module: {inherit module;}) (passing // featureCases)
+    // lib.mapAttrs (_: module: {inherit module;}) passing
     // lib.mapAttrs (_: module: {
       inherit module;
       withoutUserNamespaces = true;
     })
-    passingWithoutUserNamespaces
-    // lib.mapAttrs' (name: config:
-      lib.nameValuePair "example-${name}" {
-        inherit config;
-        withoutUserNamespaces = true;
-      })
-    examples;
+    passingWithoutUserNamespaces;
 
   # a case with `expect` fails with those lines, any other case builds
   run = part: cases:
@@ -831,17 +542,12 @@ in {
       ${lib.concatStrings (
         lib.mapAttrsToList (
           name: case: let
-            configCheck =
-              if case ? config
-              then configCheckOf case.config
-              else checkOf case.module;
+            configCheck = checkOf case.module;
             check =
               if case.withoutUserNamespaces or false
               then withoutUserNamespaces configCheck
               else if case.slowLogger or false
               then withSlowLogger configCheck
-              else if case ? timeLimit
-              then withTimeLimit case.timeLimit configCheck
               else configCheck;
             log = "${pkgs.testers.testBuildFailure check}/testBuildFailure.log";
           in

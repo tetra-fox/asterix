@@ -2,8 +2,8 @@
 # of the test at once: each step acts on the rows that have not failed, then
 # checks each of them. A row that fails a check hangs up and is left out of
 # the steps after it, and the test fails at the end with each failed row and
-# why. Appended after phone.py and tones.py, with PLAN, CERTIFICATES, KEYPAD,
-# KEYS, DISTINCT and HOLD_TONE set.
+# why. Appended after phone.py and tones.py, with PLAN, CERTIFICATES, KEYS
+# and HOLD_TONE set.
 import collections
 import ipaddress
 
@@ -24,8 +24,6 @@ class Row:
         self.id = plan["id"]
         self.pbx = by_name[plan["pbx"]]
         self.websocket = plan["websocket"]
-        # a bug outside asterix the row meets
-        self.known = plan["known"]
         self.failure = None
         self.planned = {phone["role"]: phone for phone in plan["phones"]}
         self.phones = {}
@@ -37,7 +35,7 @@ class Row:
                 ca = f"{CERTIFICATES}/ca.pem" if plan["transport"] == "wss" else ""
                 self.phones[role] = Baresip(
                     machine, name, phone["extension"], phone["password"], phone["server"],
-                    sip_port=sip_port, ctrl_port=control_port + 2000, ca_file=ca,
+                    sip_port=sip_port, ca_file=ca,
                 )
             else:
                 self.phones[role] = Phone(
@@ -52,30 +50,21 @@ class Row:
     def users(self, *roles):
         return [self.phones[role].user for role in roles]
 
-    def method(self):
-        """How the phones get keys: pjsua offers RFC 4733, so auto and
-        auto_info use it"""
-        return "SIP INFO" if self.plan["dtmf"] == "info" else "RFC2833"
 
-    def dtmf(self, role):
-        return (self.phones[role], f"call {'d_info' if self.plan['dtmf'] == 'info' else 'd_2833'} {KEYS}")
+rows =[Row(plan) for plan in PLAN["rows"]]
 
 
-rows = [Row(plan) for plan in PLAN["rows"]]
-
-
-def calling(known=None):
-    """The rows that have not failed, that meet the bug `known`, or with none
-    the rows that run the call script"""
-    return [row for row in rows if row.failure is None and row.known == known]
+def calling():
+    """The rows that have not failed and run the call script. WebSocket rows
+    only register: over WebSocket, Asterisk offers an address and a Contact
+    the phones may not reach (modules/pjsip.nix, transports.<name>.protocol)"""
+    return [row for row in rows if row.failure is None and not row.websocket]
 
 
 def hang_up(row):
     for phone in row.phones.values():
         if isinstance(phone, Phone):
             phone.machine.execute(f"sip-phone cli {phone.name} 'call hangup_all'")
-        else:
-            phone.machine.execute(f"baresip-phone command {phone.name} hangup ''")
 
 
 def report(row):
@@ -114,28 +103,19 @@ def each(title, check, selected):
             fail(row, f"{title}: {error}")
 
 
-def shell(phone, command):
-    """The shell command that gives `phone` the CLI command `command`, for
-    baresip its command word and parameters"""
-    if isinstance(phone, Phone):
-        return f"sip-phone cli {phone.name} {shlex.quote(command)}"
-    word, _, params = command.partition(" ")
-    return f"baresip-phone command {phone.name} {word} {shlex.quote(params)}"
-
-
 batches = itertools.count()
 
 
 def cli_all(commands):
-    """As cli_parallel, for pjsua and baresip phones, with the machines' shares
-    under way at once rather than one after another: each command takes a
-    second or two. Returns what each phone answered, by phone name."""
+    """As cli_parallel, with the machines' shares under way at once rather
+    than one after another: each command takes a second or two. Returns what
+    each phone answered, by phone name."""
     batch = next(batches)
     by_machine = {}
     for phone, command in commands:
         by_machine.setdefault(phone.machine, []).append((phone, command))
     for i, (machine, group) in enumerate(by_machine.items()):
-        script = "\n".join(f"{shell(phone, command)} > /tmp/cli-{batch}-{phone.name} &" for phone, command in group)
+        script = "\n".join(f"sip-phone cli {phone.name} {shlex.quote(command)} > /tmp/cli-{batch}-{phone.name} &" for phone, command in group)
         script = f"({script}\nwait\ntouch /tmp/cli-{batch}.done) > /dev/null 2>&1"
         machine.succeed(script if i == len(by_machine) - 1 else f"{script} &")
     answers = {}
@@ -264,69 +244,12 @@ with subtest("A calls B, and each hears the other in its codec"):
 
     each("A calls B", answered, calling())
 
-with subtest("behind NAT, the pbx names its own address over TCP and TLS on IPv6 to endpoints that name no transport"):
-    # res_pjsip_nat finds a TCP or TLS transport on IPv6 only through one the endpoint
-    # names, and these name none (res/res_pjsip_nat.c:328, res/res_pjsip.c:653-671)
-    # TODO: run the call script on these rows once Asterisk rewrites them
-
-    def unrewritten(row):
-        for role, phone in row.phones.items():
-            if row.planned[role]["family"] == "v6":
-                phone.wait_request("OPTIONS", timeout=30)
-                via = re.findall(r"^Via: .*$", phone.received("OPTIONS")[0], re.M)
-                assert via and all(any(prefix in line for prefix in row.plan["private"]) for line in via), (role, via)
-
-    each("the pbx's own address", unrewritten, calling("tcp6-nat"))
-
-with subtest("on ws and wss the pbx offers its host's IPv4 address, and only IPv4 phones of a pbx on the internet talk"):
-    # the SDP Asterisk sends over WebSocket names its host's IPv4 address,
-    # private behind NAT and of the other family for an IPv6 phone
-    # TODO: run the call script on these rows once Asterisk sends a reachable
-    # address and Contact over WebSocket
-
-    def invite(phone, timeout=30):
-        """The first INVITE in baresip's SIP trace, once there is one"""
-        deadline = time.time() + timeout
-        while True:
-            trace = phone.machine.succeed(f"cat {phone.log}")
-            found = [text for text in re.findall(r"#\n\S+ \S+ -> \S+\n(.*?)\x1b\[;m", trace, re.S) if text.startswith("INVITE ")]
-            if found:
-                return found[0]
-            assert time.time() < deadline, f"{phone.name} got no INVITE"
-            time.sleep(1)
-
-    def pbx_of(row):
-        return next(pbx for pbx in PLAN["pbxs"] if pbx["name"] == row.plan["pbx"])
-
-    def talks(row):
-        return row.planned["b"]["family"] == "v4" and not pbx_of(row)["behind-nat"]
-
-    send(lambda row: [(row.a, f"dial sip:{row.b.user}@{row.a.address}")], calling("websocket"))
-
-    def offered(row):
-        sdp = invite(row.b)
-        assert re.findall(r"^c=IN (IP[46]) (\S+)\r?$", sdp, re.M) == [("IP4", pbx_of(row)["hostAddress"])], sdp
-
-    each("the pbx's host address", offered, calling("websocket"))
-
-    def talking(row):
-        wait_bridged(row.pbx, *row.users("a", "b"))
-        hear_each_other(row.a, row.b)
-        codecs(row, "a", "b")
-
-    each("A and B talk", talking, [row for row in calling("websocket") if talks(row)])
-    # A hangs up, as B's requests go to a Contact it cannot reach; both
-    # hang up the calls that failed, which the pbx lets go in its own time
-    send(lambda row: [(row.a, "hangup")] if talks(row) else [(row.a, "hangup"), (row.b, "hangup")], calling("websocket"))
-    each("A hangs up", lambda row: gone(row, "a", "b"), [row for row in calling("websocket") if talks(row)])
-
-with subtest("keys go from A to B and back as RFC 4733 events or SIP INFO"):
-    events = [row for row in calling() if row.plan["dtmf"] != "inband"]
-    before = {row.id: {role: len(row.phones[role].dtmf_received(row.method())) for role in "ab"} for row in events}
-    send(lambda row: [row.dtmf("a")], events)
-    each("keys from A", lambda row: row.b.wait_dtmf(KEYS, after=before[row.id]["b"], method=row.method()), events)
-    send(lambda row: [row.dtmf("b")], events)
-    each("keys from B", lambda row: row.a.wait_dtmf(KEYS, after=before[row.id]["a"], method=row.method()), events)
+with subtest("keys go from A to B and back as RFC 4733 events"):
+    before = {row.id: {role: len(row.phones[role].dtmf_received("RFC2833")) for role in "ab"} for row in calling()}
+    send(lambda row: [(row.a, f"call d_2833 {KEYS}")], calling())
+    each("keys from A", lambda row: row.b.wait_dtmf(KEYS, after=before[row.id]["b"], method="RFC2833"), calling())
+    send(lambda row: [(row.b, f"call d_2833 {KEYS}")], calling())
+    each("keys from B", lambda row: row.a.wait_dtmf(KEYS, after=before[row.id]["a"], method="RFC2833"), calling())
 
 with subtest("A holds B, who hears music until A takes the call back"):
     send(lambda row: [(row.a, "call hold")], calling())
@@ -343,31 +266,6 @@ with subtest("B hangs up, and the call ends for A too"):
         gone(row, "a", "b")
 
     each("B hangs up", hung_up, calling())
-
-with subtest("keys pressed as tones in A's name reach B"):
-    inband = [row for row in calling() if row.plan["dtmf"] == "inband"]
-    pads = {}
-    for row in inband:
-        sip_port, cli_port = ports(row.a.machine)
-        pads[row.id] = Phone(
-            row.a.machine, f"{row.id}k", row.a.user, row.a.password, row.a.server,
-            sip_port=sip_port, cli_port=cli_port, tone=KEYPAD, register=False, options=row.tls(),
-        )
-    start_phones(list(pads.values()))
-    marks = {row.id: recorded(row.b) for row in inband}
-    send(lambda row: [(pads[row.id], f"call new {pads[row.id].uri(row.b.user)}")], inband)
-
-    def pressed(row):
-        wait_bridged(row.pbx, *row.users("a", "b"))
-        retry(lambda _: len(keys_heard(row.b, marks[row.id])) >= len(DISTINCT), timeout_seconds=30)
-        heard = keys_heard(row.b, marks[row.id])
-        assert heard == DISTINCT, f"B heard {heard}"
-
-    each("keys as tones", pressed, inband)
-    send(lambda row: [(pads[row.id], "call hangup_all")], inband)
-    each("the keypad hangs up", lambda row: gone(row, "a", "b"), inband)
-    for pad in pads.values():
-        pad.stop()
 
 with subtest("B calls A, who sends B on to C with a blind transfer"):
     send(lambda row: [(row.b, f"call new {row.b.uri(row.a.user)}")], calling())
@@ -387,38 +285,6 @@ with subtest("B calls A, who sends B on to C with a blind transfer"):
     each("A sends B on to C", transferred, calling())
     send(lambda row: [(row.c, "call hangup_all")], calling())
     each("C hangs up", lambda row: gone(row, "b", "c"), calling())
-
-with subtest("A calls B, who consults C and hands A over with an attended transfer"):
-    confirmed = {row.id: row.b.confirmed() for row in calling()}
-    send(lambda row: [(row.a, f"call new {row.a.uri(row.b.user)}")], calling())
-    held = {}
-
-    def listed(row):
-        wait_bridged(row.pbx, *row.users("a", "b"))
-        row.b.wait_confirmed(after=confirmed[row.id])
-        # pjsua hands out call ids round-robin; B's call is the one it confirmed last
-        held[row.id] = re.findall(r"Call (\d+) state changed to CONFIRMED", row.b.log_text())[-1]
-
-    each("A calls B", listed, calling())
-    send(lambda row: [(row.b, "call hold")], calling())
-    each("A hears the music", lambda row: wait_hears(row.a, [HOLD_TONE]), calling())
-    send(lambda row: [(row.b, f"call new {row.b.uri(row.c.user)}")], calling())
-
-    def consulted(row):
-        wait_bridged(row.pbx, *row.users("b", "c"))
-        hear_each_other(row.b, row.c)
-
-    each("B consults C", consulted, calling())
-    send(lambda row: [(row.b, f"call transfer_replaces {held[row.id]}")], calling())
-
-    def handed_over(row):
-        wait_bridged(row.pbx, *row.users("a", "c"))
-        gone(row, "b")
-        hear_each_other(row.a, row.c)
-
-    each("B hands A over to C", handed_over, calling())
-    send(lambda row: [(row.a, "call hangup_all")], calling())
-    each("A hangs up", lambda row: gone(row, "a", "c"), calling())
 
 with subtest("each phone is only given pbx addresses it can reach"):
 

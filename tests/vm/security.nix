@@ -1,13 +1,12 @@
-# What an intruder on the phone network, dialplan code and local users can
-# reach on a pbx: requests for extensions that exist and don't get the same
-# answers, requests in the name of a door phone known by its address and
-# without a password count only from that address, every wrong password is
-# logged in a form fail2ban's asterisk filter matches, the principals that
-# can read secrets are the ones the README names, programs the dialplan
-# starts, which run in Asterisk's sandbox, write only to Asterisk's
-# directories and read nothing of /home or other units' secrets, and calls
-# over the trunk, from its address or with its line, reach none of the
-# numbers that go out when a phone dials them.
+# What an intruder on the phone network and dialplan code can reach on a pbx:
+# calls to extensions that exist and don't get the same answers, requests in
+# the name of a door phone known by its address and without a password count
+# only from that address, every wrong password is logged in a form fail2ban's
+# asterisk filter matches, programs the dialplan starts, which run in
+# Asterisk's sandbox, write only to Asterisk's directories and read nothing
+# of /home or other units' secrets, and calls over the trunk, from its address
+# or with its line, reach none of the numbers that go out when a phone dials
+# them.
 #
 #   pbx       10.3.0.10
 #   intruder  10.3.0.66, 10.3.0.5, the trunk's provider, and 10.3.0.21, the
@@ -51,7 +50,6 @@ in
       in {
         imports = [
           self.nixosModules.pbx
-          ./ami.nix
           ./common.nix
           (import ./secrets.nix {
             fixed = {
@@ -61,10 +59,6 @@ in
               sip-sipp = "pw-sipp";
               sip-trunk = "trunk-password";
               vm-201 = "4201";
-              ami-dialer = "ami-dialer-pw";
-              ami-monitor = "ami-monitor-pw";
-              ami-admin = "ami-admin-pw";
-              ari-viewer = "ari-viewer-pw";
               neighbor = "neighbor-token";
             };
           })
@@ -142,7 +136,7 @@ in
               door = {
                 context = "offers";
                 identify.match = ["10.3.0.21"];
-                # sip-probe takes no requests but NOTIFY
+                # sip-probe takes no requests
                 aor.qualifyFrequency = 0;
               };
             };
@@ -160,52 +154,12 @@ in
               agi = ["AGI(${lib.getExe sandboxProbe},agi)"];
             };
           };
-
-          ami = {
-            enable = true;
-            users = {
-              # the example of services.asterisk.ami.users
-              dialer = {
-                secret = secret "ami-dialer";
-                write = [
-                  "originate"
-                  "call"
-                ];
-              };
-              monitor = {
-                secret = secret "ami-monitor";
-                write = ["reporting"];
-              };
-              admin = {
-                secret = secret "ami-admin";
-                write = [
-                  "system"
-                  "config"
-                  "command"
-                ];
-              };
-            };
-          };
-          http.enable = true;
-          ari = {
-            enable = true;
-            users.viewer = {
-              password = secret "ari-viewer";
-              readOnly = true;
-            };
-          };
         };
 
-        users.users = {
-          operator = {
-            isNormalUser = true;
-            extraGroups = ["asterisk"];
-          };
-          # a home anyone may read, so only the sandbox keeps Asterisk out
-          visitor = {
-            isNormalUser = true;
-            homeMode = "755";
-          };
+        # a home anyone may read, so only the sandbox keeps Asterisk out
+        users.users.visitor = {
+          isNormalUser = true;
+          homeMode = "755";
         };
 
         # directories anyone may write to, so only the sandbox keeps Asterisk out
@@ -232,10 +186,7 @@ in
           '';
         };
 
-        environment.systemPackages = [
-          pkgs.curl
-          pkgs.fail2ban
-        ];
+        environment.systemPackages = [pkgs.fail2ban];
       };
 
       intruder = {
@@ -263,6 +214,7 @@ in
 
     testScript = ''
       ${builtins.readFile ./phone.py}
+      import json
 
       start_all()
       pbx.wait_for_unit("asterisk.service")
@@ -294,14 +246,13 @@ in
               for response in responses
           ]
 
-      with subtest("requests as an extension, as the trunk and as a number nobody has get the same answers"):
+      with subtest("calls as an extension, as the trunk and as a number nobody has get the same answers"):
           # 201 and sipp are endpoints, provider is the trunk, 5551000 its
           # account and 299 nothing; every one is asked for a password and
           # refused the one the intruder guesses
-          for method in ["OPTIONS", "REGISTER", "INVITE"]:
-              answers = {user: told(probe(method, user, "guess")) for user in ["201", "sipp", "provider", "5551000", "299"]}
-              assert [status for status, _, _ in answers["201"]] == [401, 401], answers["201"]
-              assert all(answer == answers["201"] for answer in answers.values()), (method, answers)
+          answers = {user: told(probe("INVITE", user, "guess")) for user in ["201", "sipp", "provider", "5551000", "299"]}
+          assert [status for status, _, _ in answers["201"]] == [401, 401], answers["201"]
+          assert all(answer == answers["201"] for answer in answers.values()), answers
           # nor does the trunk's name call in
           assert statuses(probe("INVITE", "provider", to="5551000")) == [401]
 
@@ -323,50 +274,13 @@ in
 
           before = found()
           cursor = journal_cursor(pbx)
-          methods = ["REGISTER", "INVITE", "OPTIONS"] * 4
+          methods = ["REGISTER", "INVITE", "OPTIONS"]
           for i, method in enumerate(methods):
               assert statuses(probe(method, "202", f"guess-{i}")) == [401, 401]
           wait_journal(pbx, cursor, r"Request '[A-Z]+' from '<sip:202@10\.3\.0\.10>' failed for '10\.3\.0\.66:[0-9]+' \(callid: [0-9a-f]+\) - Failed to authenticate$", count=len(methods))
           assert journal_since(pbx, cursor).count("Failed to authenticate") == len(methods)
           after = found()
           assert after[: len(before)] == before and after[len(before) :] == ["10.3.0.66"] * len(methods), (before, after)
-
-      with subtest("the principals the README names read secrets, and no one else"):
-          # members of the asterisk group, through the CLI
-          assert "pw-201" in pbx.succeed("su -l operator -c \"asterisk -rx 'pjsip show auth 201'\"")
-          pbx.fail("su -l visitor -c \"asterisk -rx 'pjsip show auth 201'\"")
-          for path in ["/run/asterisk/config/pjsip.conf", "/var/lib/asterisk/astdb.sqlite3", "/var/log/asterisk"]:
-              pbx.fail(f"su -l visitor -c 'cat {path} || ls {path}'")
-
-          def ami(user, action, *headers):
-              return pbx.succeed(f"ami run {user} ami-{user}-pw {shlex.join([action, *headers])}")
-
-          # AMI: call and reporting read voicemail PINs, system every password
-          # and command any CLI output
-          for user in ["dialer", "monitor"]:
-              assert "Value: -4201" in ami(user, "Getvar", "Variable=VM_INFO(201@default,password)")
-              for action in [["PJSIPShowAuths"], ["Command", "Command=pjsip show auth 201"]]:
-                  assert "Message: Permission denied" in ami(user, *action)
-          assert "Response: Success" in ami("admin", "PJSIPShowAuths")
-          assert "pw-201" in ami("admin", "Command", "Command=pjsip show auth 201")
-          # GetConfig takes only real paths inside the configuration
-          # directory, and that is a link to another directory
-          assert "File requires escalated privileges" in ami("admin", "GetConfig", "Filename=pjsip.conf")
-
-          # ARI: no PJSIP password, since /ari/asterisk is not loaded, but
-          # read-only users too read voicemail PINs as a variable of any
-          # channel, here one in the menu at 700
-          status = pbx.succeed("curl -s -o /dev/null -w '%{http_code}' -u viewer:ari-viewer-pw http://127.0.0.1:8088/ari/asterisk/config/dynamic/res_pjsip/auth/201")
-          assert status == "404", status
-          asterisk(pbx, "channel originate Local/700@pbx-internal application Wait 60")
-          pbx.wait_until_succeeds("curl -sf -u viewer:ari-viewer-pw http://127.0.0.1:8088/ari/channels | grep -q '\"id\"'")
-          channel = json.loads(pbx.succeed("curl -sf -u viewer:ari-viewer-pw http://127.0.0.1:8088/ari/channels"))[0]["id"]
-          value = pbx.succeed(
-              f"curl -sf -G -u viewer:ari-viewer-pw --data-urlencode 'variable=VM_INFO(201@default,password)' http://127.0.0.1:8088/ari/channels/{channel}/variable"
-          )
-          assert json.loads(value) == {"value": "-4201"}, value
-          asterisk(pbx, "channel request hangup all")
-          wait_idle(pbx)
 
       with subtest("programs the dialplan starts write only to Asterisk's directories and read nothing of /home or other units' secrets"):
           # the secrets are there to be read

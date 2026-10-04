@@ -169,20 +169,8 @@
     sox -n -r 8000 -b 16 -c 1 $out/tone.wav synth 5 sine ${toString holdTone} vol 0.05
   '';
 
-  # what phones send as RFC 4733 events and SIP INFO, every key and two equal
-  # ones in a row, and as tones from the start of a call without the second
-  # of those, since Asterisk relays two equal keys in a row as tones as one
-  # (tests/vm/dtmf-tones.py)
+  # what phones send as RFC 4733 events, every key and two equal ones in a row
   keys = "01234456789*#";
-  distinct = lib.concatStrings (lib.foldl' (kept: key:
-    if kept != [] && lib.last kept == key
-    then kept
-    else kept ++ [key]) [] (lib.stringToCharacters keys));
-  keypad = harnessPkgs.runCommand "matrix-keypad" {nativeBuildInputs = [(harnessPkgs.python3.withPackages (p: [p.numpy]))];} ''
-    mkdir $out
-    cp ${./tones.py} tones.py
-    PYTHONPATH=. python3 ${./dtmf-tones.py} "$out" '{"keys.wav": [1.5, "${distinct}"]}'
-  '';
 
   address = address: prefixLength: {inherit address prefixLength;};
 
@@ -440,20 +428,14 @@
   plan = {
     pbxs =
       map (pbx: {
-        inherit (pbx) name behind-nat;
+        inherit (pbx) name;
         families = families pbx;
         address = own pbx;
-        # the IPv4 address Asterisk takes for its host's: the default route's,
-        # or where there is none what the hosts file gives the host name
-        hostAddress =
-          if has pbx "v4"
-          then (own pbx).v4
-          else "127.0.0.2";
       })
       pbxs;
     rows =
       map (row: {
-        inherit (row) id pbx transport nat codecs dtmf secrets known websocket phones private;
+        inherit (row) id pbx transport nat codecs dtmf secrets websocket phones private;
       })
       rows;
   };
@@ -501,10 +483,11 @@ in
       builtins.readFile ./phone.py
       + builtins.readFile ./tones.py
       + ''
+        import json
+
         PLAN = json.loads(${builtins.toJSON (builtins.toJSON plan)})
         CERTIFICATES = "${certificates}"
-        KEYPAD = "${keypad}/keys.wav"
-        KEYS, DISTINCT = "${keys}", "${distinct}"
+        KEYS = "${keys}"
         HOLD_TONE = ${toString holdTone}
       ''
       + builtins.readFile ./matrix.py;

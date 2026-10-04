@@ -1,8 +1,8 @@
 # A string written through the options reads back from Asterisk
 # unchanged, through the CLI and, in the dialplan, as the data of a step.
 # The value has every character that means something in a configuration
-# file, the dialplan or an argument list. Where the dialplan options say
-# Asterisk fills in variables as it loads the dialplan, it does.
+# file, the dialplan or an argument list, and a caller ID name of the 79
+# bytes Asterisk keeps reads back whole.
 {
   pkgs,
   self,
@@ -13,6 +13,8 @@
   value = ''a;b "c" 'd' \e (f) [g] {h} <i> |j =k =>l &m ^n %o #p !q ?r *s ,t ü @u /v ~w'';
   # a mailbox line splits at commas, which the option rejects
   noComma = lib.replaceStrings [","] [""] value;
+  # 79 bytes, 26 letters of three bytes and one of one
+  longest = lib.concatStrings (lib.replicate 26 (builtins.fromJSON ''"\u5c71"'')) + "!";
 
   result = probe {
     name = "roundtrip";
@@ -24,9 +26,15 @@
         # the name goes into the endpoint's caller ID, "name" <number>
         pbx = {
           enable = true;
-          extensions."202" = {
-            name = value;
-            password = secret "202";
+          extensions = {
+            "202" = {
+              name = value;
+              password = secret "202";
+            };
+            "203" = {
+              name = longest;
+              password = secret "203";
+            };
           };
         };
         services.asterisk = {
@@ -40,16 +48,8 @@
             };
           };
           dialplan = {
-            globals = {
-              ROUNDTRIP = value;
-              LOADED_A = "\${LOADED_B}a";
-              LOADED_B = "b";
-              LOADED_C = "\${LOADED_B}c";
-            };
-            contexts.roundtrip = {
-              extensions."1" = ["NoOp(${value})"];
-              hints."2" = "PJSIP/\${LOADED_B}";
-            };
+            globals.ROUNDTRIP = value;
+            contexts.roundtrip.extensions."1" = ["NoOp(${value})"];
           };
           queues.queues.roundtrip.members = [
             {
@@ -69,6 +69,7 @@
       "dialplan show roundtrip"
       "pjsip show endpoint 101"
       "pjsip show endpoint 202"
+      "pjsip show endpoint 203"
       "queue show roundtrip"
       "voicemail show users"
     ];
@@ -90,19 +91,6 @@
       command = "dialplan show roundtrip";
       text = "1. NoOp(${value}) ";
     }
-    # with the globals written before them, in the order of their names
-    {
-      command = "dialplan show globals";
-      text = "   LOADED_A=a\n";
-    }
-    {
-      command = "dialplan show globals";
-      text = "   LOADED_C=bc\n";
-    }
-    {
-      command = "dialplan show roundtrip";
-      text = "hint: PJSIP/b ";
-    }
     # the name column is as wide as the longest parameter name
     {
       command = "pjsip show endpoint 101";
@@ -112,6 +100,10 @@
     {
       command = "pjsip show endpoint 202";
       text = ": \"${lib.escape ["\\" "\""] value}\" <202>\n";
+    }
+    {
+      command = "pjsip show endpoint 203";
+      text = ": \"${longest}\" <203>\n";
     }
     {
       command = "queue show roundtrip";

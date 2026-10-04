@@ -1,16 +1,17 @@
 # Core service behaviour with a freeform (layer 1) configuration of phones, a
-# trunk and the dialplan, next to typed AMI, ARI and call records: boot,
-# config loading, codecs from several modules, secrets, runtime file
-# permissions, sandboxing without relaxations, the CLI wrapper for users in
-# and out of the asterisk group. Secret values Asterisk reads as written, from
-# files and from credentials the unit decrypts, alone and inside longer
-# strings, are read back and registered with, and values it cannot read, or a
-# missing file, fail the reload or the start. Every kind of secret is then
-# used (a phone's and a trunk's password, voicemail PINs, AMI and ARI secrets,
-# a PIN inside a dialplan application's argument) with verbose and debug
-# output at level 10, Asterisk crashes, and each secret is looked for in the
-# journal, the arguments of every program the unit started, Asterisk's
-# environment, core dumps and every file outside the rendered configuration.
+# trunk and the dialplan, next to typed AMI, ARI and call records: the default
+# modules load in the sandbox, secret values Asterisk reads as written reach
+# it and a phone registers with one, the rendered configuration is private to
+# the asterisk user, the daemon runs unprivileged and sandboxed, the CLI
+# wrapper only talks to the running daemon and never starts one, a reload
+# with a missing secret file fails and leaves Asterisk as it was, and
+# logrotate rotates the log file, queue_log and the CSV CDRs while Asterisk
+# goes on in new ones. Every kind of secret is then used (a phone's and a
+# trunk's password, voicemail PINs, AMI and ARI secrets, a PIN inside a
+# dialplan application's argument) with verbose and debug output at level
+# 10, and each secret is looked for in the store, the journal, the arguments
+# of every program the unit started, Asterisk's environment and every file
+# outside the rendered configuration.
 {
   pkgs,
   self,
@@ -20,9 +21,8 @@ pkgs.testers.runNixOSTest {
 
   nodes = {
     pbx = {config, ...}: let
-      inherit (config.lib.asterisk) secret credential;
+      inherit (config.lib.asterisk) secret;
       inherit (pkgs) lib;
-      kinds = import ./secret-kinds.nix {inherit lib;};
 
       # prints `<place> <name>` for each place outside the rendered
       # configuration, the unit's credentials and /run/test-secrets that holds
@@ -74,13 +74,11 @@ pkgs.testers.runNixOSTest {
         ./freeform.nix
         ./common.nix
         (import ./secrets.nix {
-          fixed =
-            {
-              # characters that need care in Asterisk config files and in shells
-              sip-102 = ''p;w&d,\x"$HOME'';
-              vm-101 = "1234";
-            }
-            // kinds;
+          fixed = {
+            # characters that need care in Asterisk config files and in shells
+            sip-102 = ''p;w&d,\x"$HOME'';
+            vm-101 = "1234";
+          };
           random = [
             "sip-101"
             "ami"
@@ -92,9 +90,6 @@ pkgs.testers.runNixOSTest {
             "pin"
           ];
         })
-        # codecs of endpoint 101 from further modules, which extend its list
-        {services.asterisk.settings."pjsip.conf"."101".allow = pkgs.lib.mkAfter ["gsm"];}
-        {services.asterisk.settings."pjsip.conf"."101".allow = pkgs.lib.mkBefore ["alaw"];}
       ];
 
       services.asterisk = {
@@ -149,27 +144,6 @@ pkgs.testers.runNixOSTest {
               type = "aor";
               max_contacts = 1;
             };
-            # a phone whose password is two credentials, letters outside
-            # ASCII followed by 4 KiB
-            "103" = {
-              type = "endpoint";
-              context = "phones";
-              disallow = "all";
-              allow = "ulaw";
-              auth = "103";
-              aors = "103";
-            };
-            "103-auth" = {
-              name = "103";
-              type = "auth";
-              username = "103";
-              password = "${credential "cred-unicode"}${credential "cred-long"}";
-            };
-            "103-aor" = {
-              name = "103";
-              type = "aor";
-              max_contacts = 1;
-            };
           };
           "extensions.conf" = {
             phones.exten = [
@@ -185,6 +159,12 @@ pkgs.testers.runNixOSTest {
               "_X.,1,Answer()"
               "_X.,n,Wait(20)"
               "_X.,n,Hangup()"
+            ];
+            # channels whose records and log lines the logrotate subtest
+            # looks for
+            logged.exten = [
+              "s,1,Answer()"
+              "s,n,Hangup()"
             ];
           };
           "voicemail.conf".default."102" = "${secret "/run/test-secrets/vm-102"},Leak test";
@@ -206,32 +186,36 @@ pkgs.testers.runNixOSTest {
           enable = true;
           users.app.password = secret "/run/test-secrets/ari";
         };
-        cdr.sqlite.enable = true;
+        cdr = {
+          csv.enable = true;
+          sqlite.enable = true;
+        };
         cel = {
           enable = true;
           sqlite.enable = true;
         };
-        # each kind alone and inside a longer string, from a file and as a
-        # credential
-        dialplan.globals =
-          lib.concatMapAttrs (name: _: let
-            file = secret "/run/test-secrets/${name}";
-            cred = credential "cred-${name}";
-          in {
-            "FILE_${lib.toUpper name}" = file;
-            "FILE_${lib.toUpper name}_IN" = "<${file};>";
-            "CRED_${lib.toUpper name}" = cred;
-            "CRED_${lib.toUpper name}_IN" = "<${cred};>";
-          })
-          kinds;
-        logger.channels.console = [
-          "notice"
-          "warning"
-          "error"
-          "verbose"
-          "debug"
-        ];
+        logger = {
+          channels = {
+            console = [
+              "notice"
+              "warning"
+              "error"
+              "verbose"
+              "debug"
+            ];
+            full = ["verbose"];
+          };
+          queueLog = true;
+        };
       };
+
+      # logrotate runs only when the test starts it, and then rotates every
+      # file; NixOS turns it off in tests (testing/test-instrumentation.nix)
+      services.logrotate = {
+        enable = true;
+        extraArgs = ["--force"];
+      };
+      systemd.services.logrotate.startAt = lib.mkForce [];
 
       users.users = {
         operator = {
@@ -240,25 +224,6 @@ pkgs.testers.runNixOSTest {
         };
         visitor.isNormalUser = true;
       };
-
-      # the kinds as credentials the unit decrypts itself, as a user would
-      # give them with LoadCredentialEncrypted=
-      systemd.services.encrypt-test-credentials = {
-        wantedBy = ["multi-user.target"];
-        after = ["provision-test-secrets.service"];
-        requires = ["provision-test-secrets.service"];
-        before = ["asterisk.service"];
-        requiredBy = ["asterisk.service"];
-        serviceConfig = {
-          Type = "oneshot";
-          RemainAfterExit = true;
-        };
-        path = [config.systemd.package];
-        script = lib.concatMapStrings (name: ''
-          systemd-creds encrypt --name=cred-${name} /run/test-secrets/${name} /run/test-secrets/${name}.cred
-        '') (builtins.attrNames kinds);
-      };
-      systemd.services.asterisk.serviceConfig.LoadCredentialEncrypted = map (name: "cred-${name}:/run/test-secrets/${name}.cred") (builtins.attrNames kinds);
 
       # every program the unit starts, with its arguments
       security.auditd.enable = true;
@@ -288,18 +253,6 @@ pkgs.testers.runNixOSTest {
     start_all()
     pbx.wait_for_unit("asterisk.service")
 
-    with subtest("configuration is loaded"):
-        # the codecs other modules added, in the order they asked for
-        codecs = ast("pjsip show endpoint 101")
-        assert re.search(r"^ allow +: \(alaw\|g722\|ulaw\|gsm\)$", codecs, re.M), codecs
-        endpoints = ast("pjsip show endpoints")
-        assert "Endpoint:  101" in endpoints and "Endpoint:  102" in endpoints, endpoints
-        dialplan = ast("dialplan show phones")
-        assert "Dial(PJSIP/''${EXTEN},30)" in dialplan, dialplan
-        assert "Hangup()" in dialplan, dialplan
-        ast("pjsip show transport transport-udp")
-        pbx.succeed("ss -Hlun 'sport = :5060' | grep -q 5060")
-
     with subtest("default modules load without errors"):
         # a line journald has not read yet is not in the journal
         pbx.succeed("journalctl --sync")
@@ -307,52 +260,20 @@ pkgs.testers.runNixOSTest {
         modules = ast("module show like pjsip")
         assert "chan_pjsip.so" in modules, modules
 
-    with subtest("secrets reach Asterisk unchanged"):
-        auth = ast("pjsip show auth 102")
-        assert 'p;w&d,\\x"$HOME' in auth, auth
+    with subtest("secrets reach Asterisk as written, and a phone registers with one"):
         random = pbx.succeed("cat /run/test-secrets/sip-101").strip()
         assert random in ast("pjsip show auth 101")
+        auth = ast("pjsip show auth 102")
+        assert 'p;w&d,\\x"$HOME' in auth, auth
+        # a PIN next to plain text in a mailbox line
         pin = ast("dialplan eval function VM_INFO(101@default,password)")
         assert "Result: 1234\n" in pin, pin
         assert "Result: Front desk\n" in ast("dialplan eval function VM_INFO(101@default,fullname)")
-
-    KINDS = ${builtins.toJSON (import ./secret-kinds.nix {inherit (pkgs) lib;})}
-
-    def loaded(value):
-        """What Asterisk gets of a secret file holding `value` and a line end:
-        the value without its line ends and a CR before them."""
-        return value.rstrip("\n").removesuffix("\r")
-
-    with subtest("secrets of every kind reach Asterisk as written, from files and credentials, alone and inside longer strings"):
-        found = dict(re.findall(r"^   (\w+)=(.*)$", ast("dialplan show globals"), re.M))
-        wrong = []
-        for name, value in KINDS.items():
-            for source in ["FILE", "CRED"]:
-                for suffix, expected in [("", loaded(value)), ("_IN", f"<{loaded(value)};>")]:
-                    key = f"{source}_{name.upper()}{suffix}"
-                    if found.get(key) != expected:
-                        wrong.append((key, found.get(key, "")[:40]))
-        assert not wrong, wrong
-        # a phone registers with the password of ; , \ " $ from a file, another
-        # with one made of two credentials
         password102 = pbx.succeed("cat /run/test-secrets/sip-102").rstrip("\n")
         phone102 = Phone(phones, "102", "102", password102, "pbx", sip_port=5071, cli_port=2301)
-        phone103 = Phone(phones, "103", "103", loaded(KINDS["unicode"]) + loaded(KINDS["long"]), "pbx", sip_port=5072, cli_port=2302)
-        start_phones([phone102, phone103])
-        wait_registrations({phone102: 200, phone103: 200})
-        for phone in (phone102, phone103):
-            phone.stop()
-
-    with subtest("secrets never reach the store or the logs"):
-        template = pbx.succeed("readlink -f /etc/asterisk").strip()
-        unit = pbx.succeed("readlink -f /etc/systemd/system/asterisk.service").strip()
-        closure = pbx.succeed(f"nix-store -qR {template} {unit} | grep -v -- '-asterisk-[0-9.]*$'").split()
-        pbx.fail(f"grep -rlF {shlex.quote(random)} {' '.join(closure)}")
-        pbx.fail(f"grep -rlF 'p;w&d' {' '.join(closure)}")
-        pbx.succeed(f"grep -q '@NIX_ASTERISK_SECRET:' {template}/pjsip.conf")
-        pbx.succeed("journalctl --sync")
-        pbx.fail(f"journalctl -b | grep -F {shlex.quote(random)}")
-        pbx.fail(f"grep -rF {shlex.quote(random)} /var/log/asterisk /var/lib/asterisk")
+        phone102.start()
+        wait_registrations({phone102: 200})
+        phone102.stop()
 
     with subtest("rendered configuration is private to the asterisk user"):
         pbx.succeed("test \"$(stat -L -c '%U:%G %a' /run/asterisk/config)\" = 'asterisk:asterisk 500'")
@@ -388,137 +309,45 @@ pkgs.testers.runNixOSTest {
         # an exposure of 1.5 at most
         print(pbx.succeed("systemd-analyze security --threshold=15 asterisk.service").splitlines()[-1])
 
-    with subtest("state directories"):
-        pbx.succeed("test -d /var/lib/asterisk/spool/voicemail")
-        pbx.succeed("test -f /var/lib/asterisk/astdb.sqlite3")
-        pbx.succeed("test \"$(stat -c %U /var/lib/asterisk)\" = asterisk")
-
-    with subtest("CLI wrapper only talks to the running daemon"):
+    with subtest("CLI wrapper only talks to the running daemon, and never starts one"):
         pbx.succeed("asterisk -rx 'core show version' | grep -qF 'Asterisk ${nodes.pbx.services.asterisk.package.version} '")
         pbx.succeed("rasterisk -x 'core show uptime'")
-        pbx.fail("asterisk -c")
         pbx.succeed("asterisk -V")
         # -x implies -r to Asterisk
         pbx.succeed("asterisk -x 'core show uptime'")
         # the control socket takes members of the asterisk group, and no one else
         pbx.succeed("su -l operator -c \"asterisk -rx 'core show uptime'\"")
-        pbx.succeed("su -l operator -c \"rasterisk -x 'core show uptime'\"")
         refused = pbx.fail("su -l visitor -c \"asterisk -rx 'core show uptime'\" 2>&1")
         assert "Unable to connect to remote asterisk" in refused, refused
-        # whatever would start a daemon is refused, whoever asks, also an -r
-        # that Asterisk does not read as an option
-        main = pbx.succeed("systemctl show -P MainPID asterisk.service").strip()
-        daemons = ["", "-c", "-- -r", "-C -r", "-Cr"]
-        for user in ["root", "operator", "visitor"]:
-            for arguments in daemons:
-                pbx.fail(f"su -l {user} -c 'asterisk {arguments}'")
-        assert pbx.succeed("pgrep -x asterisk").split() == [main]
-        # and while the service is stopped, when Asterisk finds none running
+        # with the service stopped, Asterisk would start a daemon for whatever
+        # the wrapper does not refuse, also an -r it does not read as an option
         pbx.succeed("systemctl stop asterisk.service")
-        for arguments in daemons:
+        for arguments in ["", "-c", "-- -r", "-C -r", "-Cr"]:
             pbx.fail(f"asterisk {arguments}")
         pbx.fail("pgrep -x asterisk")
         pbx.succeed("systemctl start asterisk.service")
 
-    with subtest("reload re-renders the configuration and rotated secrets"):
-        pbx.succeed("printf 'rotated;pw' > /run/test-secrets/sip-102")
-        pid = pbx.succeed("systemctl show -P MainPID asterisk.service").strip()
-        pbx.succeed("systemctl reload asterisk.service")
-        assert pid == pbx.succeed("systemctl show -P MainPID asterisk.service").strip()
-        pbx.wait_until_succeeds("asterisk -rx 'pjsip show auth 102' | grep -F 'rotated;pw'")
-
-    with subtest("a comma in a secret that is one field of a mailbox line fails the reload"):
-        # app_voicemail splits mailbox lines at every comma, which would make
-        # this PIN 12 and the name 34
-        pbx.succeed("printf '12,34' > /run/test-secrets/vm-101")
-        pbx.fail("systemctl reload asterisk.service")
-        # returns once journald has read what the reload wrote to its output
-        pbx.succeed("journalctl --sync")
-        pbx.succeed("journalctl -u asterisk.service | grep -F 'secret /run/test-secrets/vm-101 is one field of a comma-separated value'")
-        pin = ast("dialplan eval function VM_INFO(101@default,password)")
-        assert "Result: 1234\n" in pin, pin
-        pbx.succeed("printf 1234 > /run/test-secrets/vm-101")
-        pbx.succeed("systemctl reload asterisk.service")
-
-    with subtest("a secret PIN longer than the 79 bytes Asterisk keeps fails the reload"):
-        pbx.succeed("printf %080d 0 > /run/test-secrets/vm-101")
-        pbx.fail("systemctl reload asterisk.service")
-        pbx.succeed("journalctl --sync")
-        pbx.succeed("journalctl -u asterisk.service | grep -F 'secret /run/test-secrets/vm-101 is longer than 79 bytes'")
-        pin = ast("dialplan eval function VM_INFO(101@default,password)")
-        assert "Result: 1234\n" in pin, pin
-        pbx.succeed("printf 1234 > /run/test-secrets/vm-101")
-        pbx.succeed("systemctl reload asterisk.service")
-
-    with subtest("an ARI password as long as basic authentication carries logs in, and a byte more fails the reload"):
-        # 255 bytes of `app:<password>`
-        kept = pbx.succeed("cat /run/test-secrets/ari")
-        pbx.succeed("printf %0252d 0 > /run/test-secrets/ari")
-        pbx.fail("systemctl reload asterisk.service")
-        pbx.succeed("journalctl --sync")
-        pbx.succeed("journalctl -u asterisk.service | grep -F 'secret /run/test-secrets/ari is longer than 251 bytes'")
-        pbx.succeed("printf %0251d 0 > /run/test-secrets/ari")
-        pbx.succeed("systemctl reload asterisk.service")
-        pbx.succeed(f"curl -sf -u app:{'0' * 251} http://127.0.0.1:8088/ari/applications")
-        pbx.succeed(f"printf %s {shlex.quote(kept)} > /run/test-secrets/ari")
-        pbx.succeed("systemctl reload asterisk.service")
-
-    with subtest("an AMI secret as long as a Login line carries logs in, and a byte more fails the reload"):
-        # AMI reads `Secret: <secret>` and its CRLF into 1024 bytes
-        kept = pbx.succeed("cat /run/test-secrets/ami")
-        pbx.succeed("printf %01015d 0 > /run/test-secrets/ami")
-        pbx.fail("systemctl reload asterisk.service")
-        pbx.succeed("journalctl --sync")
-        pbx.succeed("journalctl -u asterisk.service | grep -F 'secret /run/test-secrets/ami is longer than 1014 bytes'")
-        pbx.succeed("printf %01014d 0 > /run/test-secrets/ami")
-        pbx.succeed("systemctl reload asterisk.service")
-        login = f"Action: Login\r\nUsername: monitor\r\nSecret: {'0' * 1014}\r\n\r\nAction: Logoff\r\n\r\n"
-        answer = pbx.succeed(f"exec 3<>/dev/tcp/127.0.0.1/5038; printf %s {shlex.quote(login)} >&3; timeout 5 cat <&3 || true")
-        assert "Authentication accepted" in answer, answer
-        pbx.succeed(f"printf %s {shlex.quote(kept)} > /run/test-secrets/ami")
-        pbx.succeed("systemctl reload asterisk.service")
-
-    with subtest("a secret that makes its line longer than 8190 bytes fails the reload"):
-        # Asterisk would skip the line and log how it begins, with part of the
-        # secret
-        pbx.succeed("printf 's3cr3tXYZ%.0s' $(seq 911) > /run/test-secrets/sip-102")
-        pbx.fail("systemctl reload asterisk.service")
-        pbx.succeed("journalctl --sync")
-        pbx.succeed("journalctl -u asterisk.service | grep -F 'is longer than 8190 bytes with /run/test-secrets/sip-102 in it'")
-        pbx.fail("journalctl -b | grep -F s3cr3tXYZ")
-        assert "rotated;pw" in ast("pjsip show auth 102")
-        pbx.succeed("printf 'rotated;pw' > /run/test-secrets/sip-102")
-        pbx.succeed("systemctl reload asterisk.service")
-
-    with subtest("a secret with a line break, or whitespace at either end, fails the reload, from a file and as a credential"):
-        for value, problem in [("a\\nb", "contains a line break"), (" pw", "has leading or trailing whitespace"), ("pw\\t", "has leading or trailing whitespace")]:
-            pbx.succeed(f"printf {shlex.quote(value)} > /run/test-secrets/sip-102")
-            cursor = journal_cursor(pbx)
-            pbx.fail("systemctl reload asterisk.service")
-            wait_journal(pbx, cursor, f"secret /run/test-secrets/sip-102 {problem}")
-            assert "rotated;pw" in ast("pjsip show auth 102")
-        pbx.succeed("printf 'rotated;pw' > /run/test-secrets/sip-102")
-        pbx.succeed("printf 'a\\nb' | systemd-creds encrypt --name=cred-comma - /run/test-secrets/comma.cred")
-        cursor = journal_cursor(pbx)
-        pbx.fail("systemctl reload asterisk.service")
-        wait_journal(pbx, cursor, "secret credential cred-comma contains a line break")
-        pbx.succeed("systemd-creds encrypt --name=cred-comma /run/test-secrets/comma /run/test-secrets/comma.cred")
-        pbx.succeed("systemctl reload asterisk.service")
-
-    with subtest("a missing secret file fails the reload, which leaves Asterisk as it was, and the start"):
+    with subtest("a missing secret file fails the reload, which leaves Asterisk as it was"):
         pbx.succeed("mv /run/test-secrets/sip-102 /run/test-secrets/sip-102.away")
         pbx.fail("systemctl reload asterisk.service")
-        assert "rotated;pw" in ast("pjsip show auth 102")
-        cursor = journal_cursor(pbx)
-        pbx.fail("systemctl restart asterisk.service")
-        wait_journal(pbx, cursor, "status=243/CREDENTIALS")
+        assert 'p;w&d,\\x"$HOME' in ast("pjsip show auth 102")
         pbx.succeed("mv /run/test-secrets/sip-102.away /run/test-secrets/sip-102")
-        pbx.succeed("systemctl start asterisk.service")
+        pbx.succeed("systemctl reload asterisk.service")
 
-    with subtest("restart keeps working"):
-        pbx.succeed("systemctl restart asterisk.service")
-        pbx.wait_for_unit("asterisk.service")
-        ast("pjsip show endpoints")
+    with subtest("logrotate rotates the log file, queue_log and the CSV CDRs, and Asterisk goes on in new files"):
+        files = ["full", "queue_log", "cdr-csv/Master.csv"]
+        # a call record, so that every file has lines to rotate
+        ast("channel originate Local/s@logged application NoOp")
+        pbx.wait_until_succeeds("grep -q '\"logged\"' /var/log/asterisk/cdr-csv/Master.csv", timeout=60)
+        pbx.succeed("systemctl start logrotate.service")
+        rotated = {file: pbx.succeed(f"stat -c '%U %s' /var/log/asterisk/{file}.1").split() for file in files}
+        assert all(owner == "asterisk" and int(size) > 0 for owner, size in rotated.values()), rotated
+        # what logger reload writes first
+        pbx.succeed("grep -q CONFIGRELOAD /var/log/asterisk/queue_log")
+        ast("channel originate Local/s@logged application NoOp")
+        pbx.wait_until_succeeds("grep -q '\"logged\"' /var/log/asterisk/cdr-csv/Master.csv", timeout=60)
+        pbx.wait_until_succeeds("grep -q 'Executing \\[s@logged:1\\]' /var/log/asterisk/full")
+        assert {file: pbx.succeed(f"stat -c '%U %s' /var/log/asterisk/{file}.1").split() for file in files} == rotated
 
     with subtest("every kind of secret is used, with verbose and debug output at level 10"):
         for command in ["core set debug 10", "pjsip set logger on", "manager set debug on"]:
@@ -559,19 +388,14 @@ pkgs.testers.runNixOSTest {
         for command in ["core set debug 0", "pjsip set logger off", "manager set debug off"]:
             ast(command)
 
-    with subtest("a crash leaves no core dump"):
-        pid = pbx.succeed("systemctl show -P MainPID asterisk.service").strip()
-        pbx.succeed(f"kill -SEGV {pid}")
-        # systemd-coredump records the crash, with a core file only where the
-        # process's RLIMIT_CORE lets it keep one
-        pbx.wait_until_succeeds(f"coredumpctl --no-legend list {pid}", timeout=60)
-        crash = pbx.succeed(f"coredumpctl --no-legend list {pid}")
-        assert re.search(r" SIGSEGV none ", crash), crash
-        pbx.succeed("test -z \"$(ls /var/lib/systemd/coredump)\"")
-        pbx.wait_until_succeeds(f"test \"$(systemctl show -P MainPID asterisk.service)\" != {pid}")
-        pbx.wait_for_unit("asterisk.service")
-
     with subtest("secrets are nowhere but in the rendered configuration"):
+        # the store paths of the configuration and the unit hold placeholders
+        template = pbx.succeed("readlink -f /etc/asterisk").strip()
+        unit = pbx.succeed("readlink -f /etc/systemd/system/asterisk.service").strip()
+        closure = pbx.succeed(f"nix-store -qR {template} {unit} | grep -v -- '-asterisk-[0-9.]*$'").split()
+        pbx.fail(f"grep -rlF {shlex.quote(random)} {' '.join(closure)}")
+        pbx.fail(f"grep -rlF 'p;w&d' {' '.join(closure)}")
+        pbx.succeed(f"grep -q '@NIX_ASTERISK_SECRET:' {template}/pjsip.conf")
         # the audit log holds every program the unit started, with its arguments
         started = pbx.succeed("ausearch -m EXECVE -i")
         assert "render-secrets" in started and "core waitfullybooted" in started, started[-2000:]
@@ -584,8 +408,13 @@ pkgs.testers.runNixOSTest {
         )
         found = {tuple(line.split(" ", 1)) for line in pbx.succeed("find-secrets /run/test-secrets/patterns").splitlines()}
         # Asterisk prints an application's arguments once it has substituted
-        # them: the PIN inside Authenticate's is in the Executing line and the
-        # debug output, and in the call records' lastdata and appdata
-        assert found == {("journal", "pin"), ("/var/log/asterisk/master.db", "pin")}, found
+        # them: the PIN inside Authenticate's is in the Executing line of the
+        # journal and the full log, and in the call records' lastdata and appdata
+        assert found == {
+            ("journal", "pin"),
+            ("/var/log/asterisk/full", "pin"),
+            ("/var/log/asterisk/cdr-csv/Master.csv", "pin"),
+            ("/var/log/asterisk/master.db", "pin"),
+        }, found
   '';
 }

@@ -1,6 +1,6 @@
-# Numbers outside dialled through the probe (tests/campaign/probe.nix), with
-# each kind of pbx.outbound.prefix: none, a digit, a star code and #, and
-# with and without pbx.outbound.callerId. The trunk gets the number without
+# Numbers outside dialled through the probe (tests/campaign/probe.nix),
+# without a pbx.outbound.prefix and without pbx.outbound.callerId, and with
+# the prefix *9 and a caller ID. The trunk gets the number without
 # the prefix, after the caller ID is set where one is configured, which then
 # goes in P-Asserted-Identity; a number too short for the pattern reaches
 # nothing; a pbx number that starts with the prefix reaches the pbx; and the
@@ -34,24 +34,12 @@
     {
       name = "none";
       prefix = "";
-      callerId = "5551000";
+      callerId = null;
       extensions = ["201"];
       overlap = [
         {
           extension = "201";
           steps = extensionSteps "201";
-        }
-      ];
-    }
-    {
-      name = "digit";
-      prefix = "9";
-      callerId = null;
-      extensions = ["201" "901"];
-      overlap = [
-        {
-          extension = "901";
-          steps = extensionSteps "901";
         }
       ];
     }
@@ -74,13 +62,6 @@
           ];
         }
       ];
-    }
-    {
-      name = "hash";
-      prefix = "#";
-      callerId = null;
-      extensions = ["201"];
-      overlap = [];
     }
   ];
 

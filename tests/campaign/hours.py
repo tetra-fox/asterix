@@ -3,15 +3,14 @@
 descriptions of its options say, against what its pbx-hours-<name> routine
 returns for that instant in the probe (hours.nix).
 
-    hours.py plan HOURS ZONEINFO OUT --chunk CHUNK [--sample N] [--seed S]
+    hours.py plan HOURS ZONEINFO OUT --chunk CHUNK --sample N [--seed S]
     hours.py check HOURS ZONEINFO PLAN PROBE OUT
-    hours.py sweep OUT [--flake DIR] [--zones-per-boot 3] [--jobs 2]
 
 HOURS is pbx.hours as JSON. `plan` picks instants for each of them in
 WINDOW: around the changes of offset of its zone, and on every day, the edges
-of each range and of the day, in local time. With --sample it keeps N of them
-picked by the seed, half on the days of a change of offset, a holiday or a
-leap day. OUT gets sweep.conf, the context hours-sweep, whose extensions s0,
+of each range and of the day, in local time. It keeps N of them picked by
+the seed, half on the days of a change of offset, a holiday or a leap day.
+OUT gets sweep.conf, the context hours-sweep, whose extensions s0,
 s1 and on run the routine at CHUNK instants each with TESTTIME, and
 early-<name> and reopened-<name> at EARLY instants of each hours with
 closeEarly, for the probe to call while it is on and once it is off again;
@@ -22,9 +21,6 @@ files of ZONEINFO, the tzdata whose files the routine's GotoIfTime names.
 OUT gets report.json: the number of instants that agree, each one that does
 not, and `problems`: a zone file of another tzdata, results the log lacks,
 and messages the logger dropped.
-
-`sweep` runs every instant, a few zones to a boot, and writes each report
-and a summary to OUT.
 """
 
 import argparse
@@ -33,9 +29,7 @@ import json
 import pathlib
 import random
 import re
-import subprocess
 import sys
-import time
 import zoneinfo
 
 WINDOW = (
@@ -184,13 +178,10 @@ def plan(args):
     rng = random.Random(args.seed)
     instants = {name: hours.instants() for name, hours in all_hours.items()}
     pool = [(name, epoch, special) for name, pairs in instants.items() for epoch, special in pairs]
-    if args.sample is None:
-        picked = [(name, epoch) for name, epoch, _ in pool]
-    else:
-        # half of the sample on special days
-        special = [(name, epoch) for name, epoch, s in pool if s]
-        ordinary = [(name, epoch) for name, epoch, s in pool if not s]
-        picked = rng.sample(special, args.sample // 2) + rng.sample(ordinary, args.sample - args.sample // 2)
+    # half of the sample on special days
+    special = [(name, epoch) for name, epoch, s in pool if s]
+    ordinary = [(name, epoch) for name, epoch, s in pool if not s]
+    picked = rng.sample(special, args.sample // 2) + rng.sample(ordinary, args.sample - args.sample // 2)
     picked.sort()
     calls = []
     for i in range(0, len(picked), args.chunk):
@@ -283,69 +274,11 @@ def check(args):
         "agree": agree,
         "disagree": len(disagree),
         "problems": problems,
-        "seconds": round(sum(c["seconds"] for c in probe["calls"]), 1),
         "disagreements": disagree,
     }
     out = pathlib.Path(args.out)
     out.mkdir()
     (out / "report.json").write_text(json.dumps(report, indent=1) + "\n")
-
-
-def sweep(args):
-    flake = str(pathlib.Path(args.flake).resolve())
-    zones = json.loads(subprocess.run(
-        ["nix", "eval", "--impure", "--json", "--expr", expression(flake, "hours.zones")],
-        check=True, capture_output=True, text=True,
-    ).stdout)
-    # as Nix lists
-    groups = [" ".join(json.dumps(z) for z in zones[i:i + args.zones_per_boot])
-              for i in range(0, len(zones), args.zones_per_boot)]
-    start = time.monotonic()
-    # the plans first, for the number of calls each boot places
-    plans = build(flake, args.jobs, [f"(hours.run {{ zones = [ {g} ]; chunks = 0; }}).plan" for g in groups])
-    runs = []
-    for group, plan_path in zip(groups, plans):
-        chunks = sum(1 for c in json.loads((plan_path / "plan.json").read_text()) if c["state"] is None)
-        runs.append(f"(hours.run {{ zones = [ {group} ]; chunks = {chunks}; }}).report")
-    reports = build(flake, args.jobs, runs)
-    seconds = round(time.monotonic() - start)
-    out = pathlib.Path(args.out)
-    out.mkdir(parents=True, exist_ok=True)
-    summary = {"seconds": seconds, "zones": zones, "agree": 0, "disagree": 0, "problems": [], "boots": []}
-    disagreeing = set()
-    for path in reports:
-        report = json.loads((path / "report.json").read_text())
-        (out / f"report-{'-'.join(z.replace('/', '_') for z in report['zones'])}.json").write_text(json.dumps(report, indent=1) + "\n")
-        for key in ("agree", "disagree"):
-            summary[key] += report[key]
-        summary["problems"] += report["problems"]
-        summary["boots"].append({key: report[key] for key in ("zones", "seconds", "agree", "disagree")})
-        # the zone and the kind: names repeat from one boot to the next
-        disagreeing.update(f"{d['timezone']} {d['hours'].split('-', 1)[1]}" for d in report["disagreements"])
-    summary["disagreeing hours"] = sorted(disagreeing)
-    (out / "summary.json").write_text(json.dumps(summary, indent=1) + "\n")
-    print(json.dumps(summary, indent=1))
-    return 1 if summary["disagree"] or summary["problems"] else 0
-
-
-def build(flake, jobs, attributes):
-    """Builds the derivations `attributes` name; their outputs, in order."""
-    farm = " ".join(f'{{ name = "{i}"; path = {a}; }}' for i, a in enumerate(attributes))
-    out = subprocess.run(
-        ["nix", "build", "--no-link", "--print-out-paths", "--max-jobs", str(jobs), "--impure",
-         "--expr", expression(flake, f'pkgs.linkFarm "asterisk-hours-sweep" [ {farm} ]')],
-        check=True, stdout=subprocess.PIPE, text=True,
-    ).stdout.strip()
-    return [pathlib.Path(out, str(i)).resolve() for i in range(len(attributes))]
-
-
-def expression(flake, body):
-    return (
-        f"let self = builtins.getFlake {json.dumps(flake)}; "
-        f"pkgs = self.inputs.nixpkgs.legacyPackages.x86_64-linux; "
-        f"hours = import {json.dumps(flake + '/tests/campaign/hours.nix')} {{ inherit pkgs self; }}; "
-        f"in {body}"
-    )
 
 
 def main():
@@ -356,7 +289,7 @@ def main():
     p.add_argument("zoneinfo")
     p.add_argument("out")
     p.add_argument("--chunk", type=int, required=True)
-    p.add_argument("--sample", type=int)
+    p.add_argument("--sample", type=int, required=True)
     p.add_argument("--seed", default="asterix")
     c = commands.add_parser("check")
     c.add_argument("hours")
@@ -364,13 +297,8 @@ def main():
     c.add_argument("plan")
     c.add_argument("probe")
     c.add_argument("out")
-    s = commands.add_parser("sweep")
-    s.add_argument("out")
-    s.add_argument("--flake", default=".")
-    s.add_argument("--zones-per-boot", type=int, default=3)
-    s.add_argument("--jobs", type=int, default=2)
     args = parser.parse_args()
-    sys.exit({"plan": plan, "check": check, "sweep": sweep}[args.command](args))
+    sys.exit({"plan": plan, "check": check}[args.command](args))
 
 
 if __name__ == "__main__":

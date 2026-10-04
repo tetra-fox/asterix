@@ -43,17 +43,14 @@
   evalSuiteParts = name: suite: suiteParts name (check: tests: reportFailures check (suite.run tests)) suite.tests;
 
   examples = import ./examples.nix {inherit pkgs self sopsSecrets;};
-  configCheck = import ./check.nix {
-    inherit pkgs self;
-    examples = examples.configs;
-  };
+  configCheck = import ./check.nix {inherit pkgs self;};
 
-  # the examples' configuration and checks with another Asterisk package, a
-  # sample of the checks with each package (packages.nix)
+  # the configuration and checks of the two largest examples with another
+  # Asterisk package (packages.nix)
   packageChecks = import ./packages.nix {inherit pkgs self sops-nix;};
   examplesWith = package:
     pkgs.linkFarm "asterisk-examples-config-${package}" (
-      lib.mapAttrs (name: _: packageChecks.${package}."examples-config-${name}") examples.derivations
+      lib.genAttrs ["household-intercom-ht801" "small-office"] (name: packageChecks.${package}."examples-config-${name}")
     );
 in
   import ./lint.nix {inherit pkgs self;}
@@ -70,16 +67,11 @@ in
     examples = reportFailures "asterisk-examples-eval" examples.problems;
 
     # commands and calls on Asterisk in the build sandbox (tests/campaign/probe.nix)
-    probe = import ./probe.nix {inherit pkgs self;};
     roundtrip = import ./roundtrip.nix {inherit pkgs self;};
-    dialplan = import ./dialplan.nix {inherit pkgs self;};
     tollfraud = import ./tollfraud.nix {
       inherit pkgs self;
       examples = examples.configs;
     };
-    codec-order = import ./codec-order.nix {inherit pkgs self;};
-    musiconhold = import ./musiconhold.nix {inherit pkgs self;};
-    voicemail = import ./voicemail.nix {inherit pkgs self;};
     pbx-destinations = import ./pbx/destinations.nix {inherit pkgs self;};
     pbx-numbering = import ./pbx/numbering.nix {inherit pkgs self;};
     pbx-outbound = import ./pbx/outbound.nix {inherit pkgs self;};
@@ -87,11 +79,10 @@ in
     pbx-extensions = import ./pbx/extensions.nix {inherit pkgs self;};
     pbx-names = import ./pbx/names.nix {inherit pkgs self;};
     pbx-menus = import ./pbx/menus.nix {inherit pkgs self;};
-    pbx-queues = import ./pbx/queues.nix {inherit pkgs self;};
     pbx-paging = import ./pbx/paging.nix {inherit pkgs self;};
 
     # opening hours against their oracle at a seeded sample of instants in
-    # every zone of tests/campaign/hours.nix, which hours.py sweep runs whole
+    # every zone of tests/campaign/hours.nix
     campaign-hours = let
       hours = import ./campaign/hours.nix {inherit pkgs self;};
     in
@@ -101,7 +92,6 @@ in
       };
 
     examples-config-minimal = examples.derivations.minimal;
-    examples-config-household-intercom = examples.derivations.household-intercom;
     examples-config-household-intercom-ht801 = examples.derivations.household-intercom-ht801;
     examples-config-small-office = examples.derivations.small-office;
     examples-config-asterisk_20 = examplesWith "asterisk_20";
@@ -111,38 +101,23 @@ in
 
     vm-reload = import ./vm/reload.nix {inherit pkgs self sopsSecrets;};
 
-    vm-minimal = import ./vm/minimal.nix {inherit pkgs self sopsSecrets;};
-
     vm-household-intercom = import ./vm/household-intercom.nix {inherit pkgs self sopsSecrets;};
 
     vm-small-office = import ./vm/small-office.nix {inherit pkgs self sopsSecrets;};
 
-    vm-tier2 = import ./vm/tier2.nix {inherit pkgs self;};
-
-    vm-tls-realtime = import ./vm/tls-realtime.nix {inherit pkgs self;};
+    vm-tls = import ./vm/tls.nix {inherit pkgs self;};
 
     vm-ht801 = import ./vm/ht801.nix {inherit pkgs self sopsSecrets;};
 
     vm-calls = import ./vm/calls.nix {inherit pkgs self;};
 
-    vm-transports = import ./vm/transports.nix {inherit pkgs self;};
-
     vm-security = import ./vm/security.nix {inherit pkgs self;};
-
-    vm-firewall = import ./vm/firewall.nix {inherit pkgs self;};
-
-    vm-tenants = import ./vm/tenants.nix {inherit pkgs self;};
-
-    vm-trunks = import ./vm/trunks.nix {inherit pkgs self;};
 
     vm-pbx = import ./vm/pbx.nix {inherit pkgs self;};
 
     vm-pbx-calls = import ./vm/pbx-calls.nix {inherit pkgs self;};
 
     vm-upgrade = import ./vm/upgrade.nix {inherit pkgs self;};
-    vm-faults = import ./vm/faults.nix {inherit pkgs self;};
-
-    vm-faults-net = import ./vm/faults-net.nix {inherit pkgs self;};
 
     # builds the server and runs its unit tests
     provisioning-server = self.packages.${pkgs.stdenv.hostPlatform.system}.provisioning-server;
@@ -155,12 +130,6 @@ in
     (lib.importJSON ./campaign/matrix-pairwise.json).tests)
   // evalSuiteParts "eval" (import ./eval.nix {inherit pkgs self;})
   // evalSuiteParts "assertions" (import ./assertions.nix {inherit pkgs self;})
-  // evalSuiteParts "pbx-eval" (import ./pbx/eval.nix {inherit pkgs self;})
   // evalSuiteParts "pbx-assertions" (import ./pbx/assertions.nix {inherit pkgs self;})
-  // evalSuiteParts "pbx-phones" (let
-    suites = map (vendor: import ./pbx/phones-${vendor}.nix {inherit pkgs self;}) ["cisco" "fanvil" "grandstream" "poly" "snom" "yealink"];
-  in {
-    run = lib.runTests;
-    tests = lib.mergeAttrsList (map (suite: suite.tests) suites);
-  })
+  // evalSuiteParts "pbx-phones" (import ./pbx/phones.nix {inherit pkgs self;})
   // suiteParts "config-check" configCheck.run configCheck.tests

@@ -5,25 +5,21 @@
 #   sip-phone cli NAME COMMAND...      e.g. sip-phone cli alice call new sip:102@pbx
 #   sip-phone stop NAME
 #
-# The phone sends a sine of TONE Hz, or the WAV file TONE names, on every call
-# without pause (no VAD), so RTP flows in both directions, and records what
-# its calls bring to /tmp/sip-phone-NAME.wav, so a test can tell who hears
-# whom (tones.py). Full SIP traces are logged to /tmp/sip-phone-NAME.log.
-# Whether it registers (--registrar), how it answers (--auto-answer) and its
-# transport flags (--no-tcp, --ipv6, ...) come with the pjsua args, from
-# phone.py. With --no-symmetric-rtp first among them, the phone keeps sending
-# RTP to the address the SDP names, as many desk phones do, instead of to
-# wherever RTP comes from.
+# The phone sends a sine of TONE Hz on every call without pause (no VAD), so
+# RTP flows in both directions, and records what its calls bring to
+# /tmp/sip-phone-NAME.wav, so a test can tell who hears whom (tones.py). Full
+# SIP traces are logged to /tmp/sip-phone-NAME.log. Whether it registers
+# (--registrar), how it answers (--auto-answer) and its transport flags
+# (--no-tcp, --ipv6, ...) come with the pjsua args, from phone.py.
 {pkgs, ...}: let
   pjsip = pkgs.pjsip.overrideAttrs (old: {
     patches =
       (old.patches or [])
       ++ [
-        # fixes for pjsua's CLI (pjsua_app_cli.c, unfixed in pjproject master):
-        # `call transfer_replaces` only accepts call ids when built with video and
-        # stops listing them at the current call, and `im add_b` zeroes the buddy
-        # config, so it subscribes from account 0 instead of the buddy's account
-        # TODO: remove once pjproject fixes them
+        # pjsua's CLI command `im add_b` zeroes the buddy config, so it
+        # subscribes from account 0 instead of the buddy's account
+        # (pjsua_app_cli.c, unfixed in pjproject master)
+        # TODO: remove once pjproject fixes it
         ./pjsua-cli.patch
         # pjsua's CLI closes and reopens the log file and the SIP message logger
         # once pjsua has started (pjsua_app_cli.c:253, pjsua_core.c:795-828),
@@ -43,16 +39,6 @@
           'pj_file_write(pjsua_var.log_file, buffer, &size);' \
           'pj_file_write(pjsua_var.log_file, buffer, &size); pj_file_flush(pjsua_var.log_file);'
         printf '#define PJ_HAS_IPV6 1\n#define PJMEDIA_SRTP_HAS_DTLS 1\n' > pjlib/include/pj/config_site.h
-      '';
-  });
-
-  # pjsua sends its RTP to wherever RTP comes from, once it arrives from a new
-  # address (pjmedia's symmetric RTP); this build keeps the SDP's address
-  pjsipNoSymmetricRtp = pjsip.overrideAttrs (old: {
-    postPatch =
-      old.postPatch
-      + ''
-        echo '#define PJMEDIA_TRANSPORT_SWITCH_REMOTE_ADDR 0' >> pjlib/include/pj/config_site.h
       '';
   });
 
@@ -76,21 +62,11 @@
         start)
           name=$1 user=$2 password=$3 server=$4 sip_port=$5 cli_port=$6 tone=$7
           shift 7
-          pjsua=pjsua
-          if [ "''${1:-}" = --no-symmetric-rtp ]; then
-            pjsua=${pjsipNoSymmetricRtp}/bin/pjsua
-            shift
-          fi
           echo "$cli_port" > "/run/sip-phone/$name.port"
           rm -f "/tmp/sip-phone-$name.log" "/tmp/sip-phone-$name.wav"
-          if [ -f "$tone" ]; then
-            # a WAV file to send instead of a sine, such as inband DTMF
-            cp "$tone" "/run/sip-phone/$name-tone.wav"
-          else
-            # one second of a whole number of periods, which pjsua loops without
-            # a click; quiet enough that 20 phones mixed together don't clip
-            sox -n -r 16000 -b 16 -c 1 "/run/sip-phone/$name-tone.wav" synth 1 sine "$tone" vol 0.05
-          fi
+          # one second of a whole number of periods, which pjsua loops without
+          # a click; quiet enough that 20 phones mixed together don't clip
+          sox -n -r 16000 -b 16 -c 1 "/run/sip-phone/$name-tone.wav" synth 1 sine "$tone" vol 0.05
           # pjsua advertises the address of the default route's interface in
           # its SDP, which in the test VMs is QEMU's user network: every VM has
           # the same one there, so audio sent to it never arrives. Advertise
@@ -109,7 +85,7 @@
               ;;
           esac
           systemd-run --unit="sip-phone-$name" --collect \
-            "$pjsua" \
+            pjsua \
               --id="sip:$user@$server" \
               --realm='*' --username="$user" --password="$password" \
               "''${ip_addr[@]}" \

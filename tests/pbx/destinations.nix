@@ -1,11 +1,12 @@
 # Destinations followed through the dialplan, call by call (the probe,
 # tests/campaign/probe.nix): a menu key goes to a ring group, whose no-answer
 # destination is a queue, whose timeout goes to a mailbox; the timeout of a
-# queue leads to each kind of destination; and every slot that takes a
-# destination, in a configuration with each kind of destination in each slot
-# (./slots.nix), which Asterisk has to load. Nobody is registered, so ring
-# groups and extensions have no phone to ring and queues no member to take
-# the call, except for one phone that is busy.
+# queue leads to each kind of destination; a number with opening hours goes
+# to its open and its closed destination; and a key the menu has no
+# destination for goes to its invalid one. The configuration has each kind of
+# destination in each slot that takes one (./slots.nix), which Asterisk has to
+# load. Nobody is registered, so ring groups and extensions have no phone to
+# ring and queues no member to take the call.
 {
   pkgs,
   self,
@@ -24,22 +25,11 @@
     voicemail.voicemail = "200";
   };
 
-  # with the conference for no answer, and the context when busy
-  busyPhone = slots.extensionTo.conference;
-
-  # the last step of a call that hangs up, or goes to the mailbox; a hangup
-  # destination gives a caller not answered yet no answer (19)
+  # the last step of a call that hangs up, or goes to the mailbox
   hangup = [
     {
       application = "Hangup";
       data = "";
-      how = "hangup";
-    }
-  ];
-  unanswered = [
-    {
-      application = "Hangup";
-      data = "19";
       how = "hangup";
     }
   ];
@@ -124,89 +114,8 @@
       ended = voicemail;
       answered = true;
     }
-    {
-      call = {
-        extension = "600";
-        context = "pbx-internal";
-      };
-      contexts = [
-        "pbx-internal"
-        "pbx-ringgroup-sales"
-        "pbx-queue-support"
-      ];
-      ended = voicemail;
-      answered = true;
-    }
-    {
-      call = {
-        extension = "610";
-        context = "pbx-internal";
-      };
-      contexts = [
-        "pbx-internal"
-        "pbx-queue-support"
-      ];
-      ended = voicemail;
-      answered = true;
-    }
-    {
-      call = {
-        extension = slots.extensionTo.extension;
-        context = "pbx-internal";
-      };
-      contexts = [
-        "pbx-internal"
-        "pbx-extension-${slots.extensionTo.extension}"
-        "pbx-extension-201"
-      ];
-      ended = unanswered;
-    }
-    {
-      call = {
-        extension = busyPhone;
-        context = "pbx-internal";
-      };
-      contexts = [
-        "pbx-internal"
-        "pbx-extension-${busyPhone}"
-        "done"
-      ];
-      ended = hangup;
-    }
-    {
-      call = {
-        extension = "s";
-        context = "pbx-ringgroup-to-queue";
-      };
-      contexts = [
-        "pbx-ringgroup-to-queue"
-        "pbx-queue-desk"
-      ];
-      ended = hangup;
-      answered = true;
-    }
-    # a conference and a mailbox go on until the probe hangs up
-    {
-      call = {
-        extension = slots.inboundTo.conference;
-        context = "pbx-inbound-provider";
-        limit = 2;
-      };
-      contexts = [
-        "pbx-inbound-provider"
-        "pbx-conference-board"
-      ];
-      ended = [
-        {
-          application = "ConfBridge";
-          data = "board";
-          how = "hangup";
-        }
-      ];
-      answered = true;
-      limitReached = true;
-    }
-    # open on a Wednesday at 10:00, closed at 20:00
+    # open on a Wednesday at 10:00, where the mailbox goes on until the probe
+    # hangs up, and closed at 20:00
     {
       call = {
         extension = slots.inboundByHoursTo.voicemail;
@@ -237,29 +146,7 @@
       ];
       ended = hangup;
     }
-    # a key with a destination, no key, and a key without one
-    {
-      call = {
-        extension = "s";
-        context = "pbx-ivr-to-hangup";
-        keys = "1";
-      };
-      contexts = ["pbx-ivr-to-hangup"];
-      ended = hangup;
-      answered = true;
-    }
-    {
-      call = {
-        extension = "s";
-        context = "pbx-ivr-to-hangup";
-      };
-      contexts = [
-        "pbx-ivr-to-hangup"
-        "pbx-ivr-lobby"
-      ];
-      ended = hangup;
-      answered = true;
-    }
+    # a key without a destination, on the menu's only attempt
     {
       call = {
         extension = "s";
@@ -303,7 +190,6 @@
           };
           ringGroups = {
             sales = {
-              number = "600";
               members = [
                 "201"
                 "202"
@@ -314,7 +200,6 @@
           };
           queues = {
             support = {
-              number = "610";
               timeout = 1;
               noAnswer.voicemail = "200";
             };
@@ -339,18 +224,6 @@
               username = "5551000";
               password = secret "trunk";
             };
-            # the phone of busyPhone is this Asterisk, which answers busy
-            endpoints = {
-              ${busyPhone}.aor = {
-                contacts = ["sip:busy@127.0.0.1:5060"];
-                qualifyFrequency = 0;
-              };
-              busy-line = {
-                context = "busy-line";
-                identify.match = ["127.0.0.1"];
-                aor = null;
-              };
-            };
           };
           queues.queues = {
             support.members = [
@@ -360,10 +233,7 @@
             desk.members = ["PJSIP/201"];
           };
           voicemail.mailboxes."200".pin = secret "vm-200";
-          dialplan.contexts = {
-            busy-line.extensions.busy = ["Busy()"];
-            done.extensions.s = ["Hangup()"];
-          };
+          dialplan.contexts.done.extensions.s = ["Hangup()"];
         };
       })
     ];

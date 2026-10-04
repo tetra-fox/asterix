@@ -5,7 +5,7 @@
   self,
 }: let
   inherit (pkgs) lib;
-in rec {
+
   evalSystem = modules:
     import "${pkgs.path}/nixos/lib/eval-config.nix" {
       inherit (pkgs.stdenv.hostPlatform) system;
@@ -23,6 +23,9 @@ in rec {
         ++ modules;
     };
 
+  # Does evaluating `value` (deeply) throw?
+  throws = value: !(builtins.tryEval (builtins.deepSeq value value)).success;
+in rec {
   evalConfig = modules: (evalSystem modules).config;
 
   rendered = modules: (evalConfig modules).services.asterisk.renderedFiles;
@@ -63,14 +66,10 @@ in rec {
 
   placeholderFor = path: self.lib.secrets.placeholderOf (self.lib.secret path);
 
-  # Does evaluating `value` (deeply) throw?
-  throws = value: !(builtins.tryEval (builtins.deepSeq value value)).success;
-
   # The cases that did not behave as expected. Each case evaluates `base` and
   # its `module`, and expects a substring in a failed assertion (`assertion`),
-  # in a warning (`warning`), exactly these assertions or warnings
-  # (`assertions`, `warnings`), or evaluation of the generated files to throw
-  # (`throws`).
+  # exactly these assertions or warnings (`assertions`, `warnings`), or
+  # evaluation of the generated files to throw (`throws`).
   checkCases = base: cases:
     lib.concatLists (lib.mapAttrsToList (name: case: let
       config = evalConfig [
@@ -88,10 +87,6 @@ in rec {
         ++ lib.optional (case ? assertions && failed != case.assertions) {
           expectedAssertions = case.assertions;
           inherit failed;
-        }
-        ++ lib.optional (case ? warning && !(has case.warning warnings)) {
-          expectedWarning = case.warning;
-          inherit warnings;
         }
         ++ lib.optional (case ? warnings && warnings != case.warnings) {
           expectedWarnings = case.warnings;

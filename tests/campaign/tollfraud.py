@@ -25,8 +25,10 @@ check by hand. Not followed: a queue's `context`, ConfBridge menus and
 switches other than Loopback, which are reported.
 
 Prints the paths as JSON, one per trunk, way through and number, and exits
-with 1 if one is a finding or something could not be followed. The search
-and the matching of extensions are those of dialplan.py.
+with 1 if one is a finding or something could not be followed. Extensions
+sort and match as configs/samples/extensions.conf.sample and the pattern
+matching rules of Asterisk's documentation say, and where they say nothing,
+a comment names the source.
 """
 
 import dataclasses
@@ -34,14 +36,258 @@ import json
 import re
 import sys
 
-import dialplan
-
 # a part of a value the caller chooses, and one the walk cannot know
 ANY = "\x01"
 UNKNOWN = "\x02"
 # applications after which the caller's digits pick the next extension
 DIGITS = {"waitexten", "background"}
 ENDS = {"hangup", "busy", "congestion"}
+
+# `.` and `!` sort after every set of characters, `.` first, and the end of a
+# pattern after both (main/pbx.c ext_cmp_pattern_pos)
+WILDCARD = {".": 0x18000, "!": 0x28000}
+END = (0x30000, ())
+
+# the characters N, X and Z stand for, in either case (main/pbx.c
+# _extension_match_core)
+CLASSES = {"N": "23456789", "X": "0123456789", "Z": "123456789"}
+
+
+def positions(pattern):
+    """The positions of a pattern without its underscore, each a set of
+    characters or a wildcard. Dashes outside a set are ignored."""
+    result = []
+    i = 0
+    while i < len(pattern):
+        c = pattern[i]
+        if c == "-":
+            i += 1
+        elif c == "[":
+            end = pattern.find("]", i + 1)
+            if end < 0:
+                raise ValueError(f"no ] in pattern {pattern!r}")
+            chars = set()
+            body = pattern[i + 1 : end]
+            j = 0
+            while j < len(body):
+                if j + 2 < len(body) and body[j + 1] == "-":
+                    chars.update(chr(x) for x in range(ord(body[j]), ord(body[j + 2]) + 1))
+                    j += 3
+                else:
+                    chars.add(body[j])
+                    j += 1
+            # an empty set is skipped
+            if chars:
+                result.append(frozenset(chars))
+            i = end + 1
+        elif c in WILDCARD:
+            result.append(c)
+            i += 1
+        else:
+            result.append(frozenset(CLASSES.get(c.upper(), c)))
+            i += 1
+    return result
+
+
+def matches(extension, number):
+    """Whether dialling `number` reaches `extension`, a name or a pattern."""
+    if not extension.startswith("_"):
+        return extension.replace("-", "") == number.replace("-", "")
+    rest = number.replace("-", "")
+    for position in positions(extension[1:]):
+        if position == ".":
+            return rest != ""
+        if position == "!":
+            return True
+        if not rest or rest[0] not in position:
+            return False
+        rest = rest[1:]
+    return rest == ""
+
+
+def sort_key(extension):
+    """Asterisk's order of extensions: names before patterns; patterns by
+    their positions from the left, a smaller set before a larger one, sets of
+    one size by their characters."""
+    if not extension.startswith("_"):
+        return (0, extension.replace("-", "").encode())
+    keys = []
+    for position in positions(extension[1:]):
+        if position in WILDCARD:
+            keys.append((WILDCARD[position], ()))
+        else:
+            chars = tuple(sorted(ord(c) for c in position))
+            keys.append(((len(chars) << 8) | chars[0], chars))
+    return (1, tuple(keys) + (END,))
+
+
+@dataclasses.dataclass
+class Step:
+    priority: int
+    label: str | None
+    application: str
+    data: str
+
+    def text(self):
+        return f"{self.application}({self.data})"
+
+
+# compared and hashed as itself, so a walk can tell extensions apart
+@dataclasses.dataclass(eq=False)
+class Extension:
+    name: str
+    # the caller ID an extension written as name/callerid matches
+    cid: str | None = None
+    hint: str | None = None
+    steps: dict = dataclasses.field(default_factory=dict)
+
+    def key(self):
+        # an extension with a caller ID comes before the same one without
+        # (main/pbx.c ast_add_extension2_lockopt)
+        cid = (0, sort_key(self.cid)) if self.cid is not None else (1,)
+        return (sort_key(self.name), cid)
+
+
+@dataclasses.dataclass
+class Context:
+    name: str
+    extensions: list = dataclasses.field(default_factory=list)
+    includes: list = dataclasses.field(default_factory=list)
+    switches: list = dataclasses.field(default_factory=list)
+    ignorepats: list = dataclasses.field(default_factory=list)
+
+    def extension(self, name, cid=None):
+        for e in self.extensions:
+            if e.name == name and e.cid == cid:
+                return e
+        e = Extension(name, cid)
+        self.extensions.append(e)
+        self.extensions.sort(key=Extension.key)
+        return e
+
+
+def application(text):
+    """`App(data)` as the application and its data."""
+    name, _, rest = text.partition("(")
+    return name.strip(), rest[: rest.rfind(")")] if ")" in rest else rest
+
+
+# `dialplan show` (main/pbx.c show_dialplan_helper): a line is
+# "  %-17s %-45s [registrar]", the first column holding the extension or a
+# label
+HEADER = re.compile(r"\[ (?P<included>Included context|Context) '(?P<name>.*)' created by '.*' \]")
+EXTENSION = re.compile(r"  '(?P<name>.*?)'(?: \(CID match '(?P<cid>.*?)'\))? => +(?P<rest>.*)")
+LABEL = re.compile(r" {5}\[(?P<label>.*?)\] +(?P<rest>\d+\. .*)")
+NEXT = re.compile(r" {20,}(?P<rest>\d+\. .*)")
+OTHER = re.compile(r"  (?P<what>Include =>|Ignore pattern =>|Alt\. Switch =>) +'(?P<value>.*)' +\[[^][]*\]")
+REGISTRAR = re.compile(r"(?P<body>.*?) +\[[^][]*\]")
+PRIORITY = re.compile(r"(?P<priority>\d+)\. (?P<app>.*)")
+
+
+def events(output):
+    """What `dialplan show` printed, as a list of events: ("context", name,
+    included), ("extension", name, cid), ("hint", value), ("step", priority,
+    label, application, data), ("include", value), ("ignorepat", value) and
+    ("switch", value)."""
+    result = []
+    for line in output.splitlines():
+        if m := HEADER.fullmatch(line):
+            result.append(("context", m["name"], m["included"] != "Context"))
+            continue
+        if m := OTHER.fullmatch(line):
+            kind = {"Include =>": "include", "Ignore pattern =>": "ignorepat", "Alt. Switch =>": "switch"}[m["what"]]
+            result.append((kind, m["value"]))
+            continue
+        label = None
+        if m := EXTENSION.fullmatch(line):
+            result.append(("extension", m["name"], m["cid"]))
+            rest = m["rest"]
+        elif m := LABEL.fullmatch(line):
+            label, rest = m["label"], m["rest"]
+        elif m := NEXT.fullmatch(line):
+            rest = m["rest"]
+        else:
+            continue
+        body = REGISTRAR.fullmatch(rest)["body"]
+        if body.startswith("hint: "):
+            result.append(("hint", body.removeprefix("hint: ")))
+        else:
+            p = PRIORITY.fullmatch(body)
+            result.append(("step", int(p["priority"]), label, *application(p["app"])))
+    return result
+
+
+def parse(output):
+    """The contexts of a whole `dialplan show`, by name."""
+    contexts = {}
+    context = extension = None
+    for event in events(output):
+        match event:
+            case ("context", name, _):
+                context = contexts.setdefault(name, Context(name))
+            case ("extension", name, cid):
+                extension = context.extension(name, cid)
+            case ("hint", value):
+                extension.hint = value
+            case ("step", priority, label, app, data):
+                extension.steps[priority] = Step(priority, label, app, data)
+            case ("include", value):
+                context.includes.append(value)
+            case ("ignorepat", value):
+                context.ignorepats.append(value)
+            case ("switch", value):
+                context.switches.append(value)
+    return contexts
+
+
+def include_target(value):
+    """The context an include names: up to a | or else a comma, after which
+    comes the time it applies at (main/pbx_include.c include_alloc)."""
+    for separator in "|,":
+        if separator in value:
+            return value.split(separator, 1)[0]
+    return value
+
+
+def lookup(contexts, context, number, priority=1, label=None, visited=None):
+    """Where Asterisk finds NUMBER in CONTEXT: its extensions in their order,
+    the first that matches and has the priority or label; then the
+    context's switches, of which only Loopback is modelled; then its
+    includes in order, depth first, each context once, compared ignoring
+    case (main/pbx.c pbx_find_extension). Returns (switched, extension,
+    step), where switched is the context a switch ran the lookup in, or
+    None."""
+    visited = set() if visited is None else visited
+    c = contexts.get(context)
+    if c is None or context.lower() in visited:
+        return None
+    for e in c.extensions:
+        # the walk has no caller ID, which only an empty CID match takes
+        if not matches(e.name, number) or e.cid not in (None, ""):
+            continue
+        for step in e.steps.values():
+            if (step.label == label) if label is not None else (step.priority == priority):
+                return (None, e, step)
+    for switch in c.switches:
+        name, _, data = switch.partition("/")
+        if name.lower() != "loopback":
+            continue
+        # [exten]@context[:priority][/extramatch], empty parts meaning the
+        # call's own (pbx/pbx_loopback.c)
+        target, _, extramatch = data.partition("/")
+        exten, _, rest = target.rpartition("@")
+        where = rest.partition(":")[0]
+        if where.lower() == context.lower() or (extramatch and not matches(extramatch, number)):
+            continue
+        found = lookup(contexts, where, exten or number, priority, label)
+        if found:
+            return (found[0] or where,) + found[1:]
+    visited.add(context.lower())
+    for include in c.includes:
+        found = lookup(contexts, include_target(include), number, priority, label, visited)
+        if found:
+            return found
+    return None
 
 
 def split_top(text, separator):
@@ -125,7 +371,7 @@ class Walk:
     def __init__(self, probe, policy):
         self.unresolved = []
         outputs = {c["command"]: c["output"] for c in probe["commands"]}
-        self.contexts = dialplan.parse(outputs["dialplan show"])
+        self.contexts = parse(outputs["dialplan show"])
         self.globals = dict(
             m.groups() for m in re.finditer(r"^   ([^=\n]+)=(.*)$", outputs.get("dialplan show globals", ""), re.M)
         )
@@ -215,12 +461,12 @@ class Walk:
             self.enter(trunk, context, exten, path, channel, stack)
             return
         number = int(priority) if re.fullmatch(r"\s*\d+\s*", priority) else None
-        found = dialplan.lookup(self.contexts, context, exten, number or 1, None if number else priority)
+        found = lookup(self.contexts, context, exten, number or 1, None if number else priority)
         channel = dataclasses.replace(channel, exten=exten)
         if found:
             switched, extension, step = found
             self.steps(trunk, Place(context, extension, switched, step.priority), path, channel, stack)
-        elif exten != "i" and dialplan.lookup(self.contexts, context, "i"):
+        elif exten != "i" and lookup(self.contexts, context, "i"):
             self.jump(trunk, context, "i", "1", path, channel, stack)
 
     def extensions(self, context, path, seen=None):
@@ -241,7 +487,7 @@ class Walk:
             else:
                 self.unresolved.append({"where": context, "what": f"switch {switch}"})
         for include in c.includes:
-            result += self.extensions(dialplan.include_target(include), path, seen)
+            result += self.extensions(include_target(include), path, seen)
         return result
 
     def steps(self, trunk, place, path, channel, stack):
@@ -316,7 +562,7 @@ class Walk:
         elif app == "voicemail":
             # 0 leaves a message for the o extension of the context, * for a
             for exten in ("o", "a"):
-                if dialplan.lookup(self.contexts, place.context, exten):
+                if lookup(self.contexts, place.context, exten):
                     self.jump(trunk, place.context, exten, "1", here, channel, stack)
         elif app in DIGITS:
             self.enter(trunk, place.context, ANY, here, channel, stack)
@@ -324,7 +570,7 @@ class Walk:
 
     def hangup(self, trunk, place, path, channel, stack):
         """The end of a call, which runs the `h` extension of its context."""
-        if channel.exten != "h" and dialplan.lookup(self.contexts, place.context, "h"):
+        if channel.exten != "h" and lookup(self.contexts, place.context, "h"):
             self.jump(trunk, place.context, "h", "1", path, channel, ())
 
     def back(self, trunk, place, path, channel, stack):
@@ -391,7 +637,7 @@ class Walk:
                     shape = re.escape(endpoint).replace(re.escape(ANY), ".+")
                     whole = endpoint == ANY and channel.pattern is not None
                     for via in sorted(self.trunks):
-                        if re.fullmatch(shape, via) and (not whole or dialplan.matches(channel.pattern, via)):
+                        if re.fullmatch(shape, via) and (not whole or matches(channel.pattern, via)):
                             self.dials.append(dialled | {"via": via, "chosen": True})
             elif ANY in device or UNKNOWN in device:
                 self.unresolved.append({"where": path[-1], "what": f"dial {shown(device)}"})

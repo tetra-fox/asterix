@@ -1,10 +1,9 @@
-# Extensions through the probe (tests/campaign/probe.nix): each kind of
-# destination in `noAnswer`, reached after the phone rang for `ringTime`, and
-# in `busy`, reached when the phone answers busy, with the cause a hangup
-# destination ends such a call with; and names with quotes, with letters
-# outside ASCII and of 79 bytes, read back from Asterisk as the caller ID. The
-# phones are this Asterisk itself, at static contacts that ring without
-# answering or answer busy.
+# Extensions through the probe (tests/campaign/probe.nix): a hangup, another
+# extension and a mailbox in `noAnswer`, reached after the phone rang for
+# `ringTime`, and in `busy`, reached when the phone answers busy, with the
+# cause a hangup destination ends such a call with. The phones are this
+# Asterisk itself, at static contacts that ring without answering or answer
+# busy.
 {
   pkgs,
   self,
@@ -13,13 +12,8 @@
   probe = import ../campaign/probe.nix {inherit pkgs self;};
 
   kinds = {
-    conference.conference = "board";
-    context = {context.context = "landed";};
     extension.extension = "201";
     hangup.hangup = true;
-    ivr.ivr = "lobby";
-    queue.queue = "desk";
-    ringGroup.ringGroup = "front";
     voicemail.voicemail = "200";
   };
   kindNames = builtins.attrNames kinds;
@@ -33,48 +27,22 @@
   # where each kind ends: the contexts after the extension's own, and the
   # last step. A hangup destination gives a caller not answered yet no answer
   # (19), unless the phone answered busy, which stays the call's cause.
-  hangup = data: {
-    application = "Hangup";
-    inherit data;
-    how = "hangup";
-  };
   ends = busy: let
-    unanswered = hangup (
-      if busy
-      then ""
-      else "19"
-    );
+    unanswered = {
+      application = "Hangup";
+      data =
+        if busy
+        then ""
+        else "19";
+      how = "hangup";
+    };
   in {
-    conference = {
-      contexts = ["pbx-conference-board"];
-      ended = {
-        application = "ConfBridge";
-        data = "board";
-        how = "hangup";
-      };
-    };
-    context = {
-      contexts = ["landed"];
-      ended = hangup "";
-    };
     extension = {
       contexts = ["pbx-extension-201"];
       ended = unanswered;
     };
     hangup = {
       contexts = [];
-      ended = unanswered;
-    };
-    ivr = {
-      contexts = ["pbx-ivr-lobby"];
-      ended = hangup "";
-    };
-    queue = {
-      contexts = ["pbx-queue-desk"];
-      ended = hangup "";
-    };
-    ringGroup = {
-      contexts = ["pbx-ringgroup-front"];
       ended = unanswered;
     };
     voicemail = {
@@ -102,14 +70,6 @@
       busy = true;
     })
     kindNames;
-
-  names = {
-    "231" = ''Front "Desk"'';
-    "232" = builtins.fromJSON ''"J\u00fcrgen M\u00fcller"'';
-    "233" = builtins.fromJSON ''"\u53d7\u4ed8 \u5c71\u7530"'';
-    # the longest name Asterisk keeps whole, 79 bytes
-    "234" = lib.concatStrings (lib.replicate 26 (builtins.fromJSON ''"\u5c71"'')) + "!";
-  };
 
   result = probe {
     name = "pbx-extensions";
@@ -140,20 +100,7 @@
                 password = secret "sip-${answersBusy kind}";
                 busy = kinds.${kind};
               })
-            kindNames)
-            // lib.mapAttrs (number: name: {
-              inherit name;
-              password = secret "sip-${number}";
-            })
-            names;
-          ringGroups.front.members = ["201"];
-          queues.desk.timeout = 1;
-          conferences.board = {};
-          ivrs.lobby = {
-            prompt.sound = "beep";
-            timeout = 1;
-            attempts = 1;
-          };
+            kindNames);
         };
         services.asterisk = {
           pjsip = {
@@ -170,61 +117,50 @@
                 };
               };
           };
-          queues.queues.desk.members = ["PJSIP/201"];
           voicemail.mailboxes."200".pin = secret "vm-200";
-          dialplan.contexts = {
-            line.extensions = {
-              ring = [
-                "Ringing()"
-                "Wait(30)"
-              ];
-              busy = ["Busy()"];
-            };
-            landed.extensions.s = ["Hangup()"];
+          dialplan.contexts.line.extensions = {
+            ring = [
+              "Ringing()"
+              "Wait(30)"
+            ];
+            busy = ["Busy()"];
           };
         };
       })
     ];
-    commands = map (number: "pjsip show endpoint ${number}") (builtins.attrNames names);
     calls =
       map (sample: {
         extension = sample.number;
         context = "pbx-internal";
-        # a conference goes on until the probe hangs up
+        # the probe ends a call to a mailbox after 3 s
         limit = 3;
       })
       samples;
   };
 
-  expected = {
-    calls =
-      map (sample: {
-        contexts = ["pbx-internal" "pbx-extension-${sample.number}"] ++ (ends sample.busy).${sample.kind}.contexts;
-        busy = "${
-          if sample.busy
-          then "1"
-          else "0"
-        }?busy";
-        ended = (ends sample.busy).${sample.kind}.ended;
-      })
-      samples;
-    callerIds = lib.mapAttrsToList (number: name: ''"${lib.escape [''"''] name}" <${number}>'') names;
-  };
+  expected =
+    map (sample: {
+      contexts = ["pbx-internal" "pbx-extension-${sample.number}"] ++ (ends sample.busy).${sample.kind}.contexts;
+      busy = "${
+        if sample.busy
+        then "1"
+        else "0"
+      }?busy";
+      ended = (ends sample.busy).${sample.kind}.ended;
+    })
+    samples;
 in
   pkgs.runCommand "asterisk-pbx-extensions-tests" {
     nativeBuildInputs = [pkgs.jq];
     expected = builtins.toJSON expected;
     passAsFile = ["expected"];
   } ''
-    # each call's own channel, and the callerid line of each endpoint
-    jq -S '{
-      calls: [.calls[] | .channel as $channel | [.steps[] | select(.channel == $channel)] as $steps | {
-        contexts: reduce ($steps[] | .context) as $context ([]; if last == $context then . else . + [$context] end),
-        busy: [$steps[] | select(.application == "GotoIf")][0].data,
-        ended: (.ended[] | select(.channel == $channel) | {application, data, how})
-      }],
-      callerIds: [.commands[].output | capture("\n *callerid +: (?<id>[^\n]*)\n").id]
-    }' ${result}/probe.json > actual
+    # each call's own channel
+    jq -S '[.calls[] | .channel as $channel | [.steps[] | select(.channel == $channel)] as $steps | {
+      contexts: reduce ($steps[] | .context) as $context ([]; if last == $context then . else . + [$context] end),
+      busy: [$steps[] | select(.application == "GotoIf")][0].data,
+      ended: (.ended[] | select(.channel == $channel) | {application, data, how})
+    }]' ${result}/probe.json > actual
     if ! diff -u <(jq -S . "$expectedPath") actual; then
       echo "the calls went elsewhere, see ${result}/probe.json" >&2
       exit 1

@@ -572,8 +572,7 @@ A device nobody has tried on real hardware is fine.
    into `pbx.phones.files`.
 2. Set only settings the vendor documents for that device, cite the source and
    its version, and cross-check them against FusionPBX's and Wazo's templates.
-3. Test the files it writes in `tests/pbx/phones-<vendor>.nix`, listed in the
-   `pbx-phones` suite of `tests/default.nix`.
+3. Test one file of each format it writes in `tests/pbx/phones.nix`.
 4. Add the vendor to the tables here and a section like the ones above.
 
 ## Sources

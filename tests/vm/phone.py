@@ -1,8 +1,6 @@
 # Helpers for driving `sip-phone` (tests/vm/phone.nix), `baresip-phone`
 # (tests/vm/baresip.nix) and SIPp (tests/vm/sipp.nix) from test scripts.
-import contextlib
 import itertools
-import json
 import re
 import shlex
 import socket
@@ -20,15 +18,11 @@ class Phone:
     """A pjsua instance registered as `user`, or not registered at all with
     `register=False`, like a provider's server that is only called. It answers
     incoming calls with the SIP status `auto_answer`: 200 picks up, 180 rings
-    until told otherwise, 486 is busy. With `call_waiting=False` it answers
-    486 to any call that comes while it is in one. It sends a sine of `tone`
-    Hz, or the WAV file `tone` names from the start of each call, such as
-    inband DTMF, and records what it hears (tones.py). With
-    `symmetric_rtp=False` it sends RTP only to the address the SDP names
-    (tests/vm/phone.nix). `options` are further pjsua arguments, such as
-    --mwi."""
+    until told otherwise, 486 is busy. It sends a sine of its own frequency
+    and records what it hears (tones.py). `options` are further pjsua
+    arguments, such as --reg-timeout=3600."""
 
-    def __init__(self, machine, name, user, password, server, sip_port=5070, cli_port=2300, auto_answer=200, tone=None, register=True, call_waiting=True, symmetric_rtp=True, tcp=False, options=""):
+    def __init__(self, machine, name, user, password, server, sip_port=5070, cli_port=2300, auto_answer=200, register=True, options=""):
         self.machine = machine
         self.name = name
         self.user = user
@@ -38,29 +32,21 @@ class Phone:
         self.cli_port = cli_port
         self.auto_answer = auto_answer
         self.register = register
-        self.call_waiting = call_waiting
-        self.symmetric_rtp = symmetric_rtp
-        self.tcp = tcp
         self.options = options
-        self.tone = PHONE_TONES[next(phones_made) % len(PHONE_TONES)] if tone is None else tone
+        self.tone = PHONE_TONES[next(phones_made) % len(PHONE_TONES)]
         self.log = f"/tmp/sip-phone-{name}.log"
         self.recording = f"/tmp/sip-phone-{name}.wav"
 
     def start_command(self, extra=""):
-        # sip-phone reads this one before the pjsua arguments
-        flags = [] if self.symmetric_rtp else ["--no-symmetric-rtp"]
-        flags.append(f"--auto-answer={self.auto_answer}")
+        flags = [f"--auto-answer={self.auto_answer}"]
         if self.register:
             flags.append(shlex.quote(f"--registrar=sip:{self.server}"))
-        if not self.call_waiting:
-            # pjsua answers 486 when it has no free call slot
-            flags.append("--max-calls=1")
         # the server URI decides the transport, as on a real phone. A UDP
-        # phone gets no TCP transport unless `tcp`: pjsua sends requests of
-        # 1300 bytes or more over TCP when it has one (RFC 3261 18.1.1)
+        # phone gets no TCP transport: pjsua sends requests of 1300 bytes or
+        # more over TCP when it has one (RFC 3261 18.1.1)
         if "transport=tcp" in self.server:
             flags.append("--no-udp")
-        elif not self.tcp:
+        else:
             flags.append("--no-tcp")
         if self.server.startswith("["):
             flags.append("--ipv6")
@@ -98,16 +84,9 @@ class Phone:
     def hangup(self):
         self.cli("call hangup_all")
 
-    def hold(self):
-        self.cli("call hold")
-
     def dtmf(self, digits):
         """Send DTMF as RFC 4733 events on the current call."""
         self.cli(f"call d_2833 {digits}")
-
-    def dtmf_info(self, digits):
-        """Send DTMF as SIP INFO requests on the current call."""
-        self.cli(f"call d_info {digits}")
 
     def dtmf_received(self, method=None):
         """Digits the phone received as DTMF on its calls so far, in order;
@@ -127,27 +106,10 @@ class Phone:
                 raise Exception(f"{self.name} received DTMF {received!r}, expected {digits!r}")
             time.sleep(0.5)
 
-    def transfer(self, extension):
-        """Blind transfer of the current call (REFER)."""
-        self.cli(f"call transfer {self.uri(extension)}")
-
-    def transfer_replaces(self, call_id):
-        """Attended transfer: connect the current call's peer with the peer of
-        call `call_id` (REFER with Replaces)."""
-        self.cli(f"call transfer_replaces {call_id}")
-
     def watch(self, extension):
         """Subscribe to the presence of `extension`, like a busy lamp key
         (pjsua's --add-buddy adds a buddy without subscribing)."""
         self.cli(f"im add_b {self.uri(extension)}")
-
-    def current_call(self):
-        """Id of the current call. pjsua hands out call ids round-robin, so
-        they cannot be predicted."""
-        output = self.cli("call list")
-        match = re.search(r"Current call id=(\d+)", output)
-        assert match, output
-        return int(match.group(1))
 
     def log_text(self):
         return self.machine.succeed(f"cat {self.log}")
@@ -155,17 +117,6 @@ class Phone:
     def received(self, method):
         """Requests of `method` this phone received, as raw SIP messages."""
         return re.findall(rf"RX \d+ bytes Request msg {method}/.*?\n--end msg--", self.log_text(), re.S)
-
-    def rtp_address(self):
-        """The address and RTP port the last SDP the phone sent gives; pjsua
-        takes a new port for each call. RTCP is one above."""
-        sent = re.findall(r"TX \d+ bytes .*?\n--end msg--", self.log_text(), re.S)
-        offers = [message for message in sent if "\nm=audio " in message]
-        assert offers, f"{self.name} sent no SDP"
-        address = re.search(r"^c=IN IP[46] (\S+)", offers[-1], re.M)
-        port = re.search(r"^m=audio (\d+) ", offers[-1], re.M)
-        assert address and port, offers[-1]
-        return address.group(1), int(port.group(1))
 
     def count(self, pattern):
         """Lines of the phone's log matching the extended regular expression."""
@@ -184,20 +135,6 @@ class Phone:
         """Wait until the phone has received more than `after` requests of `method`."""
         self.wait_count(f"RX [0-9]+ bytes Request msg {method}/", after + 1, timeout=timeout)
 
-    def contact_status(self, machine):
-        """Status (Avail, NonQual, ...) of this phone's contact in `pjsip show
-        contacts` on `machine`, or None when Asterisk holds none for it."""
-        match = re.search(
-            rf"^ *Contact: +{self.user}/sip:{self.user}@[^:]+:{self.sip_port}\S* +\S+ +(\S+)",
-            asterisk(machine, "pjsip show contacts"),
-            re.M,
-        )
-        return match.group(1) if match else None
-
-    def confirmed(self):
-        """Calls that got their ACK, for a callee, or sent it, for a caller."""
-        return self.count("Call [0-9]+ state changed to CONFIRMED")
-
     def wait_confirmed(self, after=0, timeout=90):
         """Wait until more than `after` of the phone's calls are confirmed."""
         self.wait_count("Call [0-9]+ state changed to CONFIRMED", after + 1, timeout=timeout)
@@ -211,101 +148,40 @@ class Phone:
 
 
 class Baresip:
-    """A baresip instance registered as `user`, which answers every call. Like
-    Phone, it sends a sine of `tone` Hz and records what it hears. The server
-    URI picks the transport (tests/vm/baresip.nix), and a wss phone verifies
-    the server's certificate against `ca_file`."""
+    """A baresip instance registered as `user`. The server URI picks the
+    transport (tests/vm/baresip.nix), and a wss phone verifies the server's
+    certificate against `ca_file`."""
 
-    def __init__(self, machine, name, user, password, server, sip_port=5090, ctrl_port=4444, tone=None, ca_file=""):
+    def __init__(self, machine, name, user, password, server, sip_port=5090, ca_file=""):
         self.machine = machine
         self.name = name
         self.user = user
         self.password = password
         self.server = server
         self.sip_port = sip_port
-        self.ctrl_port = ctrl_port
         self.ca_file = ca_file
-        self.tone = PHONE_TONES[next(phones_made) % len(PHONE_TONES)] if tone is None else tone
+        self.tone = PHONE_TONES[next(phones_made) % len(PHONE_TONES)]
         self.log = f"/tmp/baresip-phone-{name}.log"
-        self.recording = f"/tmp/baresip-phone-{name}.wav"
 
     def start(self):
         self.machine.succeed(
             f"baresip-phone start {self.name} {self.user} {shlex.quote(self.password)} "
-            f"{shlex.quote(self.server)} {self.sip_port} {self.ctrl_port} {self.tone} {shlex.quote(self.ca_file)}"
+            f"{shlex.quote(self.server)} {self.sip_port} {self.tone} {shlex.quote(self.ca_file)}"
         )
         self.machine.wait_until_succeeds(f"test -f {self.log}", timeout=60)
-        # baresip does not read /etc/hosts, so it dials the server's address,
-        # followed by the port and parameters of `server`
-        self.address = self.machine.succeed(f"cat /run/baresip-phone/{self.name}/server").strip()
-
-    def stop(self):
-        self.machine.succeed(f"baresip-phone stop {self.name}")
-
-    def command(self, command, params=""):
-        """Runs a baresip command and returns what it answered."""
-        output = self.machine.succeed(f"baresip-phone command {self.name} {command} {shlex.quote(params)}")
-        # ctrl_tcp frames each message as <length>:<json>,
-        while output:
-            length, _, rest = output.partition(":")
-            message = json.loads(rest[: int(length)])
-            output = rest[int(length) + 1 :]
-            if message.get("response"):
-                assert message["ok"], f"baresip {command} {params}: {message}"
-                return message["data"]
-        raise Exception(f"baresip did not answer {command} {params}")
 
     def wait_registered(self, timeout=120):
         # baresip logs `<aor>: {0/UDP/v4} 200 OK (<server>) [1 binding]`
         self.machine.wait_until_succeeds(f"grep -q '}} 200 OK' {self.log}", timeout=timeout)
 
-    def call(self, extension):
-        self.command("dial", f"sip:{extension}@{self.address}")
-
-    def hangup(self):
-        self.command("hangup")
-
-
-def sipp_command(scenario, *args):
-    return (
-        f"sipp -sf /etc/sipp/{scenario}.xml -m 1 -nostdin -timeout 60 -timeout_error "
-        f"-trace_msg -message_file /tmp/sipp-{scenario}.log {shlex.join(args)}"
-    )
-
 
 def sipp(machine, scenario, remote, *args):
     """Plays the SIPp scenario tests/vm/sipp/`scenario`.xml once against
     `remote`, and fails when it does."""
-    machine.succeed(sipp_command(scenario, *args, remote))
-
-
-def sipp_start(machine, scenario, *args):
-    """Plays the SIPp scenario tests/vm/sipp/`scenario`.xml once in the
-    background, for one that waits for a call or for the test; sipp_wait()
-    fails when it did."""
-    status = f"/tmp/sipp-{scenario}.status"
     machine.succeed(
-        f"rm -f {status} && systemd-run --unit=sipp-{scenario} --collect -E PATH sh -c "
-        + shlex.quote(f"{sipp_command(scenario, *args)}; echo $? > {status}")
+        f"sipp -sf /etc/sipp/{scenario}.xml -m 1 -nostdin -timeout 60 -timeout_error "
+        f"-trace_msg -message_file /tmp/sipp-{scenario}.log {shlex.join([*args, remote])}"
     )
-
-
-def sipp_wait(machine, scenario, timeout=90):
-    status = f"/tmp/sipp-{scenario}.status"
-    machine.wait_until_succeeds(f"test -f {status}", timeout=timeout)
-    code = machine.succeed(f"cat {status}").strip()
-    assert code == "0", f"SIPp {scenario} exited with {code}: " + machine.succeed(f"journalctl -u sipp-{scenario}")
-
-
-@contextlib.contextmanager
-def stalled(machine):
-    """Asterisk on `machine` stops for 0.7 s every 1.5 s while the block
-    runs, so it answers late: a client sends its request again, and the
-    answers to both copies can come after the client went on."""
-    pid = machine.succeed("systemctl show -P MainPID asterisk.service").strip()
-    machine.succeed(f"systemd-run --unit=stall --collect -E PATH sh -c 'while kill -STOP {pid}; do sleep 0.7; kill -CONT {pid}; sleep 0.8; done'")
-    yield
-    machine.succeed(f"systemctl stop stall && kill -CONT {pid}")
 
 
 def pjsua_tls(certificates, certificate=None):
@@ -384,19 +260,6 @@ def rtp_received(phones):
     return received
 
 
-def media_peers(phones):
-    """Where the RTP each phone receives on its current call comes from, as
-    address:port by phone name, or "-" before any has arrived."""
-    answers = cli_parallel([(phone, "call dump_q") for phone in phones])
-    peers = {}
-    for phone in phones:
-        # `#0 audio G722 @16kHz, sendrecv, peer=10.3.1.10:5058`
-        match = re.search(r"#\d+ audio .*, peer=(\S+)", answers[phone.name])
-        assert match, answers[phone.name]
-        peers[phone.name] = match.group(1)
-    return peers
-
-
 def asterisk(machine, command):
     return machine.succeed(f"asterisk -rx {shlex.quote(command)}")
 
@@ -470,28 +333,6 @@ def within(seconds, trigger, times):
     `seconds` after it."""
     later = [moment - trigger for moment in times if moment >= trigger]
     assert later and min(later) <= seconds, f"nothing within {seconds} s after {trigger}: {times}"
-
-
-def rtp_packets(machine, interface="eth1"):
-    """RTP packets among the UDP datagrams of udp_datagrams(): the capture
-    time, source and destination, SSRC and sequence number."""
-    packets = []
-    for when, source, destination, payload in udp_datagrams(machine, interface):
-        # version 2, and not RTCP, whose packet types 200 to 204 fill the
-        # byte that holds the marker bit and payload type in RTP
-        if len(payload) >= 12 and payload[0] >> 6 == 2 and not 200 <= payload[1] <= 204:
-            sequence, _, ssrc = struct.unpack_from("!HII", payload, 2)
-            packets.append({"time": when, "source": source, "destination": destination, "ssrc": ssrc, "sequence": sequence})
-    return packets
-
-
-def netem(machine, interface, *settings):
-    """Delay, loss, reordering and the like, as tc-netem(8) takes them, on
-    what `machine` sends out of `interface`; no settings removes them."""
-    if settings:
-        machine.succeed(f"tc qdisc replace dev {interface} root netem {shlex.join(settings)}")
-    else:
-        machine.succeed(f"tc qdisc del dev {interface} root")
 
 
 CHANNEL_FIELDS = [
@@ -628,19 +469,4 @@ def wait_for_media_both_ways(machine, phones, minimum=50, timeout=90, count=None
             return stats
         if time.time() > deadline:
             raise Exception(f"RTP did not flow both ways: {stats}, received by the phones: {received}")
-        time.sleep(2)
-
-
-def wait_calls_continue(machine, phones, stats, minimum=50, timeout=60):
-    """The channels in `stats` (from wait_for_media_both_ways) are still the
-    only ones, and each phone receives `minimum` more packets."""
-    received = rtp_received(phones)
-    deadline = time.time() + timeout
-    while True:
-        now = channel_stats(machine)
-        now_received = rtp_received(phones)
-        if set(now) == set(stats) and all(now_received[name] >= received[name] + minimum for name in received):
-            return now
-        if time.time() > deadline:
-            raise Exception(f"the calls did not go on: {stats}, {received} -> {now}, {now_received}")
         time.sleep(2)

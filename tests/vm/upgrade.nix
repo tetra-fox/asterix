@@ -1,48 +1,28 @@
-# Upgrading a pbx that has state: it boots the first of `systems` and
-# switches to each next one with switch-to-configuration. Before the first
-# switch it takes a voicemail message, an astdb key, a queue member added at
-# runtime (persistent members) and CDR and CEL records in SQLite. After each
-# switch the new Asterisk runs, all of that is still there, the phones'
-# registrations are too without the phones registering again, a call between
-# the phones and a call through the queue to the runtime member carry audio
-# both ways, and both calls add CDR and CEL records.
-#
-# The gate goes from the default Asterisk to asterisk_23 and back.
+# Upgrading a pbx that has state: it boots with the default Asterisk, switches
+# to asterisk_23 with switch-to-configuration and back, as a rollback would.
+# Before the first switch it takes a voicemail message, an astdb key, a queue
+# member added at runtime (persistent members) and CDR and CEL records in
+# SQLite. After each switch the new Asterisk runs, all of that is still
+# there, the phones' registrations are too without the phones registering
+# again, a call between the phones and a call through the queue to the
+# runtime member carry audio both ways, and both calls add CDR and CEL
+# records.
 {
   pkgs,
   self,
-  # each a name, the nixpkgs it is built from, the asterix module, the
-  # attribute of the Asterisk package in that nixpkgs and further modules
-  systems ?
-    map (package: {
-      name = package;
-      inherit package;
-    }) [
-      "asterisk"
-      "asterisk_23"
-      "asterisk"
-    ],
 }: let
   inherit (pkgs) lib;
+in
+  pkgs.testers.runNixOSTest {
+    name = "asterisk-upgrade";
 
-  withDefaults = system:
-    {
-      inherit pkgs;
-      asterix = self.nixosModules.default;
-      package = "asterisk";
-      modules = [];
-    }
-    // system;
-
-  node = system: {config, ...}: let
-    inherit (config.lib.asterisk) secret;
-  in {
-    imports =
-      [
-        system.asterix
+    nodes.pbx = {config, ...}: let
+      inherit (config.lib.asterisk) secret;
+    in {
+      imports = [
+        self.nixosModules.default
         ./common.nix
-        # the phones run from the test's nixpkgs whatever the system's is
-        (import ./phone.nix {inherit pkgs;})
+        ./phone.nix
         (import ./secrets.nix {
           fixed = {
             sip-101 = "pw-101";
@@ -50,93 +30,66 @@
             vm-101 = "1234";
           };
         })
-      ]
-      ++ system.modules;
+      ];
 
-    system.switch.enable = true;
-    environment.systemPackages = [pkgs.sqlite];
+      environment.systemPackages = [pkgs.sqlite];
 
-    services.asterisk = {
-      enable = true;
-      package = system.pkgs.${system.package};
-
-      pjsip = {
-        transports.udp = {};
-        endpoints = lib.genAttrs ["101" "102"] (extension: {
-          context = "internal";
-          auth.password = secret "/run/test-secrets/sip-${extension}";
-        });
-      };
-
-      dialplan.contexts.internal.extensions = {
-        "_10X" = [
-          "Dial(PJSIP/\${EXTEN},20)"
-          "Hangup()"
-        ];
-        "700" = [
-          "Answer()"
-          "VoiceMail(101@default,s)"
-          "Hangup()"
-        ];
-        "800" = [
-          "Queue(support)"
-          "Hangup()"
-        ];
-      };
-
-      voicemail.mailboxes."101" = {
-        pin = secret "/run/test-secrets/vm-101";
-        fullName = "Alice";
-      };
-
-      queues = {
-        persistentMembers = true;
-        queues.support = {};
-      };
-
-      cdr.sqlite.enable = true;
-      cel = {
+      services.asterisk = {
         enable = true;
-        sqlite.enable = true;
+
+        pjsip = {
+          transports.udp = {};
+          endpoints = lib.genAttrs ["101" "102"] (extension: {
+            context = "internal";
+            auth.password = secret "/run/test-secrets/sip-${extension}";
+          });
+        };
+
+        dialplan.contexts.internal.extensions = {
+          "_10X" = [
+            "Dial(PJSIP/\${EXTEN},20)"
+            "Hangup()"
+          ];
+          "700" = [
+            "Answer()"
+            "VoiceMail(101@default,s)"
+            "Hangup()"
+          ];
+          "800" = [
+            "Queue(support)"
+            "Hangup()"
+          ];
+        };
+
+        voicemail.mailboxes."101" = {
+          pin = secret "/run/test-secrets/vm-101";
+          fullName = "Alice";
+        };
+
+        queues = {
+          persistentMembers = true;
+          queues.support = {};
+        };
+
+        cdr.sqlite.enable = true;
+        cel = {
+          enable = true;
+          sqlite.enable = true;
+        };
       };
+
+      specialisation.asterisk_23.configuration.services.asterisk.package = pkgs.asterisk_23;
     };
-  };
 
-  first = withDefaults (builtins.head systems);
-in
-  pkgs.testers.runNixOSTest {
-    name = "asterisk-upgrade";
-
-    nodes.pbx = node first;
-
-    testScript = {nodes, ...}: let
-      # the host's store and the test's directories as the running VM has
-      # them: the test framework of another nixpkgs may share them otherwise
-      # (nixos-unstable's qemu-vm.nix with virtiofs, 26.05's with 9p), and
-      # the switch would fail to mount them
-      shared = lib.mapAttrs (_: fs: lib.mkForce {inherit (fs) device fsType options;}) (
-        lib.getAttrs ["/nix/.ro-store" "/tmp/shared" "/tmp/xchg"] nodes.pbx.virtualisation.fileSystems
-      );
-      next = map (system: let
-        full = withDefaults system;
-      in {
-        inherit (full) name;
-        version = full.pkgs.${full.package}.version;
-        toplevel =
-          (full.pkgs.testers.runNixOSTest {
-            name = "asterisk-upgrade-${full.name}";
-            nodes.pbx = {
-              imports = [(node full)];
-              virtualisation.fileSystems = shared;
-            };
-            testScript = "";
-          }).nodes.pbx.system.build.toplevel;
-      }) (builtins.tail systems);
-    in
+    testScript = {nodes, ...}:
       builtins.readFile ./phone.py
       + ''
-        FIRST_NAME, FIRST_VERSION = ${builtins.toJSON first.name}, ${builtins.toJSON first.pkgs.${first.package}.version}
-        SYSTEMS = json.loads(${builtins.toJSON (builtins.toJSON next)})
+        FIRST_VERSION = "${nodes.pbx.services.asterisk.package.version}"
+        # what each switch activates, below the first system, and the Asterisk it runs
+        SWITCHES = [
+            ("asterisk_23", "/specialisation/asterisk_23", "${pkgs.asterisk_23.version}"),
+            ("asterisk", "", FIRST_VERSION),
+        ]
         DB = "/var/log/asterisk/master.db"
 
         def version():
@@ -181,8 +134,9 @@ in
         phones = [alice, bob]
 
         pbx.wait_for_unit("asterisk.service")
+        base = pbx.succeed("readlink -f /run/current-system").strip()
 
-        with subtest(f"{FIRST_NAME}: Asterisk {FIRST_VERSION} runs, the phones register, and it takes a voicemail message, an astdb key, a queue member added at runtime and CDR and CEL records"):
+        with subtest(f"asterisk: Asterisk {FIRST_VERSION} runs, the phones register, and it takes a voicemail message, an astdb key, a queue member added at runtime and CDR and CEL records"):
             assert version() == FIRST_VERSION, version()
             start_phones(phones)
             wait_registrations({alice: 200, bob: 200})
@@ -198,13 +152,13 @@ in
             assert "PJSIP/102" in pbx.succeed("asterisk -rx 'database show Queue/PersistentMembers'")
             calls_work()
 
-        for system in SYSTEMS:
-            with subtest(f"{system['name']}: the switch runs Asterisk {system['version']} and keeps the state and the registrations"):
+        for name, target, expected in SWITCHES:
+            with subtest(f"{name}: the switch runs Asterisk {expected} and keeps the state and the registrations"):
                 cdr, cel = records()
                 sent = registers()
-                print(pbx.succeed(f"{system['toplevel']}/bin/switch-to-configuration test 2>&1"))
+                print(pbx.succeed(f"{base}{target}/bin/switch-to-configuration test 2>&1"))
                 pbx.wait_for_unit("asterisk.service")
-                assert version() == system["version"], version()
+                assert version() == expected, version()
                 # restored from astdb, and qualified, as the queue skips a
                 # member until its contact is
                 pbx.wait_until_succeeds("test $(asterisk -rx 'pjsip show contacts' | grep -c ' Avail ') -eq 2", timeout=15)
@@ -215,7 +169,7 @@ in
                 now_cdr, now_cel = records()
                 assert now_cdr[:len(cdr)] == cdr and now_cel >= cel, (cdr, cel, now_cdr, now_cel)
 
-            with subtest(f"{system['name']}: calls work and are recorded"):
+            with subtest(f"{name}: calls work and are recorded"):
                 calls_work()
       '';
   }

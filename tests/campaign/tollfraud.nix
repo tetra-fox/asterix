@@ -12,10 +12,6 @@
 }: let
   inherit (pkgs) lib;
   probe = import ./probe.nix {inherit pkgs self;};
-  scripts = lib.fileset.toSource {
-    root = ./.;
-    fileset = lib.fileset.unions [./dialplan.py ./tollfraud.py];
-  };
 in
   {
     name,
@@ -46,6 +42,6 @@ in
       cp ${result}/probe.json $out/probe.json
       cp ${policy} $out/policy.json
       status=0
-      ${lib.getExe pkgs.python3} ${scripts}/tollfraud.py walk $out/probe.json $out/policy.json > $out/report.json || status=$?
+      ${lib.getExe pkgs.python3} ${./tollfraud.py} walk $out/probe.json $out/policy.json > $out/report.json || status=$?
       echo "$status" > $out/status
     ''

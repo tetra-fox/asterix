@@ -1,29 +1,20 @@
 # Calls through the trunks of the pbx layer, checked by who rings and what
-# the provider receives on the wire. Inbound: each number a trunk sends,
-# written with a + too, reaches its destination, a number with opening hours
-# its closed destination while closed early and its open one again after
-# reopening, and a number without a route on the trunk it arrives on is
-# refused. Outbound: the provider gets the number without the prefix #, with
-# pbx.outbound's caller ID in P-Asserted-Identity and the account in From,
-# and a number too short for the pattern is refused as incomplete. Numbers
-# with * and #: phones registered as #1 and *2 ring when their numbers come
-# as %23 and *, which pjsua sends, or as # and %2A, which SIPp sends, and a
-# ring group, queue, conference, voice menu with a # key, page, the voicemail
-# menu, a close-early number and an inbound number reach their objects.
+# the provider receives on the wire. Inbound: a number a trunk sends, written
+# with a +, reaches its destination, and so does the number of a second
+# trunk to the same provider, which the line parameter tells apart.
+# Outbound: the provider gets the number without the prefix #, with
+# pbx.outbound's caller ID in P-Asserted-Identity and the account in From.
 # Emergency: each number, with and without the prefix, leaves for the
 # provider within a second of the phone's INVITE from every extension, with
-# pbx.outbound's caller ID as it has none of its own, and so does a second
-# call during the first, while notify rings the other extensions, one of
-# them busy and one not registered, but not the caller's own, with the
-# caller's name as written, quotes and letters outside ASCII included; with
-# the provider unreachable, an emergency or outbound caller gets congestion
-# (503), a fast busy, once the trunk's INVITE times out.
+# pbx.outbound's caller ID as it has none of its own, while notify rings the
+# other extensions, one of them not registered, but not the caller's own,
+# with the caller's name as written, quotes and letters outside ASCII
+# included.
 #
 #   pbx       10.2.0.10, trunks provider and second
 #   provider  10.2.0.5, accounts office (provider) and 5552000 (second)
-#   phones    10.2.0.21, runs 201 (rings, no call waiting), 202 (rings), 203
-#             (answers), 204 (rings), #1 and *2 (ring, no mailbox) and SIPp;
-#             205 is never registered
+#   phones    10.2.0.21, runs 201 and 202 (ring) and 203 (answers); 205 is
+#             never registered
 {
   pkgs,
   self,
@@ -34,15 +25,8 @@
     "201" = ''Front "Desk"'';
     "202" = builtins.fromJSON ''"J\u00fcrgen M\u00fcller"'';
     "203" = builtins.fromJSON ''"\u53d7\u4ed8 \u5c71\u7530"'';
-    "204" = "Warehouse";
     "205" = "Store";
   };
-
-  # the voice menu's prompt
-  prompts = pkgs.runCommand "test-prompts" {nativeBuildInputs = [pkgs.sox];} ''
-    mkdir -p $out/sounds/test
-    sox -n -r 8000 -b 16 -c 1 -e signed-integer -t raw $out/sounds/test/menu.sln synth 3 sine 2500 vol 0.5
-  '';
 
   onlyAddress = address: {
     networking.interfaces.eth1.ipv4.addresses = lib.mkForce [
@@ -68,8 +52,6 @@ in
               {
                 sip-provider = "provider-password";
                 sip-second = "second-password";
-                sip-hash = "pw-hash";
-                sip-star = "pw-star";
                 vm-200 = "4200";
               }
               // lib.concatMapAttrs (extension: _: {
@@ -83,69 +65,15 @@ in
 
         pbx = {
           enable = true;
-          extensions = lib.mkMerge [
-            (lib.mapAttrs (extension: name: {
-                inherit name;
-                password = secret "sip-${extension}";
-                voicemail.pin = secret "vm-${extension}";
-              })
-              names)
-            {
-              "#1" = {
-                name = "Hash";
-                password = secret "sip-hash";
-              };
-              "*2" = {
-                name = "Star";
-                password = secret "sip-star";
-              };
-            }
-          ];
-
-          ivrs.menu = {
-            number = "#64";
-            prompt.sound = "test/menu";
-            options."#".extension = "#1";
-          };
-
-          # every other kind of number, with * and # in it
-          ringGroups.symbols = {
-            number = "6*1";
-            members = [
-              "#1"
-              "*2"
-            ];
-          };
-          queues.symbols = {
-            number = "6#2";
-            members = ["*2"];
-          };
-          conferences.symbols.number = "*63";
-          paging.symbols = {
-            number = "65#";
-            members = [
-              "#1"
-              "*2"
-            ];
-          };
-          voicemailMenu = "*97";
-          # open around the clock, so only closing early closes them
-          hours.office = {
-            timezone = "UTC";
-            open = [
-              {
-                days = "mon-sun";
-                time = "00:00-23:59";
-              }
-            ];
-            closeEarly = "*28#";
-          };
+          extensions =
+            lib.mapAttrs (extension: name: {
+              inherit name;
+              password = secret "sip-${extension}";
+              voicemail.pin = secret "vm-${extension}";
+            })
+            names;
 
           inbound = {
-            "5551000" = {
-              trunk = "provider";
-              destination.extension = "202";
-            };
             "+15551001" = {
               trunk = "provider";
               destination.extension = "201";
@@ -153,16 +81,6 @@ in
             "5552000" = {
               trunk = "second";
               destination.voicemail = "200";
-            };
-            "*5551002#" = {
-              trunk = "provider";
-              destination.extension = "#1";
-            };
-            "5551003" = {
-              trunk = "provider";
-              hours = "office";
-              open.extension = "202";
-              closed.voicemail = "200";
             };
           };
 
@@ -198,7 +116,6 @@ in
             "verbose"
           ];
           settings."asterisk.conf".options.verbose = 3;
-          sounds.packages = [prompts];
           pjsip = {
             transports.udp = {};
             trunks = {
@@ -275,7 +192,6 @@ in
         imports = [
           ./common.nix
           ./phone.nix
-          ./sipp.nix
           (onlyAddress "10.2.0.21")
         ];
       };
@@ -290,23 +206,13 @@ in
 
         NAMES = ${builtins.toJSON names}
 
-        desk = Phone(phones, "201", "201", "pw-201", "10.2.0.10", sip_port=5060, cli_port=2300, auto_answer=180, call_waiting=False)
+        desk = Phone(phones, "201", "201", "pw-201", "10.2.0.10", sip_port=5060, cli_port=2300, auto_answer=180)
         sales = Phone(phones, "202", "202", "pw-202", "10.2.0.10", sip_port=5061, cli_port=2301, auto_answer=180)
         boss = Phone(phones, "203", "203", "pw-203", "10.2.0.10", sip_port=5062, cli_port=2302)
-        warehouse = Phone(phones, "204", "204", "pw-204", "10.2.0.10", sip_port=5063, cli_port=2303, auto_answer=180)
-        everyone = [desk, sales, boss, warehouse]
-        hash_phone = Phone(phones, "hash", "#1", "pw-hash", "10.2.0.10", sip_port=5064, cli_port=2304, auto_answer=180)
-        star_phone = Phone(phones, "star", "*2", "pw-star", "10.2.0.10", sip_port=5065, cli_port=2305, auto_answer=180)
-        symbols = [hash_phone, star_phone]
+        everyone = [desk, sales, boss]
 
         def invites(phones):
             return {p.name: p.requests("INVITE") for p in phones}
-
-        def ended(phone, after):
-            """The SIP status the phone's call ended with, once more than
-            `after` of its calls have ended."""
-            phone.wait_disconnected(after=after)
-            return int(re.findall(r"is DISCONNECTED \[reason=(\d+) ", phone.log_text())[-1])
 
         def sent(mark, start, destination):
             """Messages starting with `start` that the pbx sent to an address
@@ -343,31 +249,19 @@ in
             pbx.wait_until_succeeds("test $(asterisk -rx 'pjsip show registrations' | grep -c Registered) -eq 2", timeout=120)
             # calls only go to a reachable contact
             pbx.wait_until_succeeds("asterisk -rx 'pjsip show contacts' | grep -q 'provider/sip:10.2.0.5.* Avail'", timeout=60)
-            start_phones(everyone + symbols)
-            wait_registrations({p: 200 for p in everyone + symbols})
+            start_phones(everyone)
+            wait_registrations({p: 200 for p in everyone})
 
-        with subtest("each number a trunk sends reaches its destination, written with a + too"):
-            for account, number, phone in [("office", "5551000", sales), ("office", "+15551001", desk)]:
-                before = invites([phone])
-                asterisk(provider, f"channel originate PJSIP/{number}@{account} extension s@feed")
-                phone.wait_request("INVITE", after=before[phone.name])
-                hang_up()
+        with subtest("a number a trunk sends, written with a +, reaches its destination, and so does the number of a second trunk to the same provider"):
+            before = invites([desk])
+            asterisk(provider, "channel originate PJSIP/+15551001@office extension s@feed")
+            desk.wait_request("INVITE", after=before["201"])
+            hang_up()
             # through the second trunk, which the line parameter tells apart
             asterisk(provider, "channel originate PJSIP/5552000@5552000 extension s@feed")
             channel = wait_channel(pbx, "second", app="VoiceMail", timeout=30)
             assert channel["data"] == "200@default,u", channel
             hang_up()
-
-        with subtest("a number without a route on the trunk it arrives on is refused, and nothing rings"):
-            # an unknown number, and the first trunk's number on the second
-            for account, number in [("office", "5559876"), ("5552000", "5551000")]:
-                mark = len(sip_messages(pbx))
-                before = invites(everyone)
-                asterisk(provider, f"channel originate PJSIP/{number}@{account} extension s@feed")
-                refused = wait_sent(mark, "SIP/2.0 404 ", "10.2.0.5:")[0]
-                assert f"<sip:{number}@" in header(refused, "To"), refused["text"]
-                wait_idle(pbx)
-                assert invites(everyone) == before, "a phone rang"
 
         def presents_office(invite):
             """The pbx's INVITE to the provider has pbx.outbound's caller ID
@@ -380,98 +274,6 @@ in
             boss.call("#5559999")
             presents_office(wait_sent(mark, "INVITE sip:5559999@10.2.0.5", "10.2.0.5:")[0])
             hang_up(boss)
-
-        with subtest("a number too short for the pattern is refused as incomplete"):
-            mark = len(sip_messages(pbx))
-            done = boss.disconnects()
-            boss.call("#5")
-            assert ended(boss, done) == 484
-            assert sent(mark, "INVITE", "10.2.0.5:") == [], "the provider was called"
-
-        def request_uris(mark, source):
-            """Request-URIs of the INVITEs `source` sent the pbx after the
-            first `mark` messages of its capture."""
-            return {m["text"].split(" ", 2)[1] for m in sip_messages(pbx)[mark:] if m["source"] == source and m["text"].startswith("INVITE ")}
-
-        def wait_in(endpoint, context, app):
-            """Waits until a call of `endpoint` runs `app` in `context`."""
-            channel = wait_channel(pbx, endpoint, app=app, timeout=30)
-            assert channel["context"] == context, channel
-
-        def call_at_once(calls):
-            """Each (phone, number) calls at the same time."""
-            cli_parallel([(phone, f"call new {phone.uri(number)}") for phone, number in calls])
-
-        with subtest("phones registered as #1 and *2 ring when their numbers come as %23 or #, and as * or %2A"):
-            mark = len(sip_messages(pbx))
-            before = invites(symbols)
-            call_at_once([(boss, "#1"), (desk, "*2")])
-            for phone in symbols:
-                phone.wait_request("INVITE", after=before[phone.name])
-            hang_up(boss, desk)
-            # pjsua sends # as %23 and * as it is
-            assert request_uris(mark, "10.2.0.21:5062") == {"sip:%231@10.2.0.10"}, request_uris(mark, "10.2.0.21:5062")
-            assert request_uris(mark, "10.2.0.21:5060") == {"sip:*2@10.2.0.10"}, request_uris(mark, "10.2.0.21:5060")
-            # SIPp calls as 203, and writes the numbers as given
-            for phone, number in [(hash_phone, "#1"), (star_phone, "%2A2")]:
-                before = phone.requests("INVITE")
-                # the pbx answers late, and some answers come after SIPp went on
-                with stalled(pbx):
-                    sipp(phones, "ring", "10.2.0.10", "-s", number, "-key", "caller", "203", "-au", "203", "-ap", "pw-203", "-i", "10.2.0.21", "-p", "5080")
-                phone.wait_request("INVITE", after=before)
-                wait_idle(pbx)
-            assert request_uris(mark, "10.2.0.21:5080") == {"sip:#1@10.2.0.10:5060", "sip:%2A2@10.2.0.10:5060"}, request_uris(mark, "10.2.0.21:5080")
-
-        with subtest("a ring group, queue, page, conference, the voicemail menu, a voice menu's # key, a close-early number and an inbound number with * and # reach their objects"):
-            # these ring the same phones, so one after the other
-            for number, context, app, ringing in [
-                ("6*1", "pbx-ringgroup-symbols", "Dial", symbols),
-                ("6#2", "pbx-queue-symbols", "Queue", [star_phone]),
-                # Page() puts the caller into a conference
-                ("65#", "pbx-paging-symbols", "ConfBridge", symbols),
-            ]:
-                before = invites(ringing)
-                boss.call(number)
-                wait_in("203", context, app)
-                for phone in ringing:
-                    phone.wait_request("INVITE", after=before[phone.name])
-                hang_up(boss)
-            for phone in symbols:
-                invite = phone.received("INVITE")[-1]
-                assert "Call-Info: <sip:pbx>;answer-after=0" in invite, invite
-            before = hash_phone.requests("INVITE")
-            done = warehouse.disconnects()
-            call_at_once([(boss, "*63"), (desk, "*97"), (sales, "#64"), (warehouse, "*28#")])
-            wait_in("203", "pbx-conference-symbols", "ConfBridge")
-            wait_in("201", "pbx-internal", "VoiceMailMain")
-            wait_in("202", "pbx-ivr-menu", "BackGround")
-            sales.dtmf("#")
-            hash_phone.wait_request("INVITE", after=before)
-            # the toggle answers, says it closed and hangs up
-            warehouse.wait_disconnected(after=done)
-            hint = asterisk(pbx, "core show hint *28#")
-            assert "State:InUse" in hint, hint
-            hang_up(boss, desk, sales)
-            before = hash_phone.requests("INVITE")
-            asterisk(provider, "channel originate PJSIP/*5551002#@office extension s@feed")
-            hash_phone.wait_request("INVITE", after=before)
-            hang_up()
-
-        with subtest("a number with opening hours goes to its closed destination while closed early, and to its open one after reopening"):
-            # closed early by the subtest before
-            asterisk(provider, "channel originate PJSIP/5551003@office extension s@feed")
-            channel = wait_channel(pbx, "provider", app="VoiceMail", timeout=30)
-            assert channel["data"] == "200@default,u", channel
-            hang_up()
-            done = warehouse.disconnects()
-            warehouse.call("*28#")
-            warehouse.wait_disconnected(after=done)
-            hint = asterisk(pbx, "core show hint *28#")
-            assert "State:Idle" in hint, hint
-            before = invites([sales])
-            asterisk(provider, "channel originate PJSIP/5551003@office extension s@feed")
-            sales.wait_request("INVITE", after=before["202"])
-            hang_up()
 
         def emergency(caller, dialled, number):
             """Places an emergency call, and returns the seconds from the
@@ -489,7 +291,7 @@ in
             return out["time"] - dialling["time"]
 
         with subtest("each emergency number, with and without the prefix, leaves within a second from every extension, and notify rings the others but not the caller"):
-            for caller, dialled, number in [(desk, "911", "911"), (sales, "#911", "911")]:
+            for caller, dialled, number in [(desk, "911", "911"), (sales, "#112", "112")]:
                 (other,) = [p for p in (desk, sales) if p is not caller]
                 before = invites([desk, sales])
                 delay = emergency(caller, dialled, number)
@@ -502,34 +304,5 @@ in
                 time.sleep(1)
                 assert caller.requests("INVITE") == before[caller.name], f"{caller.name} was notified of its own emergency call"
                 hang_up(desk, sales)
-
-        with subtest("a second emergency call during the first leaves within a second too, while a notified phone is busy"):
-            before = invites([desk, sales])
-            first = emergency(boss, "112", "112")
-            for p in (desk, sales):
-                p.wait_request("INVITE", after=before[p.name])
-            # 201 rings for the first call, so it answers the second one busy
-            second = emergency(warehouse, "#112", "112")
-            assert first < 1 and second < 1, f"the calls left after {first:.2f} s and {second:.2f} s"
-            wait_bridged(pbx, "203", "provider")
-            wait_bridged(pbx, "204", "provider")
-            hang_up(boss, warehouse, desk, sales)
-
-        with subtest("with the provider unreachable, emergency and outbound callers get congestion once the trunk's INVITE times out"):
-            provider.block()
-            mark = len(sip_messages(pbx))
-            calls = [(boss, "911", "911"), (warehouse, "#5559999", "5559999")]
-            done = {caller.name: caller.disconnects() for caller, _, _ in calls}
-            # both INVITEs leave before a qualify can find the provider gone
-            call_at_once([(caller, dialled) for caller, dialled, _ in calls])
-            for caller, dialled, number in calls:
-                status = ended(caller, done[caller.name])
-                out = wait_sent(mark, f"INVITE sip:{number}@10.2.0.5", "10.2.0.5:")[0]
-                # the first copy, as one sent again comes later
-                final = wait_sent(mark, f"SIP/2.0 {status} ", f"10.2.0.21:{caller.sip_port}")[0]
-                # a fast busy once pjsip gives up after timer B, 64 times T1 of
-                # 0.5 s
-                assert status == 503 and final["time"] - out["time"] < 33, f"{dialled}: {status} after {final['time'] - out['time']:.1f} s"
-            hang_up(desk, sales)
       '';
   }

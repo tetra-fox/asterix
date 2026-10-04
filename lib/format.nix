@@ -172,10 +172,7 @@ in rec {
   isValidSectionName = n: isString n && builtins.match "[^][;[:space:]]([^][;\n\r]*[^][;[:space:]])?" n != null;
 
   # Render a single (non-list) value to its string form.
-  mkValueString = {
-    secretPlaceholder ? secrets.placeholderOf,
-    ctx ? {},
-  }: v:
+  mkValueString = {ctx ? {}}: v:
     if isBool v
     then
       (
@@ -188,7 +185,7 @@ in rec {
     else if isFloat v
     then lib.strings.floatToString v
     else if secrets.isSecret v
-    then secretPlaceholder v
+    then secrets.placeholderOf v
     else if isString v
     then
       (
@@ -292,7 +289,6 @@ in rec {
   renderSection = {
     syntax,
     file ? null,
-    secretPlaceholder ? secrets.placeholderOf,
   }: id: section: let
     name = section.name or id;
     template = section.template or false;
@@ -324,11 +320,7 @@ in rec {
         map (x: {
           inherit key;
           value =
-            mkValueString {
-              inherit secretPlaceholder;
-              ctx = ctx';
-            }
-            x;
+            mkValueString {ctx = ctx';} x;
           # only literal strings take part in `same =>` compaction
           raw = isString x;
           arrow = arrowSection || elem key syntax.arrowKeys;
@@ -486,7 +478,6 @@ in rec {
   render = {
     syntax ? defaultSyntax,
     file ? null,
-    secretPlaceholder ? secrets.placeholderOf,
     header ? null,
   }: {
     sections ? {},
@@ -501,7 +492,7 @@ in rec {
         id:
           renderSection {
             syntax = syntax';
-            inherit file secretPlaceholder;
+            inherit file;
           }
           id
           sections.${id}

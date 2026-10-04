@@ -331,7 +331,7 @@ nix run nixpkgs#nix-fast-build -- --flake .#checks.x86_64-linux
 
 | To                                         | Run                                                                                              |
 | ------------------------------------------ | ------------------------------------------------------------------------------------------------ |
-| build the checks against another Asterisk  | `nix build .#packageChecks.asterisk_23.probe` (also `asterisk_20`, `asterisk_22`)                |
+| build the checks against another Asterisk  | `nix build .#packageChecks.asterisk_23.roundtrip` (also `asterisk_20`, `asterisk_22`)            |
 | run every non-VM check against all of them | `python3 tests/campaign/packages.py DIR`, logs in `DIR`. Add `--nixpkgs REF` for another nixpkgs |
 
 The checks build against nixpkgs' `asterisk` otherwise.

@@ -70,10 +70,7 @@ in {
     services.asterisk.queues.queues = forEach (o: nameValuePair o.name {members = ["PJSIP/201"];});
   };
 
-  # by the kind in their first slot: the extensions, with it in `noAnswer`,
-  # and the inbound numbers, with it in `destination` or `open`
-  extensionTo = forEach (o: nameValuePair o.kind o.extension);
-  inboundTo = forEach (o: nameValuePair o.kind o.inbound);
+  # the inbound numbers by hours, by the kind in their `open` slot
   inboundByHoursTo = forEach (o: nameValuePair o.kind o.inboundByHours);
 
   # each slot as the assertion on missing destinations names it, with the

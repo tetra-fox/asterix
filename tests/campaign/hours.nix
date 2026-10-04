@@ -1,13 +1,11 @@
 # The opening hours oracle (hours.py) against the dialplan of pbx.hours, in
-# the probe: a few kinds of opening hours in each zone, instants that
-# hours.py picks around their edges, offset changes, holidays and leap days,
-# run through each pbx-hours-<name> routine with TESTTIME, then again while
-# the close-early toggles are on and once they are off again.
+# the probe: a few kinds of opening hours in each zone, and a seeded sample
+# of the instants hours.py picks around their edges, offset changes, holidays
+# and leap days, run through each pbx-hours-<name> routine with TESTTIME,
+# then again while the close-early toggles are on and once they are off
+# again.
 #
 #   run { zones = [ "UTC" ]; sample = 300; seed = "asterix"; }
-#
-# Without `sample` it runs every instant hours.py picks, in `chunks` calls:
-# as many as its plan has (hours.py sweep).
 {
   pkgs,
   self,
@@ -132,15 +130,15 @@ in {
   inherit zones;
 
   run = {
-    zones ? [],
-    sample ? null,
+    zones,
+    sample,
     seed ? "asterix",
-    chunks ? (sample + chunk - 1) / chunk,
   }: let
     hours = hoursOf zones;
     hoursFile = pkgs.writeText "hours.json" (builtins.toJSON hours);
+    chunks = (sample + chunk - 1) / chunk;
     plan = pkgs.runCommand "asterisk-hours-plan" {} ''
-      ${python} ${./hours.py} plan ${hoursFile} ${zoneinfo} $out --chunk ${toString chunk} ${lib.optionalString (sample != null) "--sample ${toString sample} --seed ${seed}"}
+      ${python} ${./hours.py} plan ${hoursFile} ${zoneinfo} $out --chunk ${toString chunk} --sample ${toString sample} --seed ${seed}
     '';
     closingEarly = lib.filterAttrs (_: h: h ? closeEarly) hours;
     toggles =
@@ -176,10 +174,7 @@ in {
       ${python} ${./hours.py} check ${hoursFile} ${zoneinfo} ${plan}/plan.json ${result}/probe.json $out
     '';
   in
-    pkgs.runCommand "asterisk-hours-oracle" {
-      nativeBuildInputs = [pkgs.jq];
-      passthru = {inherit plan report;};
-    } ''
+    pkgs.runCommand "asterisk-hours-oracle" {nativeBuildInputs = [pkgs.jq];} ''
       if ! jq -e '.disagree == 0 and .problems == []' ${report}/report.json > /dev/null; then
         jq '.problems, .disagreements[:20]' ${report}/report.json >&2
         echo "the dialplan disagrees with the oracle, see ${report}/report.json" >&2

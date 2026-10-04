@@ -406,7 +406,12 @@ pkgs.testers.runNixOSTest {
             " && for name in sip-101 sip-102 ami ari trunk vm-102 pin; do printf '%s %s\\n' $name \"$(cat $name)\"; done > patterns"
             " && printf 'ari-basic %s\\n' \"$(printf app:%s \"$(cat ari)\" | base64 -w0)\" >> patterns"
         )
-        found = {tuple(line.split(" ", 1)) for line in pbx.succeed("find-secrets /run/test-secrets/patterns").splitlines()}
+        # master.db-wal is part of master.db, whose records stay in it until
+        # sqlite checkpoints them
+        found = {
+            (path.removesuffix("-wal"), name)
+            for path, name in (line.split(" ", 1) for line in pbx.succeed("find-secrets /run/test-secrets/patterns").splitlines())
+        }
         # Asterisk prints an application's arguments once it has substituted
         # them: the PIN inside Authenticate's is in the Executing line of the
         # journal and the full log, and in the call records' lastdata and appdata

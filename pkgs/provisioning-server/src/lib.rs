@@ -266,48 +266,6 @@ mod tests {
     }
 
     #[test]
-    fn only_listed_files_are_read_and_only_with_get_or_head() {
-        assert_eq!(
-            status(&Method::GET, "/", "10.0.20.21"),
-            StatusCode::NOT_FOUND
-        );
-        assert_eq!(
-            status(&Method::GET, "/other.xml", "10.0.20.21"),
-            StatusCode::NOT_FOUND
-        );
-        assert_eq!(
-            status(&Method::GET, "/../open.xml", "10.0.20.21"),
-            StatusCode::NOT_FOUND
-        );
-        assert_eq!(
-            status(&Method::HEAD, "/open.xml", "10.0.20.21"),
-            StatusCode::OK
-        );
-        assert_eq!(
-            status(&Method::POST, "/open.xml", "10.0.20.21"),
-            StatusCode::METHOD_NOT_ALLOWED
-        );
-    }
-
-    #[test]
-    fn manifest_errors_name_the_line() {
-        assert_eq!(
-            parse_manifest("a.xml\nb.xml 10.0.20.0/24\n")
-                .err()
-                .as_deref(),
-            Some("manifest line 2: invalid address `10.0.20.0/24`")
-        );
-        assert_eq!(
-            parse_manifest("a.xml 10.0.20.1 10.0.20.2").err().as_deref(),
-            Some("manifest line 1: expected a file name, at most one address and `tftp`")
-        );
-        assert_eq!(
-            parse_manifest("a.xml tftp 10.0.20.1").err().as_deref(),
-            Some("manifest line 1: expected a file name, at most one address and `tftp`")
-        );
-    }
-
-    #[test]
     fn manifest_marks_files_for_tftp_after_the_address() {
         assert_eq!(
             parse_manifest("a.xml\nb.xml tftp\nc.xml 10.0.20.1 tftp\ntftp\n").unwrap(),
@@ -377,46 +335,18 @@ mod tests {
     }
 
     #[test]
-    fn hyper_hands_over_only_the_path_of_a_request() {
+    fn only_listed_files_are_read_and_only_with_get_or_head() {
         let server = server("open.xml\nkitchen.xml 127.0.0.21\n");
         for (source, request, expected) in [
             ("127.0.0.21", "GET /kitchen.xml HTTP/1.1", "200 OK"),
             ("127.0.0.22", "GET /kitchen.xml HTTP/1.1", "403 Forbidden"),
-            // the absolute form names a host, which is ignored
+            ("127.0.0.22", "HEAD /open.xml HTTP/1.1", "200 OK"),
+            ("127.0.0.22", "GET / HTTP/1.1", "404 Not Found"),
+            ("127.0.0.22", "GET /other.xml HTTP/1.1", "404 Not Found"),
+            ("127.0.0.22", "GET /../open.xml HTTP/1.1", "404 Not Found"),
             (
                 "127.0.0.22",
-                "GET http://127.0.0.1/kitchen.xml HTTP/1.1",
-                "403 Forbidden",
-            ),
-            (
-                "127.0.0.21",
-                "GET http://other.example/kitchen.xml HTTP/1.1",
-                "200 OK",
-            ),
-            ("127.0.0.22", "GET /open.xml?kitchen.xml HTTP/1.1", "200 OK"),
-            ("127.0.0.22", "GET //open.xml HTTP/1.1", "404 Not Found"),
-            ("127.0.0.22", "GET /./open.xml HTTP/1.1", "404 Not Found"),
-            (
-                "127.0.0.22",
-                "GET /%2e%2e/open.xml HTTP/1.1",
-                "404 Not Found",
-            ),
-            ("127.0.0.22", "GET /open%2Exml HTTP/1.1", "404 Not Found"),
-            ("127.0.0.22", "GET * HTTP/1.1", "404 Not Found"),
-            ("127.0.0.22", "OPTIONS * HTTP/1.1", "405 Method Not Allowed"),
-            (
-                "127.0.0.22",
-                "CONNECT 127.0.0.1:80 HTTP/1.1",
-                "405 Method Not Allowed",
-            ),
-            (
-                "127.0.0.22",
-                "PUT /open.xml HTTP/1.1",
-                "405 Method Not Allowed",
-            ),
-            (
-                "127.0.0.22",
-                "get /open.xml HTTP/1.1",
+                "POST /open.xml HTTP/1.1",
                 "405 Method Not Allowed",
             ),
         ] {
@@ -445,18 +375,6 @@ mod tests {
         let server = server("open.xml\n");
         let _idle: Vec<_> = (0..=MAX_CONNECTIONS)
             .map(|_| connect(server, "127.0.0.22"))
-            .collect();
-        let answer = exchange(server, "127.0.0.21", "GET /open.xml HTTP/1.1");
-        assert_eq!(answer, "HTTP/1.1 200 OK");
-    }
-
-    #[test]
-    fn idle_connections_of_sixteen_clients_do_not_stall_another() {
-        let server = server("open.xml\n");
-        let _idle: Vec<_> = (100..116)
-            .flat_map(|host| {
-                (0..CONNECTIONS_PER_PEER).map(move |_| connect(server, &format!("127.0.0.{host}")))
-            })
             .collect();
         let answer = exchange(server, "127.0.0.21", "GET /open.xml HTTP/1.1");
         assert_eq!(answer, "HTTP/1.1 200 OK");

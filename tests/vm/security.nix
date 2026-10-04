@@ -7,7 +7,7 @@
 # starts, which run in Asterisk's sandbox, write only to Asterisk's
 # directories and read nothing of /home or other units' secrets, and calls
 # over the trunk, from its address or with its line, reach none of the
-# numbers that go out when a phone dials them (SEC-03).
+# numbers that go out when a phone dials them.
 #
 #   pbx       10.3.0.10
 #   intruder  10.3.0.66, 10.3.0.5, the trunk's provider, and 10.3.0.21, the

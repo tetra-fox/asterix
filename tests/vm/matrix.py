@@ -190,7 +190,7 @@ def pbx_addresses(phone):
 def private_lines(phone, prefixes):
     """Lines of what `phone` received that name an address of the office
     network, but for From and To: requests from the pbx name its own address
-    in From (F173), and the phone's requests in their dialogs echo it in To"""
+    in From, and the phone's requests in their dialogs echo it in To"""
     lines = []
     for message in re.findall(r"RX \d+ bytes .*?\n--end msg--", phone.log_text(), re.S):
         for line in message.splitlines()[1:]:
@@ -279,9 +279,10 @@ with subtest("behind NAT, the pbx names its own address over TCP and TLS on IPv6
     each("the pbx's own address", unrewritten, calling("tcp6-nat"))
 
 with subtest("on ws and wss the pbx offers its host's IPv4 address, and only IPv4 phones of a pbx on the internet talk"):
-    # the SDP Asterisk sends over WebSocket names its host's IPv4 address
-    # (F50), private behind NAT and of the other family for an IPv6 phone
-    # TODO: run the call script on these rows once F50 and F51 are fixed
+    # the SDP Asterisk sends over WebSocket names its host's IPv4 address,
+    # private behind NAT and of the other family for an IPv6 phone
+    # TODO: run the call script on these rows once Asterisk sends a reachable
+    # address and Contact over WebSocket
 
     def invite(phone, timeout=30):
         """The first INVITE in baresip's SIP trace, once there is one"""
@@ -314,7 +315,7 @@ with subtest("on ws and wss the pbx offers its host's IPv4 address, and only IPv
         codecs(row, "a", "b")
 
     each("A and B talk", talking, [row for row in calling("websocket") if talks(row)])
-    # A hangs up, as B's requests go to a Contact it cannot reach (F51); both
+    # A hangs up, as B's requests go to a Contact it cannot reach; both
     # hang up the calls that failed, which the pbx lets go in its own time
     send(lambda row: [(row.a, "hangup")] if talks(row) else [(row.a, "hangup"), (row.b, "hangup")], calling("websocket"))
     each("A hangs up", lambda row: gone(row, "a", "b"), [row for row in calling("websocket") if talks(row)])

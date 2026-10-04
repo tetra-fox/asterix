@@ -172,7 +172,7 @@
   # what phones send as RFC 4733 events and SIP INFO, every key and two equal
   # ones in a row, and as tones from the start of a call without the second
   # of those, since Asterisk relays two equal keys in a row as tones as one
-  # (F138, tests/vm/dtmf-tones.py)
+  # (tests/vm/dtmf-tones.py)
   keys = "01234456789*#";
   distinct = lib.concatStrings (lib.foldl' (kept: key:
     if kept != [] && lib.last kept == key

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Every way a call from a trunk reaches a Dial through a trunk, found by
-walking the dialplan Asterisk loaded, as the T1 probe (tests/campaign/probe.nix)
+walking the dialplan Asterisk loaded, as the probe (tests/campaign/probe.nix)
 shows it:
 
     tollfraud.py walk PROBE POLICY

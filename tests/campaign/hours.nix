@@ -1,5 +1,5 @@
 # The opening hours oracle (hours.py) against the dialplan of pbx.hours, in
-# the T1 probe: a few kinds of opening hours in each zone, instants that
+# the probe: a few kinds of opening hours in each zone, instants that
 # hours.py picks around their edges, offset changes, holidays and leap days,
 # run through each pbx-hours-<name> routine with TESTTIME, then again while
 # the close-early toggles are on and once they are off again.

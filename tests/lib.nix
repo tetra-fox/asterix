@@ -36,8 +36,6 @@
     format.render {syntax = format.syntaxFor "pjsip.conf";} {sections = eval.config.file;};
 in
   lib.runTests {
-    # --- values -----------------------------------------------------------
-
     testBooleansRenderYesNo = {
       expr = render {} {
         sections.s = {
@@ -221,8 +219,6 @@ in
       ];
     };
 
-    # --- keys -------------------------------------------------------------
-
     testKeyOrderTypeDisallowAllowFirst = {
       expr = render {} {
         sections.alice = {
@@ -276,8 +272,6 @@ in
       expected = true;
     };
 
-    # --- operators ----------------------------------------------------------
-
     testArrowKeys = {
       expr = renderFile "modules.conf" {
         sections.modules = {
@@ -321,8 +315,6 @@ in
         TRUNK = PJSIP/provider
       '';
     };
-
-    # --- extensions.conf ----------------------------------------------------
 
     testExtenCompactsToSame = {
       expr = renderFile "extensions.conf" {
@@ -423,8 +415,6 @@ in
          same => n,Return()
       '';
     };
-
-    # --- sections -------------------------------------------------------------
 
     testRepeatedSectionNames = {
       expr = render {} {
@@ -563,8 +553,6 @@ in
       expr = throws (render {} {sections.a.inherits = ["x;y"];});
       expected = true;
     };
-
-    # --- file level -----------------------------------------------------------
 
     testIncludesHeaderAndExtraConfig = {
       expr =
@@ -779,8 +767,6 @@ in
       };
     };
 
-    # --- secrets ----------------------------------------------------------------
-
     testSecretRendersPlaceholder = {
       expr = render {} {sections.alice.password = asteriskLib.secret "/run/secrets/alice";};
       expected = ''
@@ -913,8 +899,6 @@ in
       ];
     };
 
-    # --- dialplan helpers -------------------------------------------------------
-
     testEscapingConventionsAgree = {
       expr = [
         "\${EXTEN}"
@@ -949,8 +933,6 @@ in
       expr = asteriskLib.dialplan.app "Answer" [];
       expected = "Answer()";
     };
-
-    # --- module system integration ----------------------------------------------
 
     testModuleMergingAndPriorities = {
       expr = evalSections [

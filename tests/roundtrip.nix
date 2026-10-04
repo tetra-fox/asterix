@@ -1,4 +1,4 @@
-# P7: a string written through the options reads back from Asterisk
+# A string written through the options reads back from Asterisk
 # unchanged, through the CLI and, in the dialplan, as the data of a step.
 # The value has every character that means something in a configuration
 # file, the dialplan or an argument list. Where the dialplan options say

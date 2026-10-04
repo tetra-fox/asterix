@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The opening hours oracle: whether pbx.hours is open at an instant, as the
 descriptions of its options say, against what its pbx-hours-<name> routine
-returns for that instant in the T1 probe (hours.nix).
+returns for that instant in the probe (hours.nix).
 
     hours.py plan HOURS ZONEINFO OUT --chunk CHUNK [--sample N] [--seed S]
     hours.py check HOURS ZONEINFO PLAN PROBE OUT

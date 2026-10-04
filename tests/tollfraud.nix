@@ -1,7 +1,7 @@
-# Every way from a trunk to a trunk's Dial (SEC-03), walked through the
-# dialplan Asterisk loads (tests/campaign/tollfraud.nix): the examples have
-# none, and the walk finds each way out built in here, the outside member of
-# a ring group, which the configuration names, among them.
+# Every way from a trunk to a trunk's Dial, walked through the dialplan
+# Asterisk loads (tests/campaign/tollfraud.nix): the examples have none, and
+# the walk finds each way out built in here, the outside member of a ring
+# group, which the configuration names, among them.
 {
   pkgs,
   self,

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The T1 probe: CLI commands and calls on the Asterisk that the build-time
+"""The probe: CLI commands and calls on the Asterisk that the build-time
 check boots (pkgs/config-check), in two steps (tests/campaign/probe.nix):
 
     probe.py drive SPEC OUT ASTERISK -C FILE

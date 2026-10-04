@@ -1,5 +1,5 @@
 # Voice menus through the probe (tests/campaign/probe.nix), for what the
-# generated configurations' probe runs leave out (PBX-08): a menu with five
+# generated configurations' probe runs leave out: a menu with five
 # attempts, which plays its prompt five times before its no-input
 # destination, also after a key without a destination, and keys pressed in
 # the menu the first one leads to, a nested one or the menu itself. `w` in

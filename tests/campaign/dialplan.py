@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """The dialplan as Asterisk searches it, written from its documented rules,
-and a check of asterix's dialplan options against it through the T1 probe
+and a check of asterix's dialplan options against it through the probe
 (tests/campaign/probe.nix):
 
     dialplan.py check SCENARIO PROBE

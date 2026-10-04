@@ -1,4 +1,4 @@
-# The T1 probe: starts Asterisk on a configuration the way its build-time
+# The probe: starts Asterisk on a configuration the way its build-time
 # check does, with the same arguments (modules/asterisk.nix), runs CLI
 # commands and places calls, and writes what they did to $out/probe.json. The
 # fields are described in probe.py.

@@ -837,8 +837,6 @@ in {
       ];
     };
 
-    # --- tier 2 -------------------------------------------------------------
-
     testVoicemailMailboxLines = {
       expr = let
         files = rendered [

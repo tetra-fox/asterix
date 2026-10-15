@@ -106,6 +106,13 @@ in
             trunk = "provider";
             destination.extension = "201";
           };
+          trunks.provider = {
+            host = "10.3.0.5";
+            username = "5551000";
+            password = secret "sip-trunk";
+            # registers, and with that has a line, though nobody answers
+            qualifyFrequency = 0;
+          };
         };
 
         services.asterisk = {
@@ -118,13 +125,6 @@ in
           ];
           settings."asterisk.conf".options.verbose = 3;
           pjsip = {
-            trunks.provider = {
-              host = "10.3.0.5";
-              username = "5551000";
-              password = secret "sip-trunk";
-              # registers, and with that has a line, though nobody answers
-              qualifyFrequency = 0;
-            };
             endpoints = {
               # an endpoint the pbx layer does not write
               sipp = {

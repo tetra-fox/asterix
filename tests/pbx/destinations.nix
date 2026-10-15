@@ -216,15 +216,13 @@
               }
             ];
           };
+          trunks.provider = {
+            host = "sip.provider.example";
+            username = "5551000";
+            password = secret "trunk";
+          };
         };
         services.asterisk = {
-          pjsip = {
-            trunks.provider = {
-              host = "sip.provider.example";
-              username = "5551000";
-              password = secret "trunk";
-            };
-          };
           dialplan.contexts.done.extensions.s = ["Hangup()"];
         };
       })

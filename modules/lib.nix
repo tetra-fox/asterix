@@ -210,11 +210,11 @@ in {
     };
 
   # networking.firewall settings opening `ports` on `interfaces`, or on every
-  # interface when the list is empty
+  # interface when the list is empty. The attribute names do not depend on
+  # `interfaces`, so a caller's mkIf can be pushed down without evaluating it
   firewallOn = interfaces: ports:
-    if interfaces == []
-    then ports
-    else {interfaces = lib.genAttrs interfaces (_: ports);};
+    lib.mapAttrs (_: lib.mkIf (interfaces == [])) ports
+    // {interfaces = lib.mkIf (interfaces != []) (lib.genAttrs interfaces (_: ports));};
 
   # the name of a transport section of the final pjsip.conf, its protocol and
   # the host and port it binds
@@ -232,6 +232,9 @@ in {
       else 5060
     );
   };
+
+  # an address or network, which a pjsip ACL takes, unlike a host name
+  isAddress = match: builtins.match "[0-9.]+(/[0-9.]+)?" match != null || lib.hasInfix ":" match;
 
   # the names in `interfaces` that Linux refuses for an interface: it takes 1
   # to 15 bytes without /, : or whitespace, other than . and .. (net/core/dev.c

@@ -1,6 +1,6 @@
 # services.asterix.inbound, services.asterix.outbound and services.asterix.emergency: calls between the phones and
 # trunks. Calls from a trunk start in pbx-inbound-<trunk>, the default context
-# the layer gives every trunk, which holds the trunk's numbers of services.asterix.inbound.
+# of services.asterix.trunks, which holds the trunk's numbers of services.asterix.inbound.
 {
   config,
   lib,
@@ -36,7 +36,7 @@
         type = types.coercedTo types.str lib.toList (types.nonEmptyListOf types.str);
         example = "provider";
         description = ''
-          Trunk of {option}`services.asterisk.pjsip.trunks` the number's calls
+          Trunk of {option}`services.asterix.trunks` the number's calls
           arrive on, or a list of them for a number that arrives through more
           than one provider or account.
         '';
@@ -85,7 +85,7 @@
       };
       trunk = mkOption {
         type = types.str;
-        description = "Trunk of {option}`services.asterisk.pjsip.trunks` calls go out through.";
+        description = "Trunk of {option}`services.asterix.trunks` calls go out through.";
       };
       callerId = mkOption {
         type = types.nullOr types.str;
@@ -121,7 +121,7 @@
         type = types.nullOr types.str;
         default = null;
         defaultText = lib.literalExpression "config.services.asterix.outbound.trunk";
-        description = "Trunk of {option}`services.asterisk.pjsip.trunks` emergency calls go out through.";
+        description = "Trunk of {option}`services.asterix.trunks` emergency calls go out through.";
       };
       callerId = mkOption {
         type = types.nullOr types.str;
@@ -152,7 +152,7 @@
     then !(hasHours route)
     else route.hours != null && route.open != null && route.closed != null;
 
-  trunks = config.services.asterisk.pjsip.trunks;
+  inherit (cfg) trunks;
   inboundTrunks = unique (concatMap (route: route.trunk) (builtins.attrValues cfg.inbound));
   # trunks whose calls start in pbx-inbound-<trunk>
   pbxTrunks = builtins.attrNames (filterAttrs (name: trunk: trunk.context == pbxLib.objectContext "inbound" name) trunks);
@@ -278,18 +278,11 @@
       startSet = [{key = context;}];
       operator = c: map (key: {inherit key;}) (includesOf c.key);
     });
-  # trunks whose callers can dial out through services.asterix.outbound with no menu in
-  # between, as from pbx-internal, which includes pbx-outbound
-  dialOut = builtins.filter (trunk: !(builtins.elem trunk cfg.tieLines) && endpointContexts ? ${trunk} && endpointContexts.${trunk} != null && reachesOutbound endpointContexts.${trunk}) (builtins.attrNames trunks);
+  # trunks of the core, the layer's among them, whose callers can dial out
+  # through services.asterix.outbound with no menu in between, as from
+  # pbx-internal, which includes pbx-outbound
+  dialOut = builtins.filter (trunk: !(builtins.elem trunk cfg.tieLines) && endpointContexts ? ${trunk} && endpointContexts.${trunk} != null && reachesOutbound endpointContexts.${trunk}) (builtins.attrNames config.services.asterisk.pjsip.trunks);
 in {
-  # a default in each trunk rather than trunks.<name>.context, which would
-  # create a trunk for a misspelt name
-  options.services.asterisk.pjsip.trunks = mkOption {
-    type = types.attrsOf (types.submodule ({name, ...}: {
-      config.context = mkIf cfg.enable (mkDefault (pbxLib.objectContext "inbound" name));
-    }));
-  };
-
   options.services.asterix = {
     inbound = mkOption {
       type = types.attrsOf inboundType;
@@ -367,7 +360,7 @@ in {
       type = types.listOf types.str;
       default = [];
       description = ''
-        Trunks of {option}`services.asterisk.pjsip.trunks` that connect
+        Trunks of {option}`services.asterix.trunks` that connect
         another PBX, whose callers may dial out through
         {option}`services.asterix.outbound`. asterix refuses any other trunk whose calls start
         in a context that reaches `pbx-outbound`, as `pbx-internal` does,
@@ -405,7 +398,7 @@ in {
         {
           assertion = unknownTrunks == [];
           message = ''
-            services.asterix: trunks that are not defined in services.asterisk.pjsip.trunks:
+            services.asterix: trunks that are not defined in services.asterix.trunks:
               ${concatMapStringsSep "\n  " (use: "${use.where}: ${use.trunk}") unknownTrunks}
           '';
         }
@@ -455,7 +448,7 @@ in {
       assertions = [
         {
           assertion = dialOut == [];
-          message = "services.asterix: calls from the trunk(s) ${concatMapStringsSep ", " (trunk: "${trunk} (${endpointContexts.${trunk}})") dialOut} start in a context that reaches pbx-outbound, so anyone who can call in through them can dial out, emergency numbers included. Give such a trunk a context without that, such as the pbx-inbound-<trunk> pbx gives it, or list it in services.asterix.tieLines if it connects another PBX whose callers may dial out.";
+          message = "services.asterix: calls from the trunk(s) ${concatMapStringsSep ", " (trunk: "${trunk} (${endpointContexts.${trunk}})") dialOut} start in a context that reaches pbx-outbound, so anyone who can call in through them can dial out, emergency numbers included. Give such a trunk a context without that, such as the pbx-inbound-<trunk> the layer gives it, or list it in services.asterix.tieLines if it connects another PBX whose callers may dial out.";
         }
       ];
     })

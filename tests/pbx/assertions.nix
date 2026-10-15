@@ -70,16 +70,13 @@
         trunk = "provider";
         notify = ["201"];
       };
-    };
-    services.asterisk = {
-      pjsip = {
-        trunks.provider = {
-          host = "sip.provider.example";
-          username = "5551000";
-          password = secret "/run/secrets/trunk";
-        };
+      trunks.provider = {
+        host = "sip.provider.example";
+        username = "5551000";
+        password = secret "/run/secrets/trunk";
       };
     };
+    services.asterisk.queues.queues.support.members = ["PJSIP/201"];
   };
 
   # the phones' network, which the provisioning cases add adapters and files to
@@ -378,7 +375,7 @@
       assertions = [
         "services.asterix.inbound: 5551000 use hours that are not defined in services.asterix.hours."
         ''
-          services.asterix: trunks that are not defined in services.asterisk.pjsip.trunks:
+          services.asterix: trunks that are not defined in services.asterix.trunks:
             services.asterix.inbound."5551000".trunk: provder
             services.asterix.outbound.trunk: provder
             services.asterix.emergency.trunk: provder
@@ -386,7 +383,7 @@
         ''
         "services.asterix.emergency.notify: 299 are not extensions of services.asterix.extensions."
         ''
-          services.asterix: trunks that are not defined in services.asterisk.pjsip.trunks:
+          services.asterix: trunks that are not defined in services.asterix.trunks:
             services.asterix.ringGroups.front.trunk: provder
         ''
         ''
@@ -414,13 +411,13 @@
           password = config.lib.asterisk.secret "/run/secrets/trunk";
         };
       in {
-        services.asterisk.pjsip.trunks = {
-          "a&b" = trunk;
-          "c/d" = trunk;
-          "e\${f}" = trunk;
-          "in&only" = trunk;
-        };
         services.asterix = {
+          trunks = {
+            "a&b" = trunk;
+            "c/d" = trunk;
+            "e\${f}" = trunk;
+            "in&only" = trunk;
+          };
           outbound.trunk = lib.mkForce "a&b";
           emergency.trunk = lib.mkForce "e\${f}";
           ringGroups.front = {
@@ -477,15 +474,17 @@
           inherit context;
         };
       in {
-        services.asterix.tieLines = ["tie"];
-        services.asterisk = {
-          pjsip.trunks = {
+        services.asterix = {
+          tieLines = ["tie"];
+          trunks = {
             branch = trunk "pbx-internal";
             lobby = trunk "from-lobby";
             annex = trunk "from-annex";
             tie = trunk "pbx-internal";
             menu = trunk "from-menu";
           };
+        };
+        services.asterisk = {
           dialplan.contexts = {
             from-lobby.includes = ["pbx-internal,08:00-18:00,*,*,*"];
             from-annex.extensions.s = ["Hangup()"];
@@ -500,7 +499,41 @@
       };
       assertions = [
         "services.asterix.inbound: the trunk(s) provider have a context of their own, so their calls do not reach services.asterix.inbound; remove it."
-        "services.asterix: calls from the trunk(s) annex (pbx-outbound), branch (pbx-internal), lobby (from-lobby) start in a context that reaches pbx-outbound, so anyone who can call in through them can dial out, emergency numbers included. Give such a trunk a context without that, such as the pbx-inbound-<trunk> pbx gives it, or list it in services.asterix.tieLines if it connects another PBX whose callers may dial out."
+        "services.asterix: calls from the trunk(s) annex (pbx-outbound), branch (pbx-internal), lobby (from-lobby) start in a context that reaches pbx-outbound, so anyone who can call in through them can dial out, emergency numbers included. Give such a trunk a context without that, such as the pbx-inbound-<trunk> the layer gives it, or list it in services.asterix.tieLines if it connects another PBX whose callers may dial out."
+      ];
+    };
+
+    # a trunk on a network that does not exist, and with subnets on every
+    # network, trunks with no address as host or in identify.match, or a host
+    # name there
+    trunkNetworks = {
+      module = {config, ...}: let
+        trunk = attrs:
+          {
+            host = "sip.branch.example";
+            username = "5552000";
+            password = config.lib.asterisk.secret "/run/secrets/branch";
+            identify.match = ["198.51.100.0/24"];
+          }
+          // attrs;
+      in {
+        services.asterix = {
+          networks = lib.mkForce {voip.subnets = ["10.0.20.0/24"];};
+          trunks = {
+            provider.identify.match = ["203.0.113.0/24"];
+            elsewhere = trunk {network = "wan";};
+            named = trunk {identify.match = ["198.51.100.1" "sip.branch.example"];};
+            bare = trunk {identify = null;};
+            byAddress = trunk {
+              host = "192.0.2.10";
+              identify = null;
+            };
+          };
+        };
+      };
+      assertions = [
+        "services.asterix.trunks: elsewhere (wan) name networks that are not in services.asterix.networks."
+        "services.asterix.trunks: bare, named have no address as host or in identify.match, or host names in identify.match. Every network lists subnets, so the PBX takes SIP requests only from them and from those addresses of the trunks, and a pjsip ACL takes no host names, so it would reject the provider's requests, the BYE that ends a call included. List the provider's addresses or networks in identify.match."
       ];
     };
 

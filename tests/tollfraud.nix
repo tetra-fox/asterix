@@ -30,8 +30,6 @@
         numbers = ["911"];
         trunk = "provider";
       };
-    };
-    services.asterisk.pjsip = {
       trunks.provider = {
         host = "sip.provider.example";
         username = "5551000";
@@ -50,8 +48,10 @@
       modules = [
         office
         {
-          services.asterix.tieLines = ["provider"];
-          services.asterisk.pjsip.trunks.provider.context = "pbx-internal";
+          services.asterix = {
+            tieLines = ["provider"];
+            trunks.provider.context = "pbx-internal";
+          };
         }
       ];
       paths = [

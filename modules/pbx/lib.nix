@@ -1,5 +1,5 @@
-# Helpers the pbx modules share: the destination type and the dialplan steps
-# a destination turns into.
+# Helpers the pbx modules share: the destination type, the dialplan steps
+# a destination turns into, and the network of an extension or trunk.
 {lib}: let
   inherit (lib) mkOption types;
   inherit (import ../lib.nix {inherit lib;}) splitMailbox;
@@ -141,6 +141,25 @@ in rec {
       '';
     };
   };
+
+  # the network of services.asterix.networks an extension or trunk is on, or
+  # null when it names none and there are several
+  networkOf = networks: object: let
+    names = builtins.attrNames networks;
+  in
+    if object.network != null
+    then object.network
+    else if builtins.length names == 1
+    then builtins.head names
+    else null;
+
+  # the transport the extensions and trunks of network `name` send over
+  pinned = name: network:
+    if builtins.elem "udp" network.protocols
+    then name
+    else if builtins.elem "tcp" network.protocols
+    then "${name}-tcp"
+    else "${name}-tls";
 
   # the generated context of a pbx object
   objectContext = kind: name: "pbx-${kind}-${name}";

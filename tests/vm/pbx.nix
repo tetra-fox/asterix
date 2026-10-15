@@ -125,6 +125,24 @@ in
               skipBusy = false;
             };
           };
+
+          trunks =
+            lib.mapAttrs (_: port: {
+              # Asterisk resolves SIP host names without /etc/hosts
+              host = nodes.phones.networking.primaryIPAddress;
+              inherit port;
+              # not the office's number, so the caller ID can only come
+              # from services.asterix.outbound
+              username = "office";
+              password = secret "trunk";
+              register = false;
+              # the phones send from the carriers' address too
+              matchProviderHost = false;
+              # Asterisk skips a contact whose last qualify failed, and the
+              # carriers start after the pbx first qualifies them
+              qualifyFrequency = 5;
+            })
+            carrierPorts;
         };
 
         services.asterisk = {
@@ -137,26 +155,6 @@ in
             "verbose"
           ];
           settings."asterisk.conf".options.verbose = 3;
-
-          pjsip = {
-            trunks =
-              lib.mapAttrs (_: port: {
-                # Asterisk resolves SIP host names without /etc/hosts
-                host = nodes.phones.networking.primaryIPAddress;
-                inherit port;
-                # not the office's number, so the caller ID can only come
-                # from services.asterix.outbound
-                username = "office";
-                password = secret "trunk";
-                register = false;
-                # the phones send from the carriers' address too
-                matchProviderHost = false;
-                # Asterisk skips a contact whose last qualify failed, and the
-                # carriers start after the pbx first qualifies them
-                qualifyFrequency = 5;
-              })
-              carrierPorts;
-          };
 
           # what the opening hours say now, which the test reads from astdb
           dialplan.contexts.hourstest.extensions.s = [

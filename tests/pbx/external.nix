@@ -32,20 +32,16 @@
             trunk = "loop";
             destination.context.context = "answer-hangup";
           };
+          trunks.loop = {
+            host = "127.0.0.1";
+            username = "5551000";
+            password = secret "trunk";
+            register = false;
+          };
         };
-        services.asterisk = {
-          pjsip = {
-            trunks.loop = {
-              host = "127.0.0.1";
-              username = "5551000";
-              password = secret "trunk";
-              register = false;
-            };
-          };
-          dialplan.contexts = {
-            answer-hangup.extensions.s = ["Answer()" "Wait(1)" "Hangup()"];
-            done.extensions.s = ["NoOp(done)" "Hangup()"];
-          };
+        services.asterisk.dialplan.contexts = {
+          answer-hangup.extensions.s = ["Answer()" "Wait(1)" "Hangup()"];
+          done.extensions.s = ["NoOp(done)" "Hangup()"];
         };
       })
     ];

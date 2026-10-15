@@ -109,6 +109,25 @@ in
               "205"
             ];
           };
+
+          trunks = {
+            provider = {
+              host = "10.2.0.5";
+              # not the office's number, so the provider cannot take the
+              # caller ID from the account
+              username = "office";
+              password = secret "sip-provider";
+              registration.contactUser = "5551000";
+            };
+            # the same provider: a call to either registration carries its
+            # line parameter, which Asterisk checks before the address
+            second = {
+              host = "10.2.0.5";
+              username = "5552000";
+              password = secret "sip-second";
+              registration.contactUser = "5552000";
+            };
+          };
         };
 
         services.asterisk = {
@@ -121,26 +140,6 @@ in
             "verbose"
           ];
           settings."asterisk.conf".options.verbose = 3;
-          pjsip = {
-            trunks = {
-              provider = {
-                host = "10.2.0.5";
-                # not the office's number, so the provider cannot take the
-                # caller ID from the account
-                username = "office";
-                password = secret "sip-provider";
-                registration.contactUser = "5551000";
-              };
-              # the same provider: a call to either registration carries its
-              # line parameter, which Asterisk checks before the address
-              second = {
-                host = "10.2.0.5";
-                username = "5552000";
-                password = secret "sip-second";
-                registration.contactUser = "5552000";
-              };
-            };
-          };
         };
       };
 

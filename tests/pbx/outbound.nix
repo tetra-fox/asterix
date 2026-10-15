@@ -132,8 +132,6 @@
               numbers = ["911"];
               trunk = "provider";
             };
-          };
-          services.asterisk.pjsip = {
             trunks.provider = {
               host = "sip.provider.example";
               username = "5551000";
@@ -186,18 +184,14 @@
             trunk = "loop";
             destination.context.context = "busy";
           };
-        };
-        services.asterisk = {
-          pjsip = {
-            trunks.loop = {
-              host = "127.0.0.1";
-              username = "5551000";
-              password = secret "trunk";
-              register = false;
-            };
+          trunks.loop = {
+            host = "127.0.0.1";
+            username = "5551000";
+            password = secret "trunk";
+            register = false;
           };
-          dialplan.contexts.busy.extensions.s = ["Busy()"];
         };
+        services.asterisk.dialplan.contexts.busy.extensions.s = ["Busy()"];
       })
     ];
     calls = map (sample: removeAttrs sample ["steps"] // {context = "pbx-internal";}) outcomes;

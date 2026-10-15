@@ -153,15 +153,13 @@
               "_X." = "wide-pattern";
               s = "no-number";
             };
+          trunks.provider = {
+            host = "sip.provider.example";
+            username = "5551000";
+            password = secret "trunk";
+          };
         };
         services.asterisk = {
-          pjsip = {
-            trunks.provider = {
-              host = "sip.provider.example";
-              username = "5551000";
-              password = secret "trunk";
-            };
-          };
           dialplan.contexts =
             {
               pbx-internal.extensions."_2XX" = ["Hangup()"];

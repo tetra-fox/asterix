@@ -52,7 +52,7 @@
   inherit (asteriskLib) format;
   inherit (format) hostPort;
   inherit (format.types) secretOrString;
-  inherit (import ./lib.nix {inherit lib;}) settingsOption toSection transportListener;
+  inherit (import ./lib.nix {inherit lib;}) isAddress settingsOption toSection transportListener;
 
   section = {
     name,
@@ -982,9 +982,6 @@
         extra = e.identify.settings;
       };
     };
-
-  # an address or network, which an ACL takes, unlike a host name
-  isAddress = match: builtins.match "[0-9.]+(/[0-9.]+)?" match != null || lib.hasInfix ":" match;
 
   endpointSectionsFor = name: e: let
     transport =

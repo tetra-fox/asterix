@@ -1,6 +1,7 @@
 # services.asterix.networks: where phones and trunks are reached. Each network
 # turns into PJSIP transports on its address, the firewall on its interface,
-# the subnets of the global ACL, and the contact ACL of its extensions.
+# the subnets of the global ACL, and the contact ACL of its extensions. The
+# trunks send over its transport too, see trunks.nix.
 {
   config,
   lib,
@@ -14,13 +15,13 @@
     mkDefault
     mkIf
     mkOption
-    optional
     optionalAttrs
     types
     ;
 
   cfg = config.services.asterix;
-  core = config.services.asterisk;
+  pbxLib = import ./lib.nix {inherit lib;};
+  inherit (import ../lib.nix {inherit lib;}) isAddress;
 
   networkType = types.submodule {
     options = {
@@ -83,25 +84,7 @@
   };
 
   networkNames = builtins.attrNames cfg.networks;
-  only =
-    if builtins.length networkNames == 1
-    then builtins.head networkNames
-    else null;
-
-  # the network an extension is on, or null when it names none and there are
-  # several
-  networkOf = e:
-    if e.network != null
-    then e.network
-    else only;
-
-  # the transport the extensions of a network send over
-  pinned = name: n:
-    if builtins.elem "udp" n.protocols
-    then name
-    else if builtins.elem "tcp" n.protocols
-    then "${name}-tcp"
-    else "${name}-tls";
+  networkOf = pbxLib.networkOf cfg.networks;
 
   transportsOf = name: n: let
     shared =
@@ -125,17 +108,16 @@
         };
     };
 
-  # an address or network a pjsip ACL takes, which a host name is not
-  isAddress = entry: builtins.match "[0-9.]+(/[0-9.]+)?" entry != null || lib.hasInfix ":" entry;
-
   restricted = cfg.networks != {} && builtins.all (n: n.subnets != []) (builtins.attrValues cfg.networks);
-  trunkAddresses = concatMap (t: lib.optionals (t.identify != null) (builtins.filter isAddress t.identify.match)) (builtins.attrValues core.pjsip.trunks);
+  # every trunk of the final pjsip.conf, core-only ones included, since the
+  # ACL applies to all of them
+  trunks = config.services.asterisk.pjsip.trunks;
+  matchOf = t: lib.optionals (t.identify != null) t.identify.match;
+  addressesOf = t: builtins.filter isAddress (matchOf t ++ [t.host]);
+  trunkAddresses = concatMap addressesOf (builtins.attrValues trunks);
+  # trunks whose provider the global ACL keeps out, as it takes no host names
+  unreachableTrunks = builtins.attrNames (filterAttrs (_: t: addressesOf t == [] || !(builtins.all isAddress (matchOf t))) trunks);
 
-  unknown = builtins.filter (number: let
-    network = networkOf cfg.extensions.${number};
-  in
-    network != null && !(cfg.networks ? ${network})) (builtins.attrNames cfg.extensions);
-  unplaced = builtins.filter (number: networkOf cfg.extensions.${number} == null) (builtins.attrNames cfg.extensions);
   tlsWithoutKeys = builtins.attrNames (filterAttrs (_: n: builtins.elem "tls" n.protocols && (n.tls.certFile == null || n.tls.keyFile == null)) cfg.networks);
   interfaces = map (n: n.interface) (builtins.attrValues cfg.networks);
 in {
@@ -170,24 +152,40 @@ in {
   };
 
   config = mkIf cfg.enable {
-    assertions = [
-      {
-        assertion = cfg.networks != {};
-        message = "services.asterix.networks is empty, so phones have no transport to reach the PBX on. Remove the definition to get the default network, or define one.";
-      }
-      {
-        assertion = unplaced == [];
-        message = "services.asterix.extensions: ${concatStringsSep ", " unplaced} name no network, and there are several (${concatStringsSep ", " networkNames}). Set network on each.";
-      }
-      {
-        assertion = unknown == [];
-        message = "services.asterix.extensions: ${concatStringsSep ", " (map (number: "${number} (${networkOf cfg.extensions.${number}})") unknown)} name networks that are not in services.asterix.networks.";
-      }
-      {
-        assertion = tlsWithoutKeys == [];
-        message = "services.asterix.networks: ${concatStringsSep ", " tlsWithoutKeys} take tls, which needs tls.certFile and tls.keyFile.";
-      }
-    ];
+    assertions =
+      [
+        {
+          assertion = cfg.networks != {};
+          message = "services.asterix.networks is empty, so phones have no transport to reach the PBX on. Remove the definition to get the default network, or define one.";
+        }
+      ]
+      ++ concatMap (kind: let
+        objects = cfg.${kind};
+        unplaced = builtins.filter (name: networkOf objects.${name} == null) (builtins.attrNames objects);
+        unknown = builtins.filter (name: let
+          network = networkOf objects.${name};
+        in
+          network != null && !(cfg.networks ? ${network})) (builtins.attrNames objects);
+      in [
+        {
+          assertion = unplaced == [];
+          message = "services.asterix.${kind}: ${concatStringsSep ", " unplaced} name no network, and there are several (${concatStringsSep ", " networkNames}). Set network on each.";
+        }
+        {
+          assertion = unknown == [];
+          message = "services.asterix.${kind}: ${concatStringsSep ", " (map (name: "${name} (${networkOf objects.${name}})") unknown)} name networks that are not in services.asterix.networks.";
+        }
+      ]) ["extensions" "trunks"]
+      ++ [
+        {
+          assertion = !restricted || unreachableTrunks == [];
+          message = "services.asterix.trunks: ${concatStringsSep ", " unreachableTrunks} have no address as host or in identify.match, or host names in identify.match. Every network lists subnets, so the PBX takes SIP requests only from them and from those addresses of the trunks, and a pjsip ACL takes no host names, so it would reject the provider's requests, the BYE that ends a call included. List the provider's addresses or networks in identify.match.";
+        }
+        {
+          assertion = tlsWithoutKeys == [];
+          message = "services.asterix.networks: ${concatStringsSep ", " tlsWithoutKeys} take tls, which needs tls.certFile and tls.keyFile.";
+        }
+      ];
 
     services.asterisk = {
       openFirewall = mkDefault cfg.openFirewall;
@@ -211,7 +209,7 @@ in {
         n = cfg.networks.${name};
       in
         mkIf (name != null && cfg.networks ? ${name}) {
-          transport = mkDefault (pinned name n);
+          transport = mkDefault (pbxLib.pinned name n);
           settings = mkIf (n.subnets != []) {
             contact_deny = mkDefault [
               "0.0.0.0/0.0.0.0"

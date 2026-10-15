@@ -25,7 +25,7 @@
 
   cfg = config.services.asterix;
   pbxLib = import ./lib.nix {inherit lib;};
-  trunks = config.services.asterisk.pjsip.trunks;
+  inherit (cfg) trunks;
 
   groupType = types.submodule {
     options = {
@@ -61,7 +61,7 @@
         type = types.nullOr types.str;
         default = null;
         defaultText = lib.literalExpression "config.services.asterix.outbound.trunk";
-        description = "Trunk of {option}`services.asterisk.pjsip.trunks` the external numbers are called through.";
+        description = "Trunk of {option}`services.asterix.trunks` the external numbers are called through.";
       };
       strategy = mkOption {
         type = types.enum [
@@ -236,7 +236,7 @@ in {
       {
         assertion = unknownTrunks == [];
         message = ''
-          services.asterix: trunks that are not defined in services.asterisk.pjsip.trunks:
+          services.asterix: trunks that are not defined in services.asterix.trunks:
             ${concatStringsSep "\n  " (map (name: "services.asterix.ringGroups.${name}.trunk: ${cfg.ringGroups.${name}.trunk}") unknownTrunks)}
         '';
       }

@@ -73,6 +73,11 @@ in
             })
             names;
 
+          voicemail.mailboxes."200" = {
+            name = "Front desk";
+            pin = secret "vm-200";
+          };
+
           inbound = {
             "+15551001" = {
               trunk = "provider";
@@ -135,10 +140,6 @@ in
                 registration.contactUser = "5552000";
               };
             };
-          };
-          voicemail.mailboxes."200" = {
-            fullName = "Front desk";
-            pin = secret "vm-200";
           };
         };
       };

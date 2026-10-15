@@ -76,6 +76,7 @@ in {
     ./queues.nix
     ./ring-groups.nix
     ./routes.nix
+    ./voicemail.nix
   ];
 
   options.services.asterix.enable = lib.mkEnableOption "the PBX layer, and with it Asterisk";
@@ -96,7 +97,7 @@ in {
       ];
     })
     {
-      warnings = lib.optional (!cfg.enable && builtins.any (name: !(builtins.elem cfg.${name} [{} [] null])) objects) "services.asterix objects are defined, but services.asterix.enable is not set, so they do nothing.";
+      warnings = lib.optional (!cfg.enable && (builtins.any (name: !(builtins.elem cfg.${name} [{} [] null])) objects || cfg.voicemail.mailboxes != {})) "services.asterix objects are defined, but services.asterix.enable is not set, so they do nothing.";
     }
   ];
 }

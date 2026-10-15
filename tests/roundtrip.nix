@@ -23,9 +23,9 @@
       ({config, ...}: let
         secret = name: config.lib.asterisk.secret "/run/secrets/${name}";
       in {
-        # the name goes into the endpoint's caller ID, "name" <number>
         services.asterix = {
           enable = true;
+          # the name goes into the endpoint's caller ID, "name" <number>
           extensions = {
             "202" = {
               name = value;
@@ -35,6 +35,10 @@
               name = longest;
               password = secret "203";
             };
+          };
+          voicemail.mailboxes."101" = {
+            name = noComma;
+            pin = secret "vm-101";
           };
         };
         services.asterisk = {
@@ -56,10 +60,6 @@
               name = value;
             }
           ];
-          voicemail.mailboxes."101" = {
-            fullName = noComma;
-            pin = secret "vm-101";
-          };
         };
       })
     ];

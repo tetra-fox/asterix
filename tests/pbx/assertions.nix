@@ -335,6 +335,16 @@
       ];
     };
 
+    # base's 201 has a mailbox and 202 none, so only 201 clashes
+    mailboxesOfExtensions = {
+      module = {config, ...}: {
+        services.asterix.voicemail.mailboxes = lib.genAttrs ["201" "202"] (box: {
+          pin = config.lib.asterisk.secret "/run/secrets/vm-shared-${box}";
+        });
+      };
+      assertion = "services.asterix.voicemail.mailboxes: these numbers are the mailboxes of extensions with voicemail: 201.";
+    };
+
     # trunks, extensions and hours that pbx objects name but nobody defines;
     # each trunk of a number's list counts
     danglingReferences = {

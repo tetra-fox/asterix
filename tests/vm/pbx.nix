@@ -64,6 +64,7 @@ in
             }))
             {
               "230" = {
+                maxContacts = 2;
                 ringTime = 3;
                 voicemail.pin = secret "vm-230";
               };
@@ -138,8 +139,6 @@ in
           settings."asterisk.conf".options.verbose = 3;
 
           pjsip = {
-            # an extension with two devices
-            endpoints."230".aor.maxContacts = 2;
             trunks =
               lib.mapAttrs (_: port: {
                 # Asterisk resolves SIP host names without /etc/hosts

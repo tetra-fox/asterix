@@ -52,7 +52,7 @@
             email = mkOption {
               type = types.nullOr types.str;
               default = null;
-              description = "Address notified of new messages (see {option}`services.asterisk.voicemail.email`).";
+              description = "Address notified of new messages (see {option}`services.asterix.voicemail.email`).";
             };
           };
         });
@@ -65,6 +65,15 @@
         defaultText = lib.literalMD "the only network of {option}`services.asterix.networks`";
         example = "voip";
         description = "Network of {option}`services.asterix.networks` the phone is on.";
+      };
+      maxContacts = mkOption {
+        type = types.ints.positive;
+        default = 1;
+        description = ''
+          Devices that can register as the extension at once, such as a desk
+          phone and a softphone. One more replaces the registration that
+          expires soonest.
+        '';
       };
       ringTime = mkOption {
         type = types.ints.positive;
@@ -144,9 +153,8 @@ in {
         Phones, keyed by the number that reaches them. Each is a PJSIP
         endpoint named like its number, which dials from `pbx-internal`, with
         a hint for busy lamps and, with `voicemail`, a mailbox. Calls ring
-        every device registered as the extension, as many as
-        {option}`services.asterisk.pjsip.endpoints.<name>.aor.maxContacts`
-        allows (one by default). Asterisk hangs up a call of the extension
+        every device registered as the extension, as many as `maxContacts`
+        allows. Asterisk hangs up a call of the extension
         after 60 seconds without RTP from its phone, outside hold
         ({option}`services.asterisk.pjsip.endpoints.<name>.rtpTimeout`), so
         the call of a phone that loses power, which sends no BYE, ends
@@ -181,6 +189,7 @@ in {
           callerId = mkDefault ''"${lib.escape ["\\" "\""] e.name}" <${number}>'';
           auth.password = mkDefault e.password;
           rtpTimeout = mkDefault 60;
+          aor.maxContacts = mkDefault e.maxContacts;
           mailboxes = optional (e.voicemail != null) "${number}@default";
           settings = mkIf (e.pickupGroups != []) (let
             groups = mkDefault (lib.concatStringsSep "," e.pickupGroups);

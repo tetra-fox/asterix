@@ -206,6 +206,7 @@
             desk.timeout = 1;
           };
           conferences.board = {};
+          voicemail.mailboxes."200".pin = secret "vm-200";
           hours.office = {
             timezone = "UTC";
             open = [
@@ -231,7 +232,6 @@
             ];
             desk.members = ["PJSIP/201"];
           };
-          voicemail.mailboxes."200".pin = secret "vm-200";
           dialplan.contexts.done.extensions.s = ["Hangup()"];
         };
       })

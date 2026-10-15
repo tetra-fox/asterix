@@ -86,6 +86,7 @@
       in {
         services.asterix = {
           enable = true;
+          voicemail.mailboxes."200".pin = secret "vm-200";
           extensions =
             {"201".password = secret "sip-201";}
             // lib.listToAttrs (map (kind:
@@ -116,7 +117,6 @@
                 };
               };
           };
-          voicemail.mailboxes."200".pin = secret "vm-200";
           dialplan.contexts.line.extensions = {
             ring = [
               "Ringing()"

@@ -33,7 +33,7 @@ in
       };
     in {
       imports = [
-        self.nixosModules.default
+        self.nixosModules.asterisk
         ./common.nix
       ];
 

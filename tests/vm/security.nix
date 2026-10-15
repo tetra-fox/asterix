@@ -49,7 +49,7 @@ in
         secret = name: config.lib.asterisk.secret "/run/test-secrets/${name}";
       in {
         imports = [
-          self.nixosModules.pbx
+          self.nixosModules.default
           ./common.nix
           (import ./secrets.nix {
             fixed = {
@@ -69,7 +69,7 @@ in
             prefixLength = 24;
           }
         ];
-        pbx = {
+        services.asterix = {
           enable = true;
           extensions = {
             "201" = {

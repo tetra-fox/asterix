@@ -27,7 +27,7 @@
   forEach = f: listToAttrs (map f objects);
 in {
   module = {config, ...}: {
-    pbx = {
+    services.asterix = {
       extensions = forEach (o:
         nameValuePair o.extension {
           password = config.lib.asterisk.secret "/run/secrets/sip-${o.extension}";
@@ -80,22 +80,22 @@ in {
   in
     concatLists [
       (concatMap (o: [
-          (slot ''pbx.extensions."${o.extension}".noAnswer'' o.kind)
-          (slot ''pbx.extensions."${o.extension}".busy'' (o.next 1))
+          (slot ''services.asterix.extensions."${o.extension}".noAnswer'' o.kind)
+          (slot ''services.asterix.extensions."${o.extension}".busy'' (o.next 1))
         ])
         objects)
-      (map (o: slot "pbx.ringGroups.${o.name}.noAnswer" o.kind) objects)
-      (map (o: slot "pbx.queues.${o.name}.noAnswer" o.kind) objects)
-      (map (o: slot ''pbx.inbound."${o.inbound}".destination'' o.kind) objects)
+      (map (o: slot "services.asterix.ringGroups.${o.name}.noAnswer" o.kind) objects)
+      (map (o: slot "services.asterix.queues.${o.name}.noAnswer" o.kind) objects)
+      (map (o: slot ''services.asterix.inbound."${o.inbound}".destination'' o.kind) objects)
       (concatMap (o: [
-          (slot ''pbx.inbound."${o.inboundByHours}".open'' o.kind)
-          (slot ''pbx.inbound."${o.inboundByHours}".closed'' (o.next 1))
+          (slot ''services.asterix.inbound."${o.inboundByHours}".open'' o.kind)
+          (slot ''services.asterix.inbound."${o.inboundByHours}".closed'' (o.next 1))
         ])
         objects)
       (concatMap (o: [
-          (slot ''pbx.ivrs.${o.name}.options."1"'' o.kind)
-          (slot "pbx.ivrs.${o.name}.noInput" (o.next 1))
-          (slot "pbx.ivrs.${o.name}.invalid" (o.next 2))
+          (slot ''services.asterix.ivrs.${o.name}.options."1"'' o.kind)
+          (slot "services.asterix.ivrs.${o.name}.noInput" (o.next 1))
+          (slot "services.asterix.ivrs.${o.name}.invalid" (o.next 2))
         ])
         objects)
     ];

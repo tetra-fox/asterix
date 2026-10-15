@@ -15,8 +15,8 @@
   office = {config, ...}: let
     secret = name: config.lib.asterisk.secret "/run/secrets/${name}";
   in {
-    imports = [self.nixosModules.pbx];
-    pbx = {
+    imports = [self.nixosModules.default];
+    services.asterix = {
       enable = true;
       extensions = {
         "201".password = secret "sip-201";
@@ -51,7 +51,7 @@
       modules = [
         office
         {
-          pbx.tieLines = ["provider"];
+          services.asterix.tieLines = ["provider"];
           services.asterisk.pjsip.trunks.provider.context = "pbx-internal";
         }
       ];
@@ -67,7 +67,7 @@
       modules = [
         office
         {
-          pbx = {
+          services.asterix = {
             ringGroups."a/b@c{d" = {
               members = ["202"];
               external = ["5559000"];

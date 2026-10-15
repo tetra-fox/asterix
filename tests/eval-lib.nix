@@ -11,7 +11,7 @@
       inherit (pkgs.stdenv.hostPlatform) system;
       modules =
         [
-          self.nixosModules.default
+          self.nixosModules.asterisk
           {
             boot.isContainer = true;
             system.stateVersion = "26.05";

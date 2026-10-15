@@ -213,12 +213,12 @@ in
     testSectionComment = {
       expr = render {} {
         sections.s = {
-          comment = "from pbx.ringGroups.front\n\nrings 201; then 202\n";
+          comment = "from services.asterix.ringGroups.front\n\nrings 201; then 202\n";
           x = 1;
         };
       };
       expected = ''
-        ; from pbx.ringGroups.front
+        ; from services.asterix.ringGroups.front
         ;
         ; rings 201; then 202
         [s]

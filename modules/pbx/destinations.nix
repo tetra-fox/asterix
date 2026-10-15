@@ -16,7 +16,7 @@
     optional
     ;
 
-  cfg = config.pbx;
+  cfg = config.services.asterix;
   pbxLib = import ./lib.nix {inherit lib;};
   inherit (import ../lib.nix {inherit lib;}) splitMailbox voicemailMailboxes;
 
@@ -36,14 +36,14 @@
   # press, as pbxLib.describe names a destination, or is null
   use = where: from: dest: optional (dest != null) {inherit where from dest;};
   uses = concatLists [
-    (concatLists (mapAttrsToList (number: e: use ''pbx.extensions."${number}".noAnswer'' "extension ${number}" e.noAnswer ++ use ''pbx.extensions."${number}".busy'' "extension ${number}" e.busy) cfg.extensions))
-    (concatLists (mapAttrsToList (name: group: use "pbx.ringGroups.${name}.noAnswer" "ringGroup ${name}" group.noAnswer) cfg.ringGroups))
-    (concatLists (mapAttrsToList (name: queue: use "pbx.queues.${name}.noAnswer" "queue ${name}" queue.noAnswer) cfg.queues))
-    (concatLists (mapAttrsToList (number: route: concatMap (field: use ''pbx.inbound."${number}".${field}'' null route.${field}) ["destination" "open" "closed"]) cfg.inbound))
+    (concatLists (mapAttrsToList (number: e: use ''services.asterix.extensions."${number}".noAnswer'' "extension ${number}" e.noAnswer ++ use ''services.asterix.extensions."${number}".busy'' "extension ${number}" e.busy) cfg.extensions))
+    (concatLists (mapAttrsToList (name: group: use "services.asterix.ringGroups.${name}.noAnswer" "ringGroup ${name}" group.noAnswer) cfg.ringGroups))
+    (concatLists (mapAttrsToList (name: queue: use "services.asterix.queues.${name}.noAnswer" "queue ${name}" queue.noAnswer) cfg.queues))
+    (concatLists (mapAttrsToList (number: route: concatMap (field: use ''services.asterix.inbound."${number}".${field}'' null route.${field}) ["destination" "open" "closed"]) cfg.inbound))
     (concatLists (mapAttrsToList (name: ivr:
-      concatLists (mapAttrsToList (key: use ''pbx.ivrs.${name}.options."${key}"'' null) ivr.options)
-      ++ use "pbx.ivrs.${name}.noInput" "ivr ${name}" ivr.noInput
-      ++ use "pbx.ivrs.${name}.invalid" null ivr.invalid)
+      concatLists (mapAttrsToList (key: use ''services.asterix.ivrs.${name}.options."${key}"'' null) ivr.options)
+      ++ use "services.asterix.ivrs.${name}.noInput" "ivr ${name}" ivr.noInput
+      ++ use "services.asterix.ivrs.${name}.invalid" null ivr.invalid)
     cfg.ivrs))
   ];
 
@@ -81,14 +81,14 @@ in {
       {
         assertion = missing == [];
         message = ''
-          pbx: destinations that do not exist:
+          services.asterix: destinations that do not exist:
             ${concatMapStringsSep "\n  " (u: "${u.where}: ${pbxLib.describe u.dest}") missing}
         '';
       }
       {
         assertion = loops == [];
         message = ''
-          pbx: destinations that lead back to their own object without a key press, so a call goes round until the caller hangs up:
+          services.asterix: destinations that lead back to their own object without a key press, so a call goes round until the caller hangs up:
             ${concatMapStringsSep "\n  " (u: "${u.where}: ${pbxLib.describe u.dest}") loops}
           Send one of them elsewhere, such as to voicemail; a voice menu's options and invalid key may lead back, since the caller presses a key for those.
         '';

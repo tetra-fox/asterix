@@ -26,10 +26,10 @@
     lib = import ./lib {inherit lib;};
 
     nixosModules = {
-      default = self.nixosModules.asterisk;
+      # services.asterix, with the core under it
+      default = ./modules/pbx;
+      # services.asterisk alone
       asterisk = ./modules;
-      # the core and, on top of it, pbx.*
-      pbx = ./modules/pbx;
     };
 
     checks = forAllSystems (pkgs: import ./tests {inherit pkgs self sops-nix;});

@@ -1,4 +1,4 @@
-# Evaluation-only tests of the files pbx.phones writes: each vendor's format,
+# Evaluation-only tests of the files services.asterix.phones writes: each vendor's format,
 # and the parts of one with logic of their own
 {
   pkgs,
@@ -14,8 +14,8 @@
       ({config, ...}: let
         inherit (config.lib.asterisk) secret;
       in {
-        imports = [self.nixosModules.pbx];
-        pbx = {
+        imports = [self.nixosModules.default];
+        services.asterix = {
           enable = true;
           extensions = {
             "201".password = secret "/run/secrets/201";
@@ -29,7 +29,7 @@
         services.asterisk.pjsip.transports.udp = {};
       })
       module
-    ]).pbx.phones.files;
+    ]).services.asterix.phones.files;
 
   texts = module: lib.mapAttrs (_: file: file.text) (files module);
 in {
@@ -40,7 +40,7 @@ in {
     # device's own file in the rule it fetches next
     testCiscoBootstrapFiles = {
       expr = lib.mapAttrs (_: file: file.text) (lib.filterAttrs (_: file: file.tftp) (files {
-        pbx.phones.devices = {
+        services.asterix.phones.devices = {
           desk = {
             model = "cisco-8841";
             mac = "00:62:ec:00:02:01";
@@ -87,7 +87,7 @@ in {
       expr =
         (texts {
           services.asterisk.pjsip.endpoints."202".auth.username = "kitchen";
-          pbx.phones = {
+          services.asterix.phones = {
             ntpServer = "10.0.20.1";
             adminPassword = self.lib.secret "/run/secrets/phone-admin";
             cisco.settings = {
@@ -136,7 +136,7 @@ in {
     testCiscoRouterAdapterFile = {
       expr =
         (texts {
-          pbx.phones = {
+          services.asterix.phones = {
             ntpServer = "10.0.20.1";
             adminPassword = self.lib.secret "/run/secrets/phone-admin";
             devices.garage = {
@@ -178,7 +178,7 @@ in {
     testFanvilFile = {
       expr = lib.mapAttrs (_: file: {inherit (file) text escape allowedAddress;}) (files {
         services.asterisk.pjsip.endpoints."202".auth.username = "kitchen";
-        pbx.phones = {
+        services.asterix.phones = {
           ntpServer = "10.0.20.1";
           adminPassword = self.lib.secret "/run/secrets/fanvil-admin";
           fanvil.settings = {
@@ -268,7 +268,7 @@ in {
       expr =
         (texts {
           services.asterisk.pjsip.endpoints."202".auth.username = "kitchen";
-          pbx.phones = {
+          services.asterix.phones = {
             ntpServer = "10.0.20.1";
             adminPassword = self.lib.secret "/run/secrets/phone-admin";
             grandstream = {
@@ -332,7 +332,7 @@ in {
     testGrandstreamHt814File = {
       expr =
         (texts {
-          pbx.phones.devices.garage = {
+          services.asterix.phones.devices.garage = {
             model = "grandstream-ht814";
             mac = "c0:74:ad:00:02:01";
             lines = ["201" null "202"];
@@ -372,7 +372,7 @@ in {
       expr = map (adminPassword:
         lib.findFirst (lib.hasPrefix "    <P2>") null (lib.splitString "\n"
           (texts {
-            pbx.phones = {
+            services.asterix.phones = {
               inherit adminPassword;
               devices."201" = {
                 model = "grandstream-ht801";
@@ -398,7 +398,7 @@ in {
     testPolyVvxFiles = {
       expr = texts {
         services.asterisk.pjsip.endpoints."201".auth.username = "kitchen";
-        pbx.phones = {
+        services.asterix.phones = {
           ntpServer = "10.0.20.1";
           adminPassword = self.lib.secret "/run/secrets/poly-admin";
           poly.settings = {
@@ -461,7 +461,7 @@ in {
     testSnomD315File = {
       expr = texts {
         services.asterisk.pjsip.endpoints."201".auth.username = "kitchen";
-        pbx.phones = {
+        services.asterix.phones = {
           ntpServer = "10.0.20.1";
           adminPassword = self.lib.secret "/run/secrets/snom-admin";
           snom = {
@@ -520,7 +520,7 @@ in {
     testYealinkT33gFile = {
       expr = texts {
         services.asterisk.pjsip.endpoints."201".auth.username = "kitchen";
-        pbx.phones = {
+        services.asterix.phones = {
           ntpServer = "10.0.20.1";
           adminPassword = self.lib.secret "/run/secrets/yealink-admin";
           yealink.settings = {

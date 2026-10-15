@@ -76,9 +76,9 @@
   result = probe {
     name = "pbx-menus";
     modules = [
-      self.nixosModules.pbx
+      self.nixosModules.default
       ({config, ...}: {
-        pbx = {
+        services.asterix = {
           enable = true;
           extensions."201".password = config.lib.asterisk.secret "/run/secrets/sip-201";
           ivrs = {

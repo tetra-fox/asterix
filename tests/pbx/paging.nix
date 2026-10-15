@@ -16,9 +16,9 @@
   result = probe {
     name = "pbx-paging";
     modules = [
-      self.nixosModules.pbx
+      self.nixosModules.default
       ({config, ...}: {
-        pbx = {
+        services.asterix = {
           enable = true;
           extensions = lib.genAttrs members (number: {password = config.lib.asterisk.secret "/run/secrets/sip-${number}";});
           paging.all = {

@@ -1,4 +1,4 @@
-# pbx.extensions: a phone (PJSIP endpoint), its mailbox and what happens to
+# services.asterix.extensions: a phone (PJSIP endpoint), its mailbox and what happens to
 # calls it does not take, in pbx-extension-<number>, and pbx-devices, which
 # rings every device of an extension for queues and emergency notify
 {
@@ -20,7 +20,7 @@
     types
     ;
 
-  cfg = config.pbx;
+  cfg = config.services.asterix;
   pbxLib = import ./lib.nix {inherit lib;};
   inherit ((import ../../lib {inherit lib;}).format.types) secretOrString;
 
@@ -120,7 +120,7 @@
     ++ lib.optionals (cfg.emergency != null) cfg.emergency.notify
   );
 in {
-  options.pbx = {
+  options.services.asterix = {
     extensions = mkOption {
       type = types.attrsOf extensionType;
       default = {};
@@ -159,7 +159,7 @@ in {
     assertions = [
       {
         assertion = longNames == {};
-        message = "pbx.extensions: Asterisk keeps 79 bytes of a caller ID name and drops the rest, even in the middle of a letter, so these names are too long: ${
+        message = "services.asterix.extensions: Asterisk keeps 79 bytes of a caller ID name and drops the rest, even in the middle of a letter, so these names are too long: ${
           lib.concatMapStringsSep ", " (number: ''"${number}" (${toString (builtins.stringLength longNames.${number}.name)} bytes)'') (builtins.attrNames longNames)
         }.";
       }
@@ -200,7 +200,7 @@ in {
         mapAttrs' (
           number: e:
             nameValuePair (pbxLib.objectContext "extension" number) {
-              comment = mkDefault ''from pbx.extensions."${number}"'';
+              comment = mkDefault ''from services.asterix.extensions."${number}"'';
               extensions.s =
                 [
                   (pbxLib.app "Dial" [
@@ -226,7 +226,7 @@ in {
           # Dial() has no timeout: the queue or Originate() that called the
           # Local channel hangs it up after its own
           pbx-devices = {
-            comment = mkDefault "from pbx: every device of an extension, through a Local channel";
+            comment = mkDefault "from services.asterix: every device of an extension, through a Local channel";
             extensions = lib.genAttrs rungThroughLocal (number: [
               (pbxLib.app "Dial" [(pbxLib.devices number)])
               (pbxLib.app "Hangup" [])

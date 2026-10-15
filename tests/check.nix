@@ -23,8 +23,8 @@
 
   # a phone of the pbx layer with a mailbox, which cases add pbx objects to
   pbxPhone = {config, ...}: {
-    imports = [self.nixosModules.pbx];
-    pbx = {
+    imports = [self.nixosModules.default];
+    services.asterix = {
       enable = true;
       extensions."201" = {
         password = config.lib.asterisk.secret "/run/secrets/201";
@@ -135,7 +135,7 @@
     soundsMissingInLanguage = {
       module = {
         imports = [pbxPhone];
-        pbx = {
+        services.asterix = {
           ivrs = {
             main = {
               prompt.sound = "basic-pbx-ivr-main";
@@ -169,7 +169,7 @@
     gotoTargetsMissing = {
       module = {
         imports = [pbxPhone];
-        pbx.extensions."201" = {
+        services.asterix.extensions."201" = {
           busy.context = {
             context = "internal";
             extension = "nope";

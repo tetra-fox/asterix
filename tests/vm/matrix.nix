@@ -237,7 +237,7 @@
   in {
     imports =
       [
-        self.nixosModules.default
+        self.nixosModules.asterisk
         (host {
           vlan = vlans.${site pbx};
           v4 =

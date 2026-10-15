@@ -1,11 +1,11 @@
 # Numbers outside dialled through the probe (tests/campaign/probe.nix),
-# without a pbx.outbound.prefix and without pbx.outbound.callerId, and with
+# without a services.asterix.outbound.prefix and without services.asterix.outbound.callerId, and with
 # the prefix *9 and a caller ID. The trunk gets the number without
 # the prefix, after the caller ID is set where one is configured, which then
 # goes in P-Asserted-Identity; a number too short for the pattern reaches
 # nothing; a pbx number that starts with the prefix reaches the pbx; and the
-# emergency number works with and without the prefix, with pbx.outbound's
-# caller ID, as pbx.emergency sets none. A call the trunk does not put
+# emergency number works with and without the prefix, with services.asterix.outbound's
+# caller ID, as services.asterix.emergency sets none. A call the trunk does not put
 # through, here to a provider whose name does not resolve in the build
 # sandbox, ends with congestion; through a trunk back to the same Asterisk, a
 # number the far end answers busy stays busy, and outbound and emergency calls
@@ -113,11 +113,11 @@
     probe {
       name = "pbx-outbound-${c.name}";
       modules = [
-        self.nixosModules.pbx
+        self.nixosModules.default
         ({config, ...}: let
           secret = name: config.lib.asterisk.secret "/run/secrets/${name}";
         in {
-          pbx = {
+          services.asterix = {
             enable = true;
             extensions = lib.genAttrs c.extensions (number: {
               password = secret "sip-${number}";
@@ -168,11 +168,11 @@
   outcomesResult = probe {
     name = "pbx-outbound-outcomes";
     modules = [
-      self.nixosModules.pbx
+      self.nixosModules.default
       ({config, ...}: let
         secret = name: config.lib.asterisk.secret "/run/secrets/${name}";
       in {
-        pbx = {
+        services.asterix = {
           enable = true;
           extensions."201".password = secret "sip-201";
           outbound = {

@@ -31,7 +31,7 @@ in {
       reloadUnits = ["asterisk.service"];
     });
 
-  pbx = {
+  services.asterix = {
     enable = true;
 
     # calls a phone does not take go to its own mailbox
@@ -136,7 +136,7 @@ in {
       maxSeconds = 300;
     };
 
-    # pbx.queues.support gives this queue its number and members
+    # services.asterix.queues.support gives this queue its number and members
     queues.queues.support = {
       strategy = "ringall";
       timeout = 20;

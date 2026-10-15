@@ -140,7 +140,7 @@ in
       inherit (config.lib.asterisk) credential secret;
     in {
       imports = [
-        self.nixosModules.default
+        self.nixosModules.asterisk
         ../../examples/minimal.nix
         ./common.nix
         ./phone.nix

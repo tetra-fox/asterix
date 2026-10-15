@@ -41,7 +41,7 @@ in
     nodes = {
       pbx = {
         imports = [
-          self.nixosModules.pbx
+          self.nixosModules.default
           ../../examples/small-office.nix
           ./common.nix
           (sopsSecrets secrets)
@@ -69,7 +69,7 @@ in
 
       provider = {config, ...}: {
         imports = [
-          self.nixosModules.default
+          self.nixosModules.asterisk
           ./common.nix
           (import ./secrets.nix {fixed.customer = secrets.sip-trunk;})
           (onlyAddress "eth1" "203.0.113.5")

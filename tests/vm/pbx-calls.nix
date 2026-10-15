@@ -3,10 +3,10 @@
 # with a +, reaches its destination, and so does the number of a second
 # trunk to the same provider, which the line parameter tells apart.
 # Outbound: the provider gets the number without the prefix #, with
-# pbx.outbound's caller ID in P-Asserted-Identity and the account in From.
+# services.asterix.outbound's caller ID in P-Asserted-Identity and the account in From.
 # Emergency: each number, with and without the prefix, leaves for the
 # provider within a second of the phone's INVITE from every extension, with
-# pbx.outbound's caller ID as it has none of its own, while notify rings the
+# services.asterix.outbound's caller ID as it has none of its own, while notify rings the
 # other extensions, one of them not registered, but not the caller's own,
 # with the caller's name as written, quotes and letters outside ASCII
 # included.
@@ -45,7 +45,7 @@ in
         secret = name: config.lib.asterisk.secret "/run/test-secrets/${name}";
       in {
         imports = [
-          self.nixosModules.pbx
+          self.nixosModules.default
           ./common.nix
           (import ./secrets.nix {
             fixed =
@@ -63,7 +63,7 @@ in
           (onlyAddress "10.2.0.10")
         ];
 
-        pbx = {
+        services.asterix = {
           enable = true;
           extensions =
             lib.mapAttrs (extension: name: {
@@ -97,7 +97,7 @@ in
             ];
             trunk = "provider";
             # without a callerId of its own, emergency calls present
-            # pbx.outbound.callerId
+            # services.asterix.outbound.callerId
             notify = [
               "201"
               "202"
@@ -148,7 +148,7 @@ in
         secret = name: config.lib.asterisk.secret "/run/test-secrets/${name}";
       in {
         imports = [
-          self.nixosModules.default
+          self.nixosModules.asterisk
           ./common.nix
           (import ./secrets.nix {
             fixed = {
@@ -264,7 +264,7 @@ in
             hang_up()
 
         def presents_office(invite):
-            """The pbx's INVITE to the provider has pbx.outbound's caller ID
+            """The pbx's INVITE to the provider has services.asterix.outbound's caller ID
             in P-Asserted-Identity, and the account in From."""
             assert "<sip:5551000@" in header(invite, "P-Asserted-Identity"), invite["text"]
             assert "<sip:office@" in header(invite, "From"), invite["text"]

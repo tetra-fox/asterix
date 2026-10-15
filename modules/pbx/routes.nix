@@ -1,6 +1,6 @@
-# pbx.inbound, pbx.outbound and pbx.emergency: calls between the phones and
+# services.asterix.inbound, services.asterix.outbound and services.asterix.emergency: calls between the phones and
 # trunks. Calls from a trunk start in pbx-inbound-<trunk>, the default context
-# pbx gives every trunk, which holds the trunk's numbers of pbx.inbound.
+# the layer gives every trunk, which holds the trunk's numbers of services.asterix.inbound.
 {
   config,
   lib,
@@ -26,7 +26,7 @@
     unique
     ;
 
-  cfg = config.pbx;
+  cfg = config.services.asterix;
   pbxLib = import ./lib.nix {inherit lib;};
   inherit (import ../../lib {inherit lib;}) format;
 
@@ -51,7 +51,7 @@
         type = types.nullOr types.str;
         default = null;
         example = "office";
-        description = "Opening hours of {option}`pbx.hours` that choose between `open` and `closed`.";
+        description = "Opening hours of {option}`services.asterix.hours` that choose between `open` and `closed`.";
       };
       open = mkOption {
         type = types.nullOr pbxLib.destination;
@@ -74,9 +74,9 @@
         description = ''
           Digits dialled before a number outside, removed before the call
           leaves; the number outside has two digits or more. Can be empty, and
-          then every number of two digits or more that no pbx number takes
+          then every number of two digits or more that no number of the PBX takes
           goes out through the trunk, a mistyped extension number included. A
-          pbx number that starts with them still reaches the pbx: with `9`, a
+          number of the PBX that starts with them still reaches the PBX: with `9`, a
           ring group on 900 takes the calls to 900, so 00 outside cannot be
           dialled. So does a call pickup code (`pickupexten` of features.conf)
           that starts with them, which chan_pjsip takes before the dialplan:
@@ -94,7 +94,7 @@
         description = ''
           Number presented to the called party, on calls out and to the
           external numbers of ring groups. The trunk's From header keeps
-          naming its account, so pbx sends this number in the
+          naming its account, so asterix sends this number in the
           P-Asserted-Identity header of these calls; a provider that ignores
           that header shows the account's number. Without it, the trunk
           decides.
@@ -112,7 +112,7 @@
         example = ["911"];
         description = ''
           Emergency numbers where the PBX is. Phones can dial them with and
-          without the outbound prefix. With {option}`pbx.outbound`, an empty
+          without the outbound prefix. With {option}`services.asterix.outbound`, an empty
           list says that the PBX makes no emergency calls; an emergency number
           is then taken for a number outside, or reaches nothing.
         '';
@@ -120,7 +120,7 @@
       trunk = mkOption {
         type = types.nullOr types.str;
         default = null;
-        defaultText = lib.literalExpression "config.pbx.outbound.trunk";
+        defaultText = lib.literalExpression "config.services.asterix.outbound.trunk";
         description = "Trunk of {option}`services.asterisk.pjsip.trunks` emergency calls go out through.";
       };
       callerId = mkOption {
@@ -129,7 +129,7 @@
         description = ''
           Number presented to the emergency service, usually the one the
           site's address is registered with, sent in P-Asserted-Identity as
-          {option}`pbx.outbound.callerId` is; without it, emergency calls
+          {option}`services.asterix.outbound.callerId` is; without it, emergency calls
           present that one.
         '';
       };
@@ -209,7 +209,7 @@
     ++ setCallerId emergencyCallerId
     ++ dialTrunk (["PJSIP/${number}@${emergencyTrunk}"] ++ callerIdArguments emergencyCallerId emergencyTrunk);
 
-  # emergency calls without a trunk of their own go out through pbx.outbound's
+  # emergency calls without a trunk of their own go out through services.asterix.outbound's
   emergencyTrunk =
     if cfg.emergency.trunk != null
     then cfg.emergency.trunk
@@ -225,34 +225,34 @@
 
   outboundTrunkUses =
     optional (cfg.outbound != null) {
-      where = "pbx.outbound.trunk";
+      where = "services.asterix.outbound.trunk";
       inherit (cfg.outbound) trunk;
     }
     ++ optional (cfg.emergency != null && cfg.emergency.trunk != null) {
-      where = "pbx.emergency.trunk";
+      where = "services.asterix.emergency.trunk";
       inherit (cfg.emergency) trunk;
     };
   trunkUses =
     concatLists (mapAttrsToList (number: route:
       map (trunk: {
-        where = ''pbx.inbound."${number}".trunk'';
+        where = ''services.asterix.inbound."${number}".trunk'';
         inherit trunk;
       })
       route.trunk)
     cfg.inbound)
     ++ outboundTrunkUses
     ++ map (trunk: {
-      where = "pbx.tieLines";
+      where = "services.asterix.tieLines";
       inherit trunk;
     })
     cfg.tieLines;
   unknownTrunks = builtins.filter (use: !(trunks ? ${use.trunk})) trunkUses;
   # trunks pbx dials as PJSIP/<number>@<trunk>; a ring group without a trunk
-  # of its own uses pbx.outbound's
+  # of its own uses services.asterix.outbound's
   badTrunkNames = builtins.filter (use: pbxLib.breaksDialString use.trunk) (
     outboundTrunkUses
     ++ mapAttrsToList (name: group: {
-      where = "pbx.ringGroups.${name}.trunk";
+      where = "services.asterix.ringGroups.${name}.trunk";
       inherit (group) trunk;
     }) (filterAttrs (_: group: group.external != [] && group.trunk != null) cfg.ringGroups)
   );
@@ -278,7 +278,7 @@
       startSet = [{key = context;}];
       operator = c: map (key: {inherit key;}) (includesOf c.key);
     });
-  # trunks whose callers can dial out through pbx.outbound with no menu in
+  # trunks whose callers can dial out through services.asterix.outbound with no menu in
   # between, as from pbx-internal, which includes pbx-outbound
   dialOut = builtins.filter (trunk: !(builtins.elem trunk cfg.tieLines) && endpointContexts ? ${trunk} && endpointContexts.${trunk} != null && reachesOutbound endpointContexts.${trunk}) (builtins.attrNames trunks);
 in {
@@ -290,7 +290,7 @@ in {
     }));
   };
 
-  options.pbx = {
+  options.services.asterix = {
     inbound = mkOption {
       type = types.attrsOf inboundType;
       default = {};
@@ -308,7 +308,7 @@ in {
         Numbers calls arrive at from trunks, keyed by the user part of the
         Request-URI the trunk sends (a number only in To does not count), and
         where their calls go: `destination`, or `hours` with `open` and
-        `closed`. With pbx, calls from a trunk start in
+        `closed`. Calls from a trunk start in
         `pbx-inbound-<trunk>`, which holds these numbers, unless the trunk
         sets a `context` of its own. Other numbers are rejected.
 
@@ -338,7 +338,7 @@ in {
         play as a fast busy, and one the far end answers busy stays busy. A
         provider that does not answer at all fails a call once its INVITE
         times out, after 32 s, and at once after the trunk's next qualify
-        (`qualifyFrequency`). It needs {option}`pbx.emergency` beside it, with
+        (`qualifyFrequency`). It needs {option}`services.asterix.emergency` beside it, with
         no emergency numbers if the PBX makes no emergency calls: without
         their own route they would go out as numbers outside, 911 as 11 with
         the prefix 9.
@@ -355,11 +355,11 @@ in {
         notify = ["201"];
       };
       description = ''
-        Emergency calls, which {option}`pbx.outbound` needs. There are no
+        Emergency calls, which {option}`services.asterix.outbound` needs. There are no
         defaults: the numbers, and who must be told, depend on where the PBX
         is. A call waits for the trunk as long as it takes, and one the trunk
         does not put through ends with congestion, as with
-        {option}`pbx.outbound`.
+        {option}`services.asterix.outbound`.
       '';
     };
 
@@ -369,7 +369,7 @@ in {
       description = ''
         Trunks of {option}`services.asterisk.pjsip.trunks` that connect
         another PBX, whose callers may dial out through
-        {option}`pbx.outbound`. pbx refuses any other trunk whose calls start
+        {option}`services.asterix.outbound`. asterix refuses any other trunk whose calls start
         in a context that reaches `pbx-outbound`, as `pbx-internal` does,
         since anyone who can call in through it could dial out, emergency
         numbers included.
@@ -381,7 +381,7 @@ in {
     {
       services.asterisk.dialplan.contexts = lib.listToAttrs (map (trunk:
         lib.nameValuePair (pbxLib.objectContext "inbound" trunk) {
-          comment = mkDefault "from pbx.inbound: calls from trunk ${trunk}";
+          comment = mkDefault "from services.asterix.inbound: calls from trunk ${trunk}";
           # an incomplete number has no steps, the assertion below names it
           extensions = mapAttrs (_: inboundSteps) (filterAttrs (_: route: builtins.elem trunk route.trunk && complete route) cfg.inbound);
         })
@@ -390,43 +390,43 @@ in {
       assertions = [
         {
           assertion = builtins.all complete (builtins.attrValues cfg.inbound);
-          message = "pbx.inbound: ${
+          message = "services.asterix.inbound: ${
             concatStringsSep ", " (builtins.attrNames (filterAttrs (_: route: !(complete route)) cfg.inbound))
           } need either `destination`, or `hours` with `open` and `closed`.";
         }
         {
           assertion = badKeys == [];
-          message = "pbx.inbound: keys must be a number of digits, * and #, with an optional leading +; s, which takes the calls that name no number; or a pattern of such numbers that starts with _, such as _X.: ${concatMapStringsSep ", " (key: lib.showOption ["pbx" "inbound" key]) badKeys}.";
+          message = "services.asterix.inbound: keys must be a number of digits, * and #, with an optional leading +; s, which takes the calls that name no number; or a pattern of such numbers that starts with _, such as _X.: ${concatMapStringsSep ", " (key: lib.showOption ["services" "asterix" "inbound" key]) badKeys}.";
         }
         {
           assertion = unknownHours == [];
-          message = "pbx.inbound: ${concatStringsSep ", " unknownHours} use hours that are not defined in pbx.hours.";
+          message = "services.asterix.inbound: ${concatStringsSep ", " unknownHours} use hours that are not defined in services.asterix.hours.";
         }
         {
           assertion = unknownTrunks == [];
           message = ''
-            pbx: trunks that are not defined in services.asterisk.pjsip.trunks:
+            services.asterix: trunks that are not defined in services.asterisk.pjsip.trunks:
               ${concatMapStringsSep "\n  " (use: "${use.where}: ${use.trunk}") unknownTrunks}
           '';
         }
         {
           assertion = badTrunkNames == [];
           message = ''
-            pbx: trunk names that Asterisk would misread in a dial string (they may not contain , ; [ ] " \ ''${ $[ & / or an unclosed parenthesis):
+            services.asterix: trunk names that Asterisk would misread in a dial string (they may not contain , ; [ ] " \ ''${ $[ & / or an unclosed parenthesis):
               ${concatMapStringsSep "\n  " (use: "${use.where}: ${use.trunk}") badTrunkNames}
           '';
         }
         {
           assertion = foreignContexts == [];
-          message = "pbx.inbound: the trunk(s) ${concatStringsSep ", " foreignContexts} have a context of their own, so their calls do not reach pbx.inbound; remove it.";
+          message = "services.asterix.inbound: the trunk(s) ${concatStringsSep ", " foreignContexts} have a context of their own, so their calls do not reach services.asterix.inbound; remove it.";
         }
         {
           assertion = cfg.outbound == null || cfg.emergency != null;
           message = ''
-            pbx.outbound is set but pbx.emergency is not, so an emergency number dialled from a phone goes out as a number outside, or nowhere: with the prefix 9, 911 reaches the trunk as 11. Add the emergency numbers where the PBX is, such as
-              pbx.emergency.numbers = [ "911" ];
-            which go out through pbx.outbound.trunk unless pbx.emergency.trunk names another, or, if this PBX makes no emergency calls,
-              pbx.emergency.numbers = [ ];
+            services.asterix.outbound is set but services.asterix.emergency is not, so an emergency number dialled from a phone goes out as a number outside, or nowhere: with the prefix 9, 911 reaches the trunk as 11. Add the emergency numbers where the PBX is, such as
+              services.asterix.emergency.numbers = [ "911" ];
+            which go out through services.asterix.outbound.trunk unless services.asterix.emergency.trunk names another, or, if this PBX makes no emergency calls,
+              services.asterix.emergency.numbers = [ ];
           '';
         }
       ];
@@ -436,7 +436,7 @@ in {
     # goes out, where the connected line is the caller ID Dial was given
     (mkIf (cfg.outbound != null && cfg.outbound.callerId != null || cfg.emergency != null && emergencyCallerId != null) {
       services.asterisk.dialplan.contexts.pbx-caller-id = {
-        comment = mkDefault "from pbx.outbound and pbx.emergency: their caller ID in P-Asserted-Identity";
+        comment = mkDefault "from services.asterix.outbound and services.asterix.emergency: their caller ID in P-Asserted-Identity";
         extensions.s = [
           (pbxLib.app "Set" ["PJSIP_HEADER(add,P-Asserted-Identity)=<sip:\${CONNECTEDLINE(num)}@\${ARG1}>"])
           (pbxLib.app "Return" [])
@@ -446,7 +446,7 @@ in {
 
     (mkIf (cfg.outbound != null) {
       services.asterisk.dialplan.contexts.pbx-outbound = {
-        comment = mkDefault "from pbx.outbound";
+        comment = mkDefault "from services.asterix.outbound";
         extensions."_${prefix}X." =
           setCallerId cfg.outbound.callerId
           ++ dialTrunk (["PJSIP/${numberAfterPrefix}@${cfg.outbound.trunk}"] ++ callerIdArguments cfg.outbound.callerId cfg.outbound.trunk);
@@ -455,7 +455,7 @@ in {
       assertions = [
         {
           assertion = dialOut == [];
-          message = "pbx: calls from the trunk(s) ${concatMapStringsSep ", " (trunk: "${trunk} (${endpointContexts.${trunk}})") dialOut} start in a context that reaches pbx-outbound, so anyone who can call in through them can dial out, emergency numbers included. Give such a trunk a context without that, such as the pbx-inbound-<trunk> pbx gives it, or list it in pbx.tieLines if it connects another PBX whose callers may dial out.";
+          message = "services.asterix: calls from the trunk(s) ${concatMapStringsSep ", " (trunk: "${trunk} (${endpointContexts.${trunk}})") dialOut} start in a context that reaches pbx-outbound, so anyone who can call in through them can dial out, emergency numbers included. Give such a trunk a context without that, such as the pbx-inbound-<trunk> pbx gives it, or list it in services.asterix.tieLines if it connects another PBX whose callers may dial out.";
         }
       ];
     })
@@ -465,7 +465,7 @@ in {
       # assertion below says so
       services.asterisk.dialplan.contexts = mkIf (cfg.emergency.numbers != [] && emergencyTrunk != null) {
         pbx-emergency = {
-          comment = mkDefault "from pbx.emergency";
+          comment = mkDefault "from services.asterix.emergency";
           extensions =
             genAttrs cfg.emergency.numbers (emergencySteps cfg.emergency)
             // optionalAttrs (cfg.emergency.notify != []) {
@@ -497,15 +497,15 @@ in {
       assertions = [
         {
           assertion = unknownNotify == [];
-          message = "pbx.emergency.notify: ${concatStringsSep ", " unknownNotify} are not extensions of pbx.extensions.";
+          message = "services.asterix.emergency.notify: ${concatStringsSep ", " unknownNotify} are not extensions of services.asterix.extensions.";
         }
         {
           assertion = cfg.emergency.numbers == [] || emergencyTrunk != null;
-          message = "pbx.emergency: emergency calls need a trunk; set pbx.emergency.trunk, or pbx.outbound, whose trunk they then go out through.";
+          message = "services.asterix.emergency: emergency calls need a trunk; set services.asterix.emergency.trunk, or services.asterix.outbound, whose trunk they then go out through.";
         }
       ];
 
-      warnings = optional (cfg.emergency.numbers != [] && emergencyCallerId == null) "pbx.emergency: neither pbx.emergency.callerId nor pbx.outbound.callerId is set, so the provider decides which number emergency calls present. Set pbx.emergency.callerId to the number the site's address is registered with.";
+      warnings = optional (cfg.emergency.numbers != [] && emergencyCallerId == null) "services.asterix.emergency: neither services.asterix.emergency.callerId nor services.asterix.outbound.callerId is set, so the provider decides which number emergency calls present. Set services.asterix.emergency.callerId to the number the site's address is registered with.";
     })
   ]);
 }

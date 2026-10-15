@@ -1,5 +1,5 @@
 # Provisioning for Fanvil phones, door phones and paging gateways: each
-# pbx.phones device of one of these models gets a `<mac>.cfg` in Fanvil's
+# services.asterix.phones device of one of these models gets a `<mac>.cfg` in Fanvil's
 # sysConf XML, in which each line, a SIP account, registers as its endpoint.
 #
 # Every key set here is in the key map (vNcDotNameMap.txt) of the firmware
@@ -34,8 +34,8 @@
     types
     ;
 
-  cfg = config.pbx.phones.fanvil;
-  pcfg = config.pbx.phones;
+  cfg = config.services.asterix.phones.fanvil;
+  pcfg = config.services.asterix.phones;
   acfg = config.services.asterisk;
   asteriskLib = import ../../../lib {inherit lib;};
   inherit (asteriskLib) format secrets;
@@ -221,7 +221,7 @@
     ${renderElements "  " (deviceSettings device)}</sysConf>
   '';
 in {
-  options.pbx.phones.fanvil.settings = mkOption {
+  options.services.asterix.phones.fanvil.settings = mkOption {
     type = types.attrsOf pbxLib.phoneValue;
     default = {};
     example = {
@@ -236,33 +236,33 @@ in {
   };
 
   config = mkMerge [
-    {pbx.phones.models = lib.mapAttrs (_: lines: {inherit lines;}) models;}
+    {services.asterix.phones.models = lib.mapAttrs (_: lines: {inherit lines;}) models;}
 
     (mkIf (devices != {}) {
       assertions = [
         {
           assertion = invalidAdminPasswords == [];
-          message = "pbx.phones: the admin password (web.account.1.Password) of ${concatStringsSep ", " invalidAdminPasswords} is not 1 to 39 letters and digits, which is what every Fanvil firmware takes (the X1S, X1SG, X3SG, X3U and X305 take no symbols).";
+          message = "services.asterix.phones: the admin password (web.account.1.Password) of ${concatStringsSep ", " invalidAdminPasswords} is not 1 to 39 letters and digits, which is what every Fanvil firmware takes (the X1S, X1SG, X3SG, X3U and X305 take no symbols).";
         }
         {
           assertion = controlCharacters == [];
-          message = "pbx.phones.devices: Fanvil settings cannot contain control characters: ${concatStringsSep ", " controlCharacters}.";
+          message = "services.asterix.phones.devices: Fanvil settings cannot contain control characters: ${concatStringsSep ", " controlCharacters}.";
         }
         {
           assertion = wildcardServers == [];
-          message = "pbx.phones.devices: Fanvil settings that send devices to 0.0.0.0 or ::, which no device can reach: ${concatStringsSep ", " wildcardServers}. Set pbx.phones.listenAddress to the PBX's address on the devices' network, or give that address in pbx.phones.sipServer and settings.\"ap.FlashServerIP\".";
+          message = "services.asterix.phones.devices: Fanvil settings that send devices to 0.0.0.0 or ::, which no device can reach: ${concatStringsSep ", " wildcardServers}. Set services.asterix.phones.listenAddress to the PBX's address on the devices' network, or give that address in services.asterix.phones.sipServer and settings.\"ap.FlashServerIP\".";
         }
         {
           assertion = badKeys == [];
-          message = "pbx.phones: settings of Fanvil devices must be paths of sysConf elements such as sip.line.1.DisplayName: ${concatStringsSep ", " (map builtins.toJSON badKeys)}.";
+          message = "services.asterix.phones: settings of Fanvil devices must be paths of sysConf elements such as sip.line.1.DisplayName: ${concatStringsSep ", " (map builtins.toJSON badKeys)}.";
         }
         {
           assertion = nestedKeys == [];
-          message = "pbx.phones.devices: Fanvil settings that other settings are below, which one XML element cannot be: ${concatStringsSep ", " nestedKeys}.";
+          message = "services.asterix.phones.devices: Fanvil settings that other settings are below, which one XML element cannot be: ${concatStringsSep ", " nestedKeys}.";
         }
       ];
 
-      pbx.phones.files = mapAttrs' (_: device:
+      services.asterix.phones.files = mapAttrs' (_: device:
         nameValuePair "${device.mac}.cfg" {
           text = deviceXml device;
           escape = "xml";

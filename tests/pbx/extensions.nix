@@ -74,7 +74,7 @@
   result = probe {
     name = "pbx-extensions";
     modules = [
-      self.nixosModules.pbx
+      self.nixosModules.default
       ({config, ...}: let
         secret = name: config.lib.asterisk.secret "/run/secrets/${name}";
         phone = contact: {
@@ -84,7 +84,7 @@
           };
         };
       in {
-        pbx = {
+        services.asterix = {
           enable = true;
           extensions =
             {"201".password = secret "sip-201";}

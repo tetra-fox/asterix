@@ -1,5 +1,5 @@
 # Provisioning for Poly (formerly Polycom) VVX phones on UC Software and Edge
-# E phones on PVOS: each pbx.phones device of one of these models gets a master
+# E phones on PVOS: each services.asterix.phones device of one of these models gets a master
 # configuration file `<mac>.cfg` whose CONFIG_FILES names `<mac>-settings.cfg`,
 # which holds the phone's parameters, and each line, a registration, registers
 # as its endpoint.
@@ -28,8 +28,8 @@
     types
     ;
 
-  cfg = config.pbx.phones.poly;
-  pcfg = config.pbx.phones;
+  cfg = config.services.asterix.phones.poly;
+  pcfg = config.services.asterix.phones;
   acfg = config.services.asterisk;
   asteriskLib = import ../../../lib {inherit lib;};
   inherit (asteriskLib) format secrets;
@@ -183,7 +183,7 @@
     + concatStrings (map (key: "  ${key}=\"${pbxLib.phoneValueText pbxLib.escapeXml values.${key}}\"\n") (lib.naturalSort (attrNames values)))
     + "/>\n";
 in {
-  options.pbx.phones.poly.settings = mkOption {
+  options.services.asterix.phones.poly.settings = mkOption {
     type = types.attrsOf pbxLib.phoneValue;
     default = {};
     example = {
@@ -193,29 +193,29 @@ in {
   };
 
   config = mkMerge [
-    {pbx.phones.models = lib.mapAttrs (_: model: {inherit (model) lines;}) models;}
+    {services.asterix.phones.models = lib.mapAttrs (_: model: {inherit (model) lines;}) models;}
 
     (mkIf (devices != {}) {
       assertions = [
         {
           assertion = invalidAdminPasswords == [];
-          message = "pbx.phones: the admin password (device.auth.localAdminPassword) of ${lib.concatStringsSep ", " invalidAdminPasswords} is not 1 to 32 characters of ASCII without < and >, or is 456, the factory default, none of which Poly phones take.";
+          message = "services.asterix.phones: the admin password (device.auth.localAdminPassword) of ${lib.concatStringsSep ", " invalidAdminPasswords} is not 1 to 32 characters of ASCII without < and >, or is 456, the factory default, none of which Poly phones take.";
         }
         {
           assertion = controlCharacters == [];
-          message = "pbx.phones.devices: Poly parameters cannot contain control characters: ${lib.concatStringsSep ", " controlCharacters}.";
+          message = "services.asterix.phones.devices: Poly parameters cannot contain control characters: ${lib.concatStringsSep ", " controlCharacters}.";
         }
         {
           assertion = wildcardServers == [];
-          message = "pbx.phones.devices: Poly parameters that send phones to 0.0.0.0 or ::, which no phone can reach: ${lib.concatStringsSep ", " wildcardServers}. Set pbx.phones.listenAddress to the PBX's address on the phones' network, or give that address in pbx.phones.sipServer and settings.\"device.prov.serverName\".";
+          message = "services.asterix.phones.devices: Poly parameters that send phones to 0.0.0.0 or ::, which no phone can reach: ${lib.concatStringsSep ", " wildcardServers}. Set services.asterix.phones.listenAddress to the PBX's address on the phones' network, or give that address in services.asterix.phones.sipServer and settings.\"device.prov.serverName\".";
         }
         {
           assertion = invalidKeys == [];
-          message = "pbx.phones: settings of Poly devices must be parameter names such as reg.1.label, parts of letters, digits, _ and - separated by dots and starting with a letter: ${lib.concatMapStringsSep ", " builtins.toJSON invalidKeys}.";
+          message = "services.asterix.phones: settings of Poly devices must be parameter names such as reg.1.label, parts of letters, digits, _ and - separated by dots and starting with a letter: ${lib.concatMapStringsSep ", " builtins.toJSON invalidKeys}.";
         }
       ];
 
-      pbx.phones.files =
+      services.asterix.phones.files =
         lib.concatMapAttrs (_: device: {
           "${device.mac}.cfg" = {
             text = masterXml device;

@@ -14,11 +14,6 @@
       "asterisk"
       "useTheseDefaultConfFiles"
     ] "Every configuration file is generated; none are copied from the package.")
-    (lib.mkRemovedOptionModule [
-      "services"
-      "asterisk"
-      "provisioning"
-    ] "Phone provisioning moved to pbx.phones, in nixosModules.pbx.")
     ./ari.nix
     ./asterisk.nix
     ./cdr.nix

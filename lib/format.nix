@@ -590,7 +590,7 @@ in rec {
           comment = mkOption {
             type = lib.types.nullOr lib.types.str;
             default = null;
-            example = "from pbx.ringGroups.front";
+            example = "from services.asterix.ringGroups.front";
             description = "Comment written above the section header, one `;` line per line.";
           };
         };

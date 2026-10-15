@@ -6,13 +6,13 @@
 # at once or one after the other, passing over a busy member and one that is
 # not registered, and the first to answer gets the call while every other
 # leg is cancelled. An outside member, called through the group's own trunk
-# with pbx.outbound's caller ID, takes the call by pressing 1, hands it back
+# with services.asterix.outbound's caller ID, takes the call by pressing 1, hands it back
 # to the members with 2, and stops hearing the confirmation prompt as soon as
 # a member answers. Paging: members get the auto-answer headers, members in a
 # call are left out unless skipBusy is off, and the pager's own extension
 # always is.
 #
-#   pbx     the trunks provider (pbx.outbound's) and second lead to carrier-a
+#   pbx     the trunks provider (services.asterix.outbound's) and second lead to carrier-a
 #           and carrier-b on the phones' machine
 #   phones  200 calls and pages, 201 to 204 ring until the test answers them,
 #           205 watches busy lamps, 221 is busy, 222 never registers and 230
@@ -44,7 +44,7 @@ in
         secret = name: config.lib.asterisk.secret "/run/test-secrets/${name}";
       in {
         imports = [
-          self.nixosModules.pbx
+          self.nixosModules.default
           ./common.nix
           (import ./secrets.nix {
             fixed =
@@ -56,7 +56,7 @@ in
           })
         ];
 
-        pbx = {
+        services.asterix = {
           enable = true;
           extensions = lib.mkMerge [
             (lib.genAttrs numbers (number: {
@@ -147,7 +147,7 @@ in
                 host = nodes.phones.networking.primaryIPAddress;
                 inherit port;
                 # not the office's number, so the caller ID can only come
-                # from pbx.outbound
+                # from services.asterix.outbound
                 username = "office";
                 password = secret "trunk";
                 register = false;
@@ -343,7 +343,7 @@ in
             ended_calls = carrier_b.disconnects()
             boss.call("630")
             member.wait_request("INVITE", after=invites["201"])
-            # through the group's own trunk, not pbx.outbound's
+            # through the group's own trunk, not services.asterix.outbound's
             carrier_b.wait_request("INVITE", after=invites["carrier-b"])
             assert "INVITE sip:5559001@" in carrier_b.received("INVITE")[-1]
             wait_confirming(cursor)
@@ -353,11 +353,11 @@ in
             answer(member)
             wait_bridged(pbx, "200", "201")
             hear_each_other(boss, member)
-            assert carrier_a.requests("INVITE") == invites["carrier-a"], "pbx.outbound's trunk was used"
+            assert carrier_a.requests("INVITE") == invites["carrier-a"], "services.asterix.outbound's trunk was used"
             boss.hangup()
             wait_idle(pbx)
 
-        with subtest("an outside member gets pbx.outbound's caller ID, takes the call by pressing 1, and the member stops ringing"):
+        with subtest("an outside member gets services.asterix.outbound's caller ID, takes the call by pressing 1, and the member stops ringing"):
             cursor = journal_cursor(pbx)
             member = phone["201"]
             invites = member.requests("INVITE")

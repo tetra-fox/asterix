@@ -28,7 +28,7 @@
   # not answered yet gets as 603 Decline (channels/chan_pjsip.c hangup_cause2sip)
   unansweredCause = ''''${IF($["''${CHANNEL(state)}" != "Up" & (''${HANGUPCAUSE} = 0 | ''${HANGUPCAUSE} = 16)]?19)}'';
 in rec {
-  # a setting of a device that pbx.phones provisions
+  # a setting of a device that services.asterix.phones provisions
   phoneValue =
     types.oneOf [
       types.str
@@ -88,23 +88,23 @@ in rec {
     extension = mkOption {
       type = types.str;
       example = "201";
-      description = "Extension of {option}`pbx.extensions`: its phone rings, then its own busy or no-answer destination.";
+      description = "Extension of {option}`services.asterix.extensions`: its phone rings, then its own busy or no-answer destination.";
     };
     ringGroup = mkOption {
       type = types.str;
-      description = "Ring group of {option}`pbx.ringGroups`.";
+      description = "Ring group of {option}`services.asterix.ringGroups`.";
     };
     queue = mkOption {
       type = types.str;
-      description = "Queue of {option}`pbx.queues`.";
+      description = "Queue of {option}`services.asterix.queues`.";
     };
     conference = mkOption {
       type = types.str;
-      description = "Conference of {option}`pbx.conferences`.";
+      description = "Conference of {option}`services.asterix.conferences`.";
     };
     ivr = mkOption {
       type = types.str;
-      description = "Voice menu of {option}`pbx.ivrs`.";
+      description = "Voice menu of {option}`services.asterix.ivrs`.";
     };
     voicemail = mkOption {
       type = types.coercedTo types.str (mailbox: {inherit mailbox;}) mailboxType;

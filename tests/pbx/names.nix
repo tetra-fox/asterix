@@ -126,18 +126,18 @@
   result = probe {
     name = "pbx-names";
     modules = [
-      self.nixosModules.pbx
+      self.nixosModules.default
       ({config, ...}: let
         secret = name: config.lib.asterisk.secret "/run/secrets/${name}";
       in {
-        pbx = {
+        services.asterix = {
           enable = true;
           extensions."201".password = secret "sip-201";
           outbound = {
             prefix = "9";
             trunk = "provider";
           };
-          # no emergency calls, which pbx.outbound needs said
+          # no emergency calls, which services.asterix.outbound needs said
           emergency.numbers = [];
           ringGroups = forEach "ringGroups" (o:
             lib.nameValuePair o.name {

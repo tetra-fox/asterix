@@ -1,4 +1,4 @@
-# pbx: extensions, ring groups, queues, conferences, voice menus, paging,
+# services.asterix: extensions, ring groups, queues, conferences, voice menus, paging,
 # business hours, routes and phone provisioning, written into the options of
 # the core module (services.asterisk), which stays usable on its own. Every
 # object gets a context of its own, pbx-<kind>-<name>, and phones dial from
@@ -9,7 +9,7 @@
   options,
   ...
 }: let
-  cfg = config.pbx;
+  cfg = config.services.asterix;
   core = config.services.asterisk;
   asteriskLib = import ../../lib {inherit lib;};
   objects = ["extensions" "ringGroups" "queues" "conferences" "ivrs" "paging" "hours" "inbound" "outbound" "emergency" "voicemailMenu" "tieLines"];
@@ -77,7 +77,7 @@ in {
     ./routes.nix
   ];
 
-  options.pbx.enable = lib.mkEnableOption "the PBX layer, and with it Asterisk";
+  options.services.asterix.enable = lib.mkEnableOption "the PBX layer, and with it Asterisk";
 
   config = lib.mkMerge [
     (lib.mkIf cfg.enable {
@@ -86,16 +86,16 @@ in {
       assertions = [
         {
           assertion = extended == [];
-          message = "pbx: steps were added to ${lib.concatStringsSep ", " extended} from elsewhere, so they run before or after the pbx's own. Change these through the pbx options, or replace their steps with lib.mkForce; ${ownSteps}";
+          message = "services.asterix: steps were added to ${lib.concatStringsSep ", " extended} from elsewhere, so they run before or after the layer's own. Change these through the services.asterix options, or replace their steps with lib.mkForce; ${ownSteps}";
         }
         {
           assertion = extendedInSettings == [];
-          message = "pbx: steps were added to ${lib.concatStringsSep ", " extendedInSettings} from elsewhere, as lines of services.asterisk.settings.\"extensions.conf\". Change these through the pbx options; ${ownSteps}";
+          message = "services.asterix: steps were added to ${lib.concatStringsSep ", " extendedInSettings} from elsewhere, as lines of services.asterisk.settings.\"extensions.conf\". Change these through the services.asterix options; ${ownSteps}";
         }
       ];
     })
     {
-      warnings = lib.optional (!cfg.enable && builtins.any (name: !(builtins.elem cfg.${name} [{} [] null])) objects) "pbx objects are defined, but pbx.enable is not set, so they do nothing.";
+      warnings = lib.optional (!cfg.enable && builtins.any (name: !(builtins.elem cfg.${name} [{} [] null])) objects) "services.asterix objects are defined, but services.asterix.enable is not set, so they do nothing.";
     }
   ];
 }

@@ -13,11 +13,11 @@
   result = probe {
     name = "pbx-external";
     modules = [
-      self.nixosModules.pbx
+      self.nixosModules.default
       ({config, ...}: let
         secret = name: config.lib.asterisk.secret "/run/secrets/${name}";
       in {
-        pbx = {
+        services.asterix = {
           enable = true;
           extensions."201".password = secret "sip-201";
           ringGroups.sales = {

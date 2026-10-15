@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""The opening hours oracle: whether pbx.hours is open at an instant, as the
+"""The opening hours oracle: whether services.asterix.hours is open at an instant, as the
 descriptions of its options say, against what its pbx-hours-<name> routine
 returns for that instant in the probe (hours.nix).
 
     hours.py plan HOURS ZONEINFO OUT --chunk CHUNK --sample N [--seed S]
     hours.py check HOURS ZONEINFO PLAN PROBE OUT
 
-HOURS is pbx.hours as JSON. `plan` picks instants for each of them in
+HOURS is services.asterix.hours as JSON. `plan` picks instants for each of them in
 WINDOW: around the changes of offset of its zone, and on every day, the edges
 of each range and of the day, in local time. It keeps N of them picked by
 the seed, half on the days of a change of offset, a holiday or a leap day.

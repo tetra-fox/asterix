@@ -3,7 +3,7 @@
 # services.asterisk.pjsip.trunks, and the walk writes every way from a trunk
 # to a trunk's Dial to $out/report.json, and its exit code to $out/status.
 # The outside numbers the configuration names are the external members of
-# pbx.ringGroups, with the trunk each is called through.
+# services.asterix.ringGroups, with the trunk each is called through.
 #
 #   tollfraud { name = "office"; config = evalConfig [ ./office.nix ]; }
 {
@@ -18,18 +18,18 @@ in
     config,
   }: let
     trunks = builtins.attrNames config.services.asterisk.pjsip.trunks;
-    pbx = config.pbx or {};
-    # a ring group without a trunk of its own uses pbx.outbound's
+    asterix = config.services.asterix or {};
+    # a ring group without a trunk of its own uses services.asterix.outbound's
     trunkOf = group:
       if group.trunk != null
       then group.trunk
-      else pbx.outbound.trunk;
+      else asterix.outbound.trunk;
     named = lib.concatMap (group:
       map (number: {
         trunk = trunkOf group;
         inherit number;
       })
-      group.external) (builtins.attrValues (pbx.ringGroups or {}));
+      group.external) (builtins.attrValues (asterix.ringGroups or {}));
     policy = pkgs.writeText "asterisk-tollfraud-${name}.json" (builtins.toJSON {inherit trunks named;});
     result = probe {
       name = "tollfraud-${name}";

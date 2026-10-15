@@ -20,7 +20,7 @@ in
       inherit (config.lib.asterisk) secret;
     in {
       imports = [
-        self.nixosModules.default
+        self.nixosModules.asterisk
         ./common.nix
         ./phone.nix
         (import ./secrets.nix {

@@ -1,5 +1,5 @@
 # Provisioning for Yealink SIP phones on firmware V84 and later: each
-# pbx.phones device of one of these models gets a `<mac>.cfg`, Yealink's
+# services.asterix.phones device of one of these models gets a `<mac>.cfg`, Yealink's
 # MAC-oriented configuration file, in which each line is an account that
 # registers as its endpoint. Without boot files on the server, the phone asks
 # for its model's common file and then this one.
@@ -30,8 +30,8 @@
     types
     ;
 
-  cfg = config.pbx.phones.yealink;
-  pcfg = config.pbx.phones;
+  cfg = config.services.asterix.phones.yealink;
+  pcfg = config.services.asterix.phones;
   acfg = config.services.asterisk;
   asteriskLib = import ../../../lib {inherit lib;};
   inherit (asteriskLib) format secrets;
@@ -158,7 +158,7 @@
     #!version:1.0.0.1
     ${concatStrings (map (key: "${key} = ${pbxLib.phoneValueText lib.id values.${key}}\n") (lib.naturalSort (attrNames values)))}'';
 in {
-  options.pbx.phones.yealink.settings = mkOption {
+  options.services.asterix.phones.yealink.settings = mkOption {
     type = types.attrsOf pbxLib.phoneValue;
     default = {};
     example = {
@@ -169,31 +169,31 @@ in {
   };
 
   config = mkMerge [
-    {pbx.phones.models = lib.mapAttrs (_: model: {inherit (model) lines;}) models;}
+    {services.asterix.phones.models = lib.mapAttrs (_: model: {inherit (model) lines;}) models;}
 
     (mkIf (devices != {}) {
       assertions = [
         {
           assertion = invalidAdminPasswords == [];
-          message = "pbx.phones: static.security.user_password of ${lib.concatStringsSep ", " invalidAdminPasswords} is not <user name>:<password> with a password of 1 to 32 characters from ASCII 33 (!) to 126 (~) other than the colon, which is what Yealink phones take from a configuration file.";
+          message = "services.asterix.phones: static.security.user_password of ${lib.concatStringsSep ", " invalidAdminPasswords} is not <user name>:<password> with a password of 1 to 32 characters from ASCII 33 (!) to 126 (~) other than the colon, which is what Yealink phones take from a configuration file.";
         }
         {
           assertion = controlCharacters == [];
-          message = "pbx.phones.devices: Yealink settings cannot contain control characters: ${lib.concatStringsSep ", " controlCharacters}.";
+          message = "services.asterix.phones.devices: Yealink settings cannot contain control characters: ${lib.concatStringsSep ", " controlCharacters}.";
         }
         {
           assertion = wildcardServers == [];
-          message = "pbx.phones.devices: Yealink settings that send phones to 0.0.0.0 or ::, which no phone can reach: ${lib.concatStringsSep ", " wildcardServers}. Set pbx.phones.listenAddress to the PBX's address on the phones' network, or give that address in pbx.phones.sipServer and settings.\"static.auto_provision.server.url\".";
+          message = "services.asterix.phones.devices: Yealink settings that send phones to 0.0.0.0 or ::, which no phone can reach: ${lib.concatStringsSep ", " wildcardServers}. Set services.asterix.phones.listenAddress to the PBX's address on the phones' network, or give that address in services.asterix.phones.sipServer and settings.\"static.auto_provision.server.url\".";
         }
         {
           assertion = builtins.all (key: builtins.match "[A-Za-z0-9_]+([.][A-Za-z0-9_]+)*" key != null) (
             attrNames cfg.settings ++ lib.concatMap (device: attrNames device.settings) (attrValues devices)
           );
-          message = "pbx.phones: settings of Yealink devices must be configuration parameters such as local_time.time_zone, letters, digits and _ in parts separated by dots.";
+          message = "services.asterix.phones: settings of Yealink devices must be configuration parameters such as local_time.time_zone, letters, digits and _ in parts separated by dots.";
         }
       ];
 
-      pbx.phones.files = mapAttrs' (_: device:
+      services.asterix.phones.files = mapAttrs' (_: device:
         nameValuePair "${device.mac}.cfg" {
           text = deviceCfg device;
           escape = "line";

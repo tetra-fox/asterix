@@ -1,4 +1,4 @@
-# pbx.ivrs: a menu that plays a prompt and sends each key to a destination,
+# services.asterix.ivrs: a menu that plays a prompt and sends each key to a destination,
 # in pbx-ivr-<name>, which includes pbx-directdial with directDial. A prompt
 # given as text is spoken by flite when the system is built.
 {
@@ -25,7 +25,7 @@
     types
     ;
 
-  cfg = config.pbx;
+  cfg = config.services.asterix;
   pbxLib = import ./lib.nix {inherit lib;};
 
   ivrType = types.submodule {
@@ -65,7 +65,7 @@
         type = types.bool;
         default = false;
         description = ''
-          Let callers dial the numbers of {option}`pbx.extensions` from the
+          Let callers dial the numbers of {option}`services.asterix.extensions` from the
           menu. A key that starts an extension number counts on its own once
           no digit follows within 5 seconds.
         '';
@@ -107,7 +107,7 @@
   ivrSection = name: ivr: let
     again = pbxLib.app "GotoIf" [''$[''${PBX_ATTEMPT} < ${toString ivr.attempts}]?s,prompt''];
   in {
-    comment = mkDefault "from pbx.ivrs.${name}";
+    comment = mkDefault "from services.asterix.ivrs.${name}";
     # searched after the menu's own keys
     includes = optional ivr.directDial "pbx-directdial";
     extensions =
@@ -140,17 +140,17 @@
   # flite speaks a text with no ASCII letter or digit as 0.185 s of silence
   silent = builtins.filter (name: !(builtins.any (c: builtins.match "[A-Za-z0-9]" c != null) (lib.stringToCharacters spoken.${name}.prompt.text))) (builtins.attrNames spoken);
   badNames = builtins.filter (name: builtins.match "[A-Za-z0-9_-]+" name == null) (builtins.attrNames cfg.ivrs);
-  badKeys = concatMap (name: map (key: "pbx.ivrs.${name}.options.${key}") (builtins.filter (key: builtins.match "[0-9*#]" key == null) (builtins.attrNames cfg.ivrs.${name}.options))) (builtins.attrNames cfg.ivrs);
+  badKeys = concatMap (name: map (key: "services.asterix.ivrs.${name}.options.${key}") (builtins.filter (key: builtins.match "[0-9*#]" key == null) (builtins.attrNames cfg.ivrs.${name}.options))) (builtins.attrNames cfg.ivrs);
   # a key that is also an extension number would hide that number from
   # directDial, as the menu's own keys come before its includes
   shadowed = concatMap (name: let
     ivr = cfg.ivrs.${name};
   in
-    map (key: "pbx.ivrs.${name}.options.${key}") (
+    map (key: "services.asterix.ivrs.${name}.options.${key}") (
       builtins.filter (key: ivr.directDial && cfg.extensions ? ${key}) (builtins.attrNames ivr.options)
     )) (builtins.attrNames cfg.ivrs);
 in {
-  options.pbx.ivrs = mkOption {
+  options.services.asterix.ivrs = mkOption {
     type = types.attrsOf ivrType;
     default = {};
     example = lib.literalExpression ''
@@ -176,7 +176,7 @@ in {
         # grows with the menus plus the extensions, not with their product
         // optionalAttrs directDial {
           pbx-directdial = {
-            comment = mkDefault "from pbx.ivrs: the extensions a menu with directDial lets callers dial";
+            comment = mkDefault "from services.asterix.ivrs: the extensions a menu with directDial lets callers dial";
             extensions = genAttrs (builtins.attrNames cfg.extensions) (number: [
               (pbxLib.goto (pbxLib.objectContext "extension" number))
             ]);
@@ -188,19 +188,19 @@ in {
     assertions = [
       {
         assertion = badNames == [];
-        message = "pbx.ivrs: menu names may only contain letters, digits, _ and -: ${concatMapStringsSep ", " (name: lib.showOption ["pbx" "ivrs" name]) badNames}.";
+        message = "services.asterix.ivrs: menu names may only contain letters, digits, _ and -: ${concatMapStringsSep ", " (name: lib.showOption ["services" "asterix" "ivrs" name]) badNames}.";
       }
       {
         assertion = badKeys == [];
-        message = "pbx.ivrs: keys must be one digit, * or #: ${concatStringsSep ", " badKeys}.";
+        message = "services.asterix.ivrs: keys must be one digit, * or #: ${concatStringsSep ", " badKeys}.";
       }
       {
         assertion = shadowed == [];
-        message = "pbx.ivrs: these keys are also extension numbers, which directDial makes dialable: ${concatStringsSep ", " shadowed}.";
+        message = "services.asterix.ivrs: these keys are also extension numbers, which directDial makes dialable: ${concatStringsSep ", " shadowed}.";
       }
       {
         assertion = silent == [];
-        message = ''pbx.ivrs: flite speaks these prompt texts as silence, since they hold no ASCII letter or digit: ${concatMapStringsSep ", " (name: lib.showOption ["pbx" "ivrs" name "prompt" "text"]) silent}. Write the text in English, or for a menu without a prompt use prompt.sound = "silence/1".'';
+        message = ''services.asterix.ivrs: flite speaks these prompt texts as silence, since they hold no ASCII letter or digit: ${concatMapStringsSep ", " (name: lib.showOption ["services" "asterix" "ivrs" name "prompt" "text"]) silent}. Write the text in English, or for a menu without a prompt use prompt.sound = "silence/1".'';
       }
     ];
   };

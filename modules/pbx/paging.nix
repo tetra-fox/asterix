@@ -1,4 +1,4 @@
-# pbx.paging: one number that makes several phones answer by themselves, in
+# services.asterix.paging: one number that makes several phones answer by themselves, in
 # pbx-paging-<name>. Page() calls each member through a Local channel into
 # the same context, where Dial() rings every device of the member with the
 # headers phones take as an auto-answer request, from its pre-dial routine
@@ -21,7 +21,7 @@
     types
     ;
 
-  cfg = config.pbx;
+  cfg = config.services.asterix;
   pbxLib = import ./lib.nix {inherit lib;};
 
   pagingType = types.submodule {
@@ -37,7 +37,7 @@
           "201"
           "202"
         ];
-        description = "Extensions of {option}`pbx.extensions` that answer and play the page.";
+        description = "Extensions of {option}`services.asterix.extensions` that answer and play the page.";
       };
       duplex = mkOption {
         type = types.bool;
@@ -67,7 +67,7 @@
   pagingSection = name: paging: let
     context = pbxLib.objectContext "paging" name;
   in {
-    comment = mkDefault "from pbx.paging.${name}";
+    comment = mkDefault "from services.asterix.paging.${name}";
     extensions =
       {
         # one Local channel per member, since the contacts of all devices
@@ -112,7 +112,7 @@
 
   missing = concatMap (
     name:
-      map (member: "pbx.paging.${name}: ${member}") (
+      map (member: "services.asterix.paging.${name}: ${member}") (
         builtins.filter (member: !(cfg.extensions ? ${member})) cfg.paging.${name}.members
       )
   ) (builtins.attrNames cfg.paging);
@@ -120,7 +120,7 @@
   # ends its target at the first (; Page() splits its channels at &
   badNames = builtins.filter (name: pbxLib.breaksContext name || pbxLib.breaksArgument name || builtins.match ".*[()^&].*" name != null) (builtins.attrNames cfg.paging);
 in {
-  options.pbx.paging = mkOption {
+  options.services.asterix.paging = mkOption {
     type = types.attrsOf pagingType;
     default = {};
     example = lib.literalExpression ''{ all = { number = "650"; members = [ "201" "202" ]; }; }'';
@@ -138,15 +138,15 @@ in {
       {
         assertion = missing == [];
         message = ''
-          pbx.paging: members that are not extensions of pbx.extensions:
+          services.asterix.paging: members that are not extensions of services.asterix.extensions:
             ${concatStringsSep "\n  " missing}
         '';
       }
       {
         assertion = badNames == [];
         message = ''
-          pbx.paging: names that Asterisk would misread in the dialplan (they may not contain , ; [ ] " \ ''${ $[ ( ) ^ or &):
-            ${concatMapStringsSep "\n  " (name: lib.showOption ["pbx" "paging" name]) badNames}
+          services.asterix.paging: names that Asterisk would misread in the dialplan (they may not contain , ; [ ] " \ ''${ $[ ( ) ^ or &):
+            ${concatMapStringsSep "\n  " (name: lib.showOption ["services" "asterix" "paging" name]) badNames}
         '';
       }
     ];

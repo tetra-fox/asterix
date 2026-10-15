@@ -1,4 +1,4 @@
-# pbx.hours: when a business is open, as a Gosub routine in pbx-hours-<name>
+# services.asterix.hours: when a business is open, as a Gosub routine in pbx-hours-<name>
 # that returns `open` or `closed`. The close-early toggle is a custom device
 # state, which Asterisk keeps in astdb: runtime state, set from a phone, not
 # from Nix.
@@ -29,7 +29,7 @@
     unique
     ;
 
-  cfg = config.pbx;
+  cfg = config.services.asterix;
   pbxLib = import ./lib.nix {inherit lib;};
 
   weekdays = ["sun" "mon" "tue" "wed" "thu" "fri" "sat"];
@@ -138,7 +138,7 @@
   # a day its month lacks never comes, and GotoIfTime wraps a range that
   # ends before it starts within the month (main/pbx_timing.c get_range)
   badHolidays = concatLists (mapAttrsToList (name: hours:
-    map (date: "${showOption ["pbx" "hours" name "holidays"]}: ${date}") (builtins.filter (date: let
+    map (date: "${showOption ["services" "asterix" "hours" name "holidays"]}: ${date}") (builtins.filter (date: let
       m = builtins.match "([a-z]+) ([0-9]+)(-([0-9]+))?" date;
       first = lib.toIntBase10 (elemAt m 1);
       last =
@@ -193,7 +193,7 @@
         (builtins.elemAt parts 0)
       ] "closed";
   in {
-    comment = mkDefault "from pbx.hours.${name}";
+    comment = mkDefault "from services.asterix.hours.${name}";
     extensions =
       {
         s =
@@ -242,7 +242,7 @@
 
   zones = unique (map (hours: hours.timezone) (builtins.attrValues cfg.hours));
 in {
-  options.pbx.hours = mkOption {
+  options.services.asterix.hours = mkOption {
     type = types.attrsOf hoursType;
     default = {};
     example = lib.literalExpression ''
@@ -256,7 +256,7 @@ in {
       }
     '';
     description = ''
-      Opening hours, used by {option}`pbx.inbound` to route calls. A name
+      Opening hours, used by {option}`services.asterix.inbound` to route calls. A name
       cannot contain `,` `;` `[` `]` `''${` `$[` `(` or a line break, nor end
       with white space, and with `closeEarly` not `&` or `=` either, nor be
       longer than ${toString maxNameLength} bytes.
@@ -270,22 +270,22 @@ in {
       {
         assertion = badNames == [];
         message = ''
-          pbx.hours: names that Asterisk would misread in the dialplan (they may not contain , ; [ ] ''${ $[ or (, nor & or = or more than ${toString maxNameLength} bytes with closeEarly):
-            ${concatMapStringsSep "\n  " (name: showOption ["pbx" "hours" name]) badNames}
+          services.asterix.hours: names that Asterisk would misread in the dialplan (they may not contain , ; [ ] ''${ $[ or (, nor & or = or more than ${toString maxNameLength} bytes with closeEarly):
+            ${concatMapStringsSep "\n  " (name: showOption ["services" "asterix" "hours" name]) badNames}
         '';
       }
       {
         assertion = badHolidays == [];
         message = ''
-          pbx.hours: holidays on a day their month does not have, or that end before they start:
+          services.asterix.hours: holidays on a day their month does not have, or that end before they start:
             ${lib.concatStringsSep "\n  " badHolidays}
         '';
       }
       {
         assertion = leapZones == {};
         message = ''
-          pbx.hours: time zones of right/, which count leap seconds as the system clock does not, so the hours would open and close 27 s late; use the zone without right/:
-            ${concatMapStringsSep "\n  " (name: "${showOption ["pbx" "hours" name "timezone"]}: ${leapZones.${name}.timezone}") (builtins.attrNames leapZones)}
+          services.asterix.hours: time zones of right/, which count leap seconds as the system clock does not, so the hours would open and close 27 s late; use the zone without right/:
+            ${concatMapStringsSep "\n  " (name: "${showOption ["services" "asterix" "hours" name "timezone"]}: ${leapZones.${name}.timezone}") (builtins.attrNames leapZones)}
         '';
       }
     ];
@@ -296,7 +296,7 @@ in {
           file="${zoneFile "$zone"}"
           # zoneinfo also holds tables and text files
           if [ ! -f "$file" ] || [ "$(head -c 4 "$file")" != TZif ]; then
-            echo "pbx.hours: $zone is not a time zone of tzdata" >&2
+            echo "services.asterix.hours: $zone is not a time zone of tzdata" >&2
             exit 1
           fi
         done

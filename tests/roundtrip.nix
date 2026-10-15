@@ -19,12 +19,12 @@
   result = probe {
     name = "roundtrip";
     modules = [
-      self.nixosModules.pbx
+      self.nixosModules.default
       ({config, ...}: let
         secret = name: config.lib.asterisk.secret "/run/secrets/${name}";
       in {
         # the name goes into the endpoint's caller ID, "name" <number>
-        pbx = {
+        services.asterix = {
           enable = true;
           extensions = {
             "202" = {

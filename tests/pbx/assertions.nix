@@ -14,8 +14,8 @@
   base = {config, ...}: let
     inherit (config.lib.asterisk) secret;
   in {
-    imports = [self.nixosModules.pbx];
-    pbx = {
+    imports = [self.nixosModules.default];
+    services.asterix = {
       enable = true;
       extensions = {
         "201" = {
@@ -85,7 +85,7 @@
   };
 
   # the phones' network, which the provisioning cases add adapters and files to
-  phones.pbx.phones = {
+  phones.services.asterix.phones = {
     listenAddress = "10.0.20.10";
     allowedNetworks = lib.mkDefault ["10.0.20.0/24"];
   };
@@ -102,16 +102,16 @@
     # takes it from all of them
     everyKindOfNumberClashes = let
       owners = [
-        ''pbx.extensions."9911"''
-        "pbx.ringGroups.clash"
-        "pbx.queues.clash"
-        "pbx.conferences.clash"
-        "pbx.ivrs.clash"
-        "pbx.paging.clash"
-        "pbx.voicemailMenu"
-        "pbx.hours.clash.closeEarly"
-        "pbx.emergency.numbers (911 after pbx.outbound.prefix)"
-        "pbx.emergency.numbers"
+        ''services.asterix.extensions."9911"''
+        "services.asterix.ringGroups.clash"
+        "services.asterix.queues.clash"
+        "services.asterix.conferences.clash"
+        "services.asterix.ivrs.clash"
+        "services.asterix.paging.clash"
+        "services.asterix.voicemailMenu"
+        "services.asterix.hours.clash.closeEarly"
+        "services.asterix.emergency.numbers (911 after services.asterix.outbound.prefix)"
+        "services.asterix.emergency.numbers"
       ];
       # the object named clash on 9911, and one and two on `twins`
       named = twins: object: {
@@ -121,7 +121,7 @@
       };
     in {
       module = {config, ...}: {
-        pbx = {
+        services.asterix = {
           extensions."9911".password = config.lib.asterisk.secret "/run/secrets/9911";
           ringGroups = named "601" (number: {
             inherit number;
@@ -164,16 +164,16 @@
       };
       assertions = [
         ''
-          pbx: numbers with more than one owner:
-            601: pbx.ringGroups.one, pbx.ringGroups.two
-            602: pbx.queues.one, pbx.queues.two
-            603: pbx.conferences.one, pbx.conferences.two
-            604: pbx.ivrs.one, pbx.ivrs.two
-            605: pbx.paging.one, pbx.paging.two
-            606: pbx.hours.one.closeEarly, pbx.hours.two.closeEarly
+          services.asterix: numbers with more than one owner:
+            601: services.asterix.ringGroups.one, services.asterix.ringGroups.two
+            602: services.asterix.queues.one, services.asterix.queues.two
+            603: services.asterix.conferences.one, services.asterix.conferences.two
+            604: services.asterix.ivrs.one, services.asterix.ivrs.two
+            605: services.asterix.paging.one, services.asterix.paging.two
+            606: services.asterix.hours.one.closeEarly, services.asterix.hours.two.closeEarly
             9911: ${lib.concatStringsSep ", " owners}
         ''
-        ''pbx: chan_pjsip takes a call to 9911, the pickupexten of features.conf, as a call pickup before the dialplan runs, so it never reaches ${lib.concatStringsSep ", " owners}, pbx.inbound."9911". Use another number, or change services.asterisk.features.general.pickupexten.''
+        ''services.asterix: chan_pjsip takes a call to 9911, the pickupexten of features.conf, as a call pickup before the dialplan runs, so it never reaches ${lib.concatStringsSep ", " owners}, services.asterix.inbound."9911". Use another number, or change services.asterisk.features.general.pickupexten.''
       ];
     };
 
@@ -182,12 +182,12 @@
     # letter, which a caller would have to send, is none of them. The keys
     # from +15551001 on are valid and stay out of the message.
     inboundKeys = {
-      module.pbx.inbound = lib.genAttrs ["5551abc" "h" "S" "1+5551000" "555-1000" "_" "_[]" "_555abc" "_555-XXXX" "+15551001" "*5551002#" "s" "_X." "_555XXXX" "_[2-9]xx!" "_+1NXXNXXXXXX" "_*[0-9#]Z"] (_: {
+      module.services.asterix.inbound = lib.genAttrs ["5551abc" "h" "S" "1+5551000" "555-1000" "_" "_[]" "_555abc" "_555-XXXX" "+15551001" "*5551002#" "s" "_X." "_555XXXX" "_[2-9]xx!" "_+1NXXNXXXXXX" "_*[0-9#]Z"] (_: {
         trunk = "provider";
         destination.hangup = true;
       });
       assertions = [
-        ''pbx.inbound: keys must be a number of digits, * and #, with an optional leading +; s, which takes the calls that name no number; or a pattern of such numbers that starts with _, such as _X.: pbx.inbound."1+5551000", pbx.inbound."555-1000", pbx.inbound."5551abc", pbx.inbound.S, pbx.inbound._, pbx.inbound._555-XXXX, pbx.inbound._555abc, pbx.inbound."_[]", pbx.inbound.h.''
+        ''services.asterix.inbound: keys must be a number of digits, * and #, with an optional leading +; s, which takes the calls that name no number; or a pattern of such numbers that starts with _, such as _X.: services.asterix.inbound."1+5551000", services.asterix.inbound."555-1000", services.asterix.inbound."5551abc", services.asterix.inbound.S, services.asterix.inbound._, services.asterix.inbound._555-XXXX, services.asterix.inbound._555abc, services.asterix.inbound."_[]", services.asterix.inbound.h.''
       ];
     };
 
@@ -209,7 +209,7 @@
         pbx-emergency.extensions."911" = lib.mkBefore ["NoOp(first)"];
       };
       assertions = [
-        "pbx: steps were added to pbx-emergency/911, pbx-extension-201/s, pbx-inbound-provider/5551000, pbx-internal/201, pbx-outbound/_9X., pbx-ringgroup-front/s from elsewhere, so they run before or after the pbx's own. Change these through the pbx options, or replace their steps with lib.mkForce; steps of your own can go in the context's extraConfig, which is written as it is, or in a context of your own that a `context` destination names."
+        "services.asterix: steps were added to pbx-emergency/911, pbx-extension-201/s, pbx-inbound-provider/5551000, pbx-internal/201, pbx-outbound/_9X., pbx-ringgroup-front/s from elsewhere, so they run before or after the layer's own. Change these through the services.asterix options, or replace their steps with lib.mkForce; steps of your own can go in the context's extraConfig, which is written as it is, or in a context of your own that a `context` destination names."
       ];
     };
 
@@ -221,7 +221,7 @@
         pbx-internal.exten = ["*72,1,Playback(beep)"];
       };
       assertions = [
-        ''pbx: steps were added to pbx-queue-support/s from elsewhere, as lines of services.asterisk.settings."extensions.conf". Change these through the pbx options; steps of your own can go in the context's extraConfig, which is written as it is, or in a context of your own that a `context` destination names.''
+        ''services.asterix: steps were added to pbx-queue-support/s from elsewhere, as lines of services.asterisk.settings."extensions.conf". Change these through the services.asterix options; steps of your own can go in the context's extraConfig, which is written as it is, or in a context of your own that a `context` destination names.''
       ];
     };
 
@@ -249,7 +249,7 @@
       inherit (missing) module;
       assertions = [
         ''
-          pbx: destinations that do not exist:
+          services.asterix: destinations that do not exist:
             ${lib.concatMapStringsSep "\n  " (slot: "${slot.where}: ${described.${slot.kind}}") missing.slots}
         ''
       ];
@@ -261,7 +261,7 @@
     # A key press breaks the round: the menu's key 9 and invalid key lead back
     # to it, and lobby sends callers back to the menu whose key 2 rings it.
     destinationLoops = {
-      module.pbx = {
+      module.services.asterix = {
         extensions."202".busy.ringGroup = "front";
         ringGroups = {
           front.noAnswer.extension = "202";
@@ -290,13 +290,13 @@
       };
       assertions = [
         ''
-          pbx: destinations that lead back to their own object without a key press, so a call goes round until the caller hangs up:
-            pbx.extensions."202".busy: ringGroup front
-            pbx.ringGroups.back.noAnswer: ringGroup side
-            pbx.ringGroups.front.noAnswer: extension 202
-            pbx.ringGroups.side.noAnswer: ringGroup back
-            pbx.queues.support.noAnswer: queue support
-            pbx.ivrs.main.noInput: ivr main
+          services.asterix: destinations that lead back to their own object without a key press, so a call goes round until the caller hangs up:
+            services.asterix.extensions."202".busy: ringGroup front
+            services.asterix.ringGroups.back.noAnswer: ringGroup side
+            services.asterix.ringGroups.front.noAnswer: extension 202
+            services.asterix.ringGroups.side.noAnswer: ringGroup back
+            services.asterix.queues.support.noAnswer: queue support
+            services.asterix.ivrs.main.noInput: ivr main
           Send one of them elsewhere, such as to voicemail; a voice menu's options and invalid key may lead back, since the caller presses a key for those.
         ''
       ];
@@ -308,7 +308,7 @@
       module = {config, ...}: let
         inherit (config.lib.asterisk) secret;
       in {
-        pbx = {
+        services.asterix = {
           extensions."202" = {
             noAnswer.voicemail = "201@Default";
             busy.voicemail = "300@sales";
@@ -329,9 +329,9 @@
       };
       assertions = [
         ''
-          pbx: destinations that do not exist:
-            pbx.ringGroups.front.noAnswer: voicemail 1234@devices
-            pbx.queues.support.noAnswer: voicemail Alice@Sales
+          services.asterix: destinations that do not exist:
+            services.asterix.ringGroups.front.noAnswer: voicemail 1234@devices
+            services.asterix.queues.support.noAnswer: voicemail Alice@Sales
         ''
       ];
     };
@@ -339,7 +339,7 @@
     # trunks, extensions and hours that pbx objects name but nobody defines;
     # each trunk of a number's list counts
     danglingReferences = {
-      module.pbx = {
+      module.services.asterix = {
         inbound."5551000" = {
           trunk = lib.mkForce [
             "provider"
@@ -371,30 +371,30 @@
         ];
       };
       assertions = [
-        "pbx.inbound: 5551000 use hours that are not defined in pbx.hours."
+        "services.asterix.inbound: 5551000 use hours that are not defined in services.asterix.hours."
         ''
-          pbx: trunks that are not defined in services.asterisk.pjsip.trunks:
-            pbx.inbound."5551000".trunk: provder
-            pbx.outbound.trunk: provder
-            pbx.emergency.trunk: provder
-            pbx.tieLines: brnach
+          services.asterix: trunks that are not defined in services.asterisk.pjsip.trunks:
+            services.asterix.inbound."5551000".trunk: provder
+            services.asterix.outbound.trunk: provder
+            services.asterix.emergency.trunk: provder
+            services.asterix.tieLines: brnach
         ''
-        "pbx.emergency.notify: 299 are not extensions of pbx.extensions."
+        "services.asterix.emergency.notify: 299 are not extensions of services.asterix.extensions."
         ''
-          pbx: trunks that are not defined in services.asterisk.pjsip.trunks:
-            pbx.ringGroups.front.trunk: provder
-        ''
-        ''
-          pbx.ringGroups: members that are not extensions of pbx.extensions:
-            pbx.ringGroups.front: 299
+          services.asterix: trunks that are not defined in services.asterisk.pjsip.trunks:
+            services.asterix.ringGroups.front.trunk: provder
         ''
         ''
-          pbx.queues: members that are not extensions of pbx.extensions, where other devices go in services.asterisk.queues.queues.<name>.members:
-            pbx.queues.support: 299
+          services.asterix.ringGroups: members that are not extensions of services.asterix.extensions:
+            services.asterix.ringGroups.front: 299
         ''
         ''
-          pbx.paging: members that are not extensions of pbx.extensions:
-            pbx.paging.all: 299
+          services.asterix.queues: members that are not extensions of services.asterix.extensions, where other devices go in services.asterisk.queues.queues.<name>.members:
+            services.asterix.queues.support: 299
+        ''
+        ''
+          services.asterix.paging: members that are not extensions of services.asterix.extensions:
+            services.asterix.paging.all: 299
         ''
       ];
     };
@@ -415,7 +415,7 @@
           "e\${f}" = trunk;
           "in&only" = trunk;
         };
-        pbx = {
+        services.asterix = {
           outbound.trunk = lib.mkForce "a&b";
           emergency.trunk = lib.mkForce "e\${f}";
           ringGroups.front = {
@@ -429,10 +429,10 @@
         };
       };
       assertion = ''
-        pbx: trunk names that Asterisk would misread in a dial string (they may not contain , ; [ ] " \ ''${ $[ & / or an unclosed parenthesis):
-          pbx.outbound.trunk: a&b
-          pbx.emergency.trunk: e''${f}
-          pbx.ringGroups.front.trunk: c/d
+        services.asterix: trunk names that Asterisk would misread in a dial string (they may not contain , ; [ ] " \ ''${ $[ & / or an unclosed parenthesis):
+          services.asterix.outbound.trunk: a&b
+          services.asterix.emergency.trunk: e''${f}
+          services.asterix.ringGroups.front.trunk: c/d
       '';
     };
 
@@ -440,14 +440,14 @@
     # settings counts, found in any case
     queueOnlyInPbx = {
       module = {
-        pbx.queues = {
+        services.asterix.queues = {
           Sales.number = "620";
           General.number = "621";
           east.number = "622";
         };
         services.asterisk.settings."queues.conf".sales.member = ["PJSIP/202"];
       };
-      assertions = ["pbx.queues: General, east are not queues of queues.conf (services.asterisk.queues.queues or settings)."];
+      assertions = ["services.asterix.queues: General, east are not queues of queues.conf (services.asterisk.queues.queues or settings)."];
     };
 
     # default_bridge and default_user exist without configuration, a user
@@ -455,7 +455,7 @@
     # any case, with the type their template gives them
     conferenceProfiles = {
       module = {
-        pbx.conferences = {
+        services.asterix.conferences = {
           board = {
             bridgeProfile = "quiet";
             userProfile = "default_user";
@@ -489,9 +489,9 @@
       };
       assertions = [
         ''
-          pbx.conferences: profiles that are not defined:
-            pbx.conferences.board.bridgeProfile: quiet
-            pbx.conferences.team.userProfile: nobody
+          services.asterix.conferences: profiles that are not defined:
+            services.asterix.conferences.board.bridgeProfile: quiet
+            services.asterix.conferences.team.userProfile: nobody
         ''
       ];
     };
@@ -500,7 +500,7 @@
     # closed without hours; the assertion, not an error from the dialplan of
     # a number with no hours
     incompleteInbound = {
-      module.pbx.inbound = {
+      module.services.asterix.inbound = {
         "5551000".destination.ringGroup = "front";
         "5551001".trunk = "provider";
         "5551002" = {
@@ -514,7 +514,7 @@
           open.ringGroup = "front";
         };
       };
-      assertion = "pbx.inbound: 5551000, 5551001, 5551002, 5551003 need either `destination`, or `hours` with `open` and `closed`.";
+      assertion = "services.asterix.inbound: 5551000, 5551001, 5551002, 5551003 need either `destination`, or `hours` with `open` and `closed`.";
     };
 
     # where calls from a trunk start is its endpoint's context in the final
@@ -532,7 +532,7 @@
           inherit context;
         };
       in {
-        pbx.tieLines = ["tie"];
+        services.asterix.tieLines = ["tie"];
         services.asterisk = {
           pjsip.trunks = {
             branch = trunk "pbx-internal";
@@ -554,21 +554,21 @@
         };
       };
       assertions = [
-        "pbx.inbound: the trunk(s) provider have a context of their own, so their calls do not reach pbx.inbound; remove it."
-        "pbx: calls from the trunk(s) annex (pbx-outbound), branch (pbx-internal), lobby (from-lobby) start in a context that reaches pbx-outbound, so anyone who can call in through them can dial out, emergency numbers included. Give such a trunk a context without that, such as the pbx-inbound-<trunk> pbx gives it, or list it in pbx.tieLines if it connects another PBX whose callers may dial out."
+        "services.asterix.inbound: the trunk(s) provider have a context of their own, so their calls do not reach services.asterix.inbound; remove it."
+        "services.asterix: calls from the trunk(s) annex (pbx-outbound), branch (pbx-internal), lobby (from-lobby) start in a context that reaches pbx-outbound, so anyone who can call in through them can dial out, emergency numbers included. Give such a trunk a context without that, such as the pbx-inbound-<trunk> pbx gives it, or list it in services.asterix.tieLines if it connects another PBX whose callers may dial out."
       ];
     };
 
     # emergency settings without numbers are an error rather than an empty
     # list, which would say that the PBX makes no emergency calls
     emergencyNumbersUnset = {
-      module.pbx.emergency = lib.mkForce {callerId = "5551000";};
+      module.services.asterix.emergency = lib.mkForce {callerId = "5551000";};
       throws = true;
     };
 
     # GotoIfTime skips a time past 23:59, so these hours would never open
     openUntil24Throws = {
-      module.pbx.hours.office.open = lib.mkForce [
+      module.services.asterix.hours.office.open = lib.mkForce [
         {
           days = "mon-fri";
           time = "09:00-24:00";
@@ -580,7 +580,7 @@
     # feb 30 never comes, and GotoIfTime reads dec 30-2 as dec 1, 2, 30 and
     # 31; feb 29 comes in leap years, apr 30-31 closes on apr 30
     holidaysThatNeverCome = {
-      module.pbx.hours.office.holidays = [
+      module.services.asterix.hours.office.holidays = [
         "feb 30"
         "dec 30-2"
         "feb 29"
@@ -588,9 +588,9 @@
       ];
       assertions = [
         ''
-          pbx.hours: holidays on a day their month does not have, or that end before they start:
-            pbx.hours.office.holidays: feb 30
-            pbx.hours.office.holidays: dec 30-2
+          services.asterix.hours: holidays on a day their month does not have, or that end before they start:
+            services.asterix.hours.office.holidays: feb 30
+            services.asterix.hours.office.holidays: dec 30-2
         ''
       ];
     };
@@ -602,7 +602,7 @@
     phonesAddresses = {
       module = {
         imports = [phones];
-        pbx.phones = {
+        services.asterix.phones = {
           allowedNetworks = [
             "10.0.20.0/24 10.0.21.0/24"
             "fd00:20::/64"
@@ -638,8 +638,8 @@
         };
       };
       assertions = [
-        "pbx.phones.allowedNetworks: entries must be addresses, networks such as 10.0.20.0/24, or any, localhost, link-local or multicast, which is what systemd takes: `10.0.20.0/33`, `phones`, `10.0.20.021`, `[fd00::21]`, `10.0.20.0/24 phones`, ``."
-        "pbx.phones.files: allowedAddress must be one IPv4 or IPv6 address: brackets.cfg has `[fd00::21]`, cfgc074ad000201.xml has `10.0.20.021`, name.cfg has `kitchen.lan`, network.cfg has `10.0.20.21/32`, zone.cfg has `fe80::21%voip`."
+        "services.asterix.phones.allowedNetworks: entries must be addresses, networks such as 10.0.20.0/24, or any, localhost, link-local or multicast, which is what systemd takes: `10.0.20.0/33`, `phones`, `10.0.20.021`, `[fd00::21]`, `10.0.20.0/24 phones`, ``."
+        "services.asterix.phones.files: allowedAddress must be one IPv4 or IPv6 address: brackets.cfg has `[fd00::21]`, cfgc074ad000201.xml has `10.0.20.021`, name.cfg has `kitchen.lan`, network.cfg has `10.0.20.21/32`, zone.cfg has `fe80::21%voip`."
       ];
     };
 
@@ -656,7 +656,7 @@
           };
           "202".aor.name = "desk";
         };
-        pbx.phones.devices = {
+        services.asterix.phones.devices = {
           "202" = {
             model = "grandstream-ht801";
             mac = "c0:74:ad:00:02:02";
@@ -673,9 +673,9 @@
         };
       };
       assertions = [
-        "pbx.phones.devices.202: endpoints must exist in pjsip.endpoints, have `auth` set and an `aor` named like the endpoint, since the device registers each line with one user name for both: `202`."
-        "pbx.phones.devices.299: endpoints must exist in pjsip.endpoints, have `auth` set and an `aor` named like the endpoint, since the device registers each line with one user name for both: `299`."
-        "pbx.phones.devices.garage: endpoints must exist in pjsip.endpoints, have `auth` set and an `aor` named like the endpoint, since the device registers each line with one user name for both: `kitchen`, `299`."
+        "services.asterix.phones.devices.202: endpoints must exist in pjsip.endpoints, have `auth` set and an `aor` named like the endpoint, since the device registers each line with one user name for both: `202`."
+        "services.asterix.phones.devices.299: endpoints must exist in pjsip.endpoints, have `auth` set and an `aor` named like the endpoint, since the device registers each line with one user name for both: `299`."
+        "services.asterix.phones.devices.garage: endpoints must exist in pjsip.endpoints, have `auth` set and an `aor` named like the endpoint, since the device registers each line with one user name for both: `kitchen`, `299`."
       ];
     };
 
@@ -686,7 +686,7 @@
         imports = [phones];
         # inside the value, since pjsip.conf refuses one at either end
         services.asterisk.pjsip.endpoints."202".auth.username = lib.mkForce "20${builtins.fromJSON ''"\u0007"''}2";
-        pbx.phones = {
+        services.asterix.phones = {
           yealink.settings = {
             "account.1.label" = "Front\n";
             "[T46S]features.dnd_mode" = 1;
@@ -708,8 +708,8 @@
         };
       };
       assertions = [
-        "pbx.phones.devices: Yealink settings cannot contain control characters: 201 account.1.label, 201 lang.gui, 202 account.1.auth_name, 202 account.1.label."
-        "pbx.phones: settings of Yealink devices must be configuration parameters such as local_time.time_zone, letters, digits and _ in parts separated by dots."
+        "services.asterix.phones.devices: Yealink settings cannot contain control characters: 201 account.1.label, 201 lang.gui, 202 account.1.auth_name, 202 account.1.label."
+        "services.asterix.phones: settings of Yealink devices must be configuration parameters such as local_time.time_zone, letters, digits and _ in parts separated by dots."
       ];
     };
 
@@ -719,7 +719,7 @@
     snomWildcardServers = {
       module = {
         imports = [phones];
-        pbx.phones = {
+        services.asterix.phones = {
           listenAddress = lib.mkForce "::";
           port = 8080;
           devices = {
@@ -739,7 +739,7 @@
           };
         };
       };
-      assertions = ["pbx.phones.devices: Snom settings that send phones to 0.0.0.0 or ::, which no phone can reach: 201 setting_server, 201 user_host[1], 202 user_host[1], 202 user_host[2]. Set pbx.phones.listenAddress to the PBX's address on the phones' network, or give that address in pbx.phones.sipServer and settings.setting_server."];
+      assertions = ["services.asterix.phones.devices: Snom settings that send phones to 0.0.0.0 or ::, which no phone can reach: 201 setting_server, 201 user_host[1], 202 user_host[1], 202 user_host[2]. Set services.asterix.phones.listenAddress to the PBX's address on the phones' network, or give that address in services.asterix.phones.sipServer and settings.setting_server."];
     };
 
     # the multiplatform firmware takes 8 to 127 characters from ! to ~ of three
@@ -749,7 +749,7 @@
     ciscoAdminPassword = {
       module = {
         imports = [phones];
-        pbx.phones = {
+        services.asterix.phones = {
           adminPassword = "Abcdefg1";
           devices = lib.mapAttrs (_: device: device // {lines = ["201"];}) {
             good = {
@@ -795,9 +795,9 @@
         };
       };
       assertions = [
-        "pbx.phones: the admin password (router-configuration/Web_Login_Admin_Password) of ata is not at least 8 characters, which the ATA 191 and ATA 192 require."
-        "pbx.phones: the admin password (Admin_Password) of short, space, twoKinds, umlaut is not 8 to 127 characters from ASCII 33 (!) to 126 (~) of three kinds out of capital letters, small letters, digits and others, which the multiplatform firmware requires."
-        "pbx.phones: the admin password (router-configuration/Web_Login_Admin_Password) of spa112 is not at most 32 characters, which the SPA112 and SPA122 take."
+        "services.asterix.phones: the admin password (router-configuration/Web_Login_Admin_Password) of ata is not at least 8 characters, which the ATA 191 and ATA 192 require."
+        "services.asterix.phones: the admin password (Admin_Password) of short, space, twoKinds, umlaut is not 8 to 127 characters from ASCII 33 (!) to 126 (~) of three kinds out of capital letters, small letters, digits and others, which the multiplatform firmware requires."
+        "services.asterix.phones: the admin password (router-configuration/Web_Login_Admin_Password) of spa112 is not at most 32 characters, which the SPA112 and SPA122 take."
       ];
     };
 
@@ -805,7 +805,7 @@
     fanvilNestedKeys = {
       module = {
         imports = [phones];
-        pbx.phones = {
+        services.asterix.phones = {
           ntpServer = "10.0.20.1";
           fanvil.settings."phone.date" = "x";
           devices."201" = {
@@ -815,13 +815,13 @@
           };
         };
       };
-      assertions = ["pbx.phones.devices: Fanvil settings that other settings are below, which one XML element cannot be: 201 phone.date, 201 sip.line.1.PhoneNumber."];
+      assertions = ["services.asterix.phones.devices: Fanvil settings that other settings are below, which one XML element cannot be: 201 phone.date, 201 sip.line.1.PhoneNumber."];
     };
 
     # Gosub ends its target at the first (; with closeEarly the name is also
     # in Set(), which ends the variable at =, and in a hint, which splits at &
     hoursNames = {
-      module.pbx.hours = let
+      module.services.asterix.hours = let
         hours = {
           timezone = "UTC";
           open = [
@@ -839,11 +839,11 @@
         "e&f" = hours;
       };
       assertion = ''
-        pbx.hours: names that Asterisk would misread in the dialplan (they may not contain , ; [ ] ''${ $[ or (, nor & or = or more than 62 bytes with closeEarly):
-          pbx.hours."a,b"
-          pbx.hours."a=b"
-          pbx.hours."c&d"
-          pbx.hours."office (east)"
+        services.asterix.hours: names that Asterisk would misread in the dialplan (they may not contain , ; [ ] ''${ $[ or (, nor & or = or more than 62 bytes with closeEarly):
+          services.asterix.hours."a,b"
+          services.asterix.hours."a=b"
+          services.asterix.hours."c&d"
+          services.asterix.hours."office (east)"
       '';
     };
 
@@ -851,7 +851,7 @@
     # takes the timeout into the name
     queueNames = {
       module = {
-        pbx.queues = {
+        services.asterix.queues = {
           "a,b" = {};
           "a\\b" = {};
           "c(d".timeout = 60;
@@ -862,10 +862,10 @@
         });
       };
       assertion = ''
-        pbx.queues: names that Asterisk would misread in the dialplan (they may not contain , ; [ ] " \ ''${ $[ or an unclosed parenthesis):
-          pbx.queues."a,b"
-          pbx.queues."a\\b"
-          pbx.queues."c(d"
+        services.asterix.queues: names that Asterisk would misread in the dialplan (they may not contain , ; [ ] " \ ''${ $[ or an unclosed parenthesis):
+          services.asterix.queues."a,b"
+          services.asterix.queues."a\\b"
+          services.asterix.queues."c(d"
       '';
     };
   };

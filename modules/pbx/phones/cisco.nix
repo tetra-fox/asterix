@@ -1,5 +1,5 @@
 # Provisioning for Cisco phones and adapters with third-party call control
-# firmware: each pbx.phones device of one of these models gets a `<mac>.xml`
+# firmware: each services.asterix.phones device of one of these models gets a `<mac>.xml`
 # (Cisco's XML flat profile) in which each line registers as its endpoint.
 #
 # Every element set here is in Cisco's guides for the models that use it:
@@ -31,8 +31,8 @@
     types
     ;
 
-  cfg = config.pbx.phones.cisco;
-  pcfg = config.pbx.phones;
+  cfg = config.services.asterix.phones.cisco;
+  pcfg = config.services.asterix.phones;
   acfg = config.services.asterisk;
   asteriskLib = import ../../../lib {inherit lib;};
   inherit (asteriskLib) format secrets;
@@ -252,7 +252,7 @@
     }}</flat-profile>
   '';
 in {
-  options.pbx.phones.cisco.settings = mkOption {
+  options.services.asterix.phones.cisco.settings = mkOption {
     type = types.attrsOf pbxLib.phoneValue;
     default = {};
     example = {
@@ -263,7 +263,7 @@ in {
   };
 
   config = mkMerge [
-    {pbx.phones.models = lib.mapAttrs (_: model: {inherit (model) lines;}) models;}
+    {services.asterix.phones.models = lib.mapAttrs (_: model: {inherit (model) lines;}) models;}
 
     (mkIf (devices != {}) {
       assertions =
@@ -271,24 +271,24 @@ in {
           invalid = invalidAdminPasswords name generation;
         in {
           assertion = invalid == [];
-          message = "pbx.phones: the admin password (${generation.adminPassword}) of ${lib.concatStringsSep ", " invalid} is not ${generation.adminPasswordRule.text}.";
+          message = "services.asterix.phones: the admin password (${generation.adminPassword}) of ${lib.concatStringsSep ", " invalid} is not ${generation.adminPasswordRule.text}.";
         }) (filterAttrs (_: generation: generation.adminPasswordRule != null) generations)
         ++ [
           {
             assertion = controlCharacters == [];
-            message = "pbx.phones.devices: settings of Cisco devices cannot contain control characters: ${lib.concatStringsSep ", " controlCharacters}.";
+            message = "services.asterix.phones.devices: settings of Cisco devices cannot contain control characters: ${lib.concatStringsSep ", " controlCharacters}.";
           }
           {
             assertion = wildcardServers == [];
-            message = "pbx.phones.devices: settings that send Cisco devices to 0.0.0.0 or ::, which no device can reach: ${lib.concatStringsSep ", " wildcardServers}. Set pbx.phones.listenAddress to the PBX's address on the devices' network, or give that address in pbx.phones.sipServer and settings.Profile_Rule.";
+            message = "services.asterix.phones.devices: settings that send Cisco devices to 0.0.0.0 or ::, which no device can reach: ${lib.concatStringsSep ", " wildcardServers}. Set services.asterix.phones.listenAddress to the PBX's address on the devices' network, or give that address in services.asterix.phones.sipServer and settings.Profile_Rule.";
           }
           {
             assertion = builtins.all validKey (attrNames cfg.settings ++ lib.concatMap (device: attrNames device.settings) (attrValues devices));
-            message = "pbx.phones: settings of Cisco devices must be XML element names such as Primary_NTP_Server, or paths of them such as router-configuration/Time_Setup/Time_Zone.";
+            message = "services.asterix.phones: settings of Cisco devices must be XML element names such as Primary_NTP_Server, or paths of them such as router-configuration/Time_Setup/Time_Zone.";
           }
         ];
 
-      pbx.phones.files =
+      services.asterix.phones.files =
         mapAttrs' (_: device:
           nameValuePair "${device.mac}.xml" {
             text = deviceXml device;

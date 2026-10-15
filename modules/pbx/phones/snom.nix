@@ -1,4 +1,4 @@
-# Provisioning for Snom desk phones: each pbx.phones device of one of these
+# Provisioning for Snom desk phones: each services.asterix.phones device of one of these
 # models gets a `snom<model>-<MAC>.htm`, the settings file a Snom requests
 # from a setting server URL without a file name, in which each line, an
 # identity, registers as its endpoint.
@@ -29,8 +29,8 @@
     types
     ;
 
-  cfg = config.pbx.phones.snom;
-  pcfg = config.pbx.phones;
+  cfg = config.services.asterix.phones.snom;
+  pcfg = config.services.asterix.phones;
   acfg = config.services.asterisk;
   asteriskLib = import ../../../lib {inherit lib;};
   inherit (asteriskLib) format;
@@ -189,7 +189,7 @@
     </settings>
   '';
 in {
-  options.pbx.phones.snom = {
+  options.services.asterix.phones.snom = {
     timeZone = mkOption {
       type = types.nullOr types.str;
       default = null;
@@ -209,27 +209,27 @@ in {
   };
 
   config = mkMerge [
-    {pbx.phones.models = lib.mapAttrs (_: model: {inherit (model) lines;}) models;}
+    {services.asterix.phones.models = lib.mapAttrs (_: model: {inherit (model) lines;}) models;}
 
     (mkIf (devices != {}) {
       assertions = [
         {
           assertion = controlCharacters == [];
-          message = "pbx.phones.devices: Snom settings cannot contain control characters: ${lib.concatStringsSep ", " controlCharacters}.";
+          message = "services.asterix.phones.devices: Snom settings cannot contain control characters: ${lib.concatStringsSep ", " controlCharacters}.";
         }
         {
           assertion = wildcardServers == [];
-          message = "pbx.phones.devices: Snom settings that send phones to 0.0.0.0 or ::, which no phone can reach: ${lib.concatStringsSep ", " wildcardServers}. Set pbx.phones.listenAddress to the PBX's address on the phones' network, or give that address in pbx.phones.sipServer and settings.setting_server.";
+          message = "services.asterix.phones.devices: Snom settings that send phones to 0.0.0.0 or ::, which no phone can reach: ${lib.concatStringsSep ", " wildcardServers}. Set services.asterix.phones.listenAddress to the PBX's address on the phones' network, or give that address in services.asterix.phones.sipServer and settings.setting_server.";
         }
         {
           assertion = builtins.all isKey (
             attrNames cfg.settings ++ lib.concatMap (device: attrNames device.settings) (attrValues devices)
           );
-          message = "pbx.phones: settings of Snom phones must be setting names such as language, or name[index] for an indexed one such as user_realname[1].";
+          message = "services.asterix.phones: settings of Snom phones must be setting names such as language, or name[index] for an indexed one such as user_realname[1].";
         }
       ];
 
-      pbx.phones.files = mapAttrs' (_: device:
+      services.asterix.phones.files = mapAttrs' (_: device:
         nameValuePair "${phoneType device}-${lib.toUpper device.mac}.htm" {
           text = deviceXml device;
           escape = "xml";

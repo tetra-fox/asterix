@@ -5,7 +5,7 @@
 #
 #   probe {
 #     name = "menu";
-#     modules = [ self.nixosModules.pbx ./office.nix ];
+#     modules = [ self.nixosModules.default ./office.nix ];
 #     commands = [ "dialplan show pbx-internal" ];
 #     calls = [ { extension = "700"; context = "pbx-internal"; keys = "1"; } ];
 #   }

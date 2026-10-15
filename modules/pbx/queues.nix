@@ -1,4 +1,4 @@
-# pbx.queues: a queue of queues.conf with a number, extensions as members and
+# services.asterix.queues: a queue of queues.conf with a number, extensions as members and
 # what happens when nobody takes the call, in pbx-queue-<name>
 {
   config,
@@ -20,7 +20,7 @@
     types
     ;
 
-  cfg = config.pbx;
+  cfg = config.services.asterix;
   core = config.services.asterisk;
   pbxLib = import ./lib.nix {inherit lib;};
   inherit (import ../../lib {inherit lib;}) format;
@@ -41,7 +41,7 @@
           "202"
         ];
         description = ''
-          Extensions of {option}`pbx.extensions` that take the queue's calls,
+          Extensions of {option}`services.asterix.extensions` that take the queue's calls,
           each on every device registered as the extension, with the state of
           its endpoint, which counts all of them. They join the members of
           {option}`services.asterisk.queues.queues.<name>.members`.
@@ -76,12 +76,12 @@
     else lib.remove "general" (map lib.toLower names);
   missing = lib.optionals (queueNames != null) (builtins.filter (name: !(builtins.elem (lib.toLower name) queueNames)) (builtins.attrNames cfg.queues));
   badNames = builtins.filter (name: pbxLib.breaksContext name || pbxLib.breaksArgument name) (builtins.attrNames cfg.queues);
-  unknownMembers = concatMap (name: map (member: "pbx.queues.${name}: ${member}") (builtins.filter (member: !(cfg.extensions ? ${member})) cfg.queues.${name}.members)) (builtins.attrNames cfg.queues);
+  unknownMembers = concatMap (name: map (member: "services.asterix.queues.${name}: ${member}") (builtins.filter (member: !(cfg.extensions ? ${member})) cfg.queues.${name}.members)) (builtins.attrNames cfg.queues);
   # queues.conf keeps the first 79 bytes of a queue's name (main/config.c
   # struct ast_category), and Queue() looks for the whole name
   longNames = builtins.filter (name: builtins.stringLength name > 79) (builtins.attrNames cfg.queues);
 in {
-  options.pbx.queues = mkOption {
+  options.services.asterix.queues = mkOption {
     type = types.attrsOf queueType;
     default = {};
     example = lib.literalExpression ''
@@ -98,7 +98,7 @@ in {
   };
 
   config = mkIf cfg.enable {
-    services.asterisk.modules.needed."pbx.queues" = mkIf (cfg.queues != {}) ["app_queue.so"];
+    services.asterisk.modules.needed."services.asterix.queues" = mkIf (cfg.queues != {}) ["app_queue.so"];
 
     # PJSIP/<number> would call one device, so a member is a Local channel
     # into pbx-devices, with the state of its endpoint
@@ -116,7 +116,7 @@ in {
       mapAttrs' (
         name: queue:
           nameValuePair (pbxLib.objectContext "queue" name) {
-            comment = mkDefault "from pbx.queues.${name}";
+            comment = mkDefault "from services.asterix.queues.${name}";
             extensions.s =
               [
                 (pbxLib.app "Answer" [])
@@ -145,23 +145,23 @@ in {
     assertions = [
       {
         assertion = missing == [];
-        message = "pbx.queues: ${concatStringsSep ", " missing} are not queues of queues.conf (services.asterisk.queues.queues or settings).";
+        message = "services.asterix.queues: ${concatStringsSep ", " missing} are not queues of queues.conf (services.asterisk.queues.queues or settings).";
       }
       {
         assertion = badNames == [];
         message = ''
-          pbx.queues: names that Asterisk would misread in the dialplan (they may not contain , ; [ ] " \ ''${ $[ or an unclosed parenthesis):
-            ${concatMapStringsSep "\n  " (name: lib.showOption ["pbx" "queues" name]) badNames}
+          services.asterix.queues: names that Asterisk would misread in the dialplan (they may not contain , ; [ ] " \ ''${ $[ or an unclosed parenthesis):
+            ${concatMapStringsSep "\n  " (name: lib.showOption ["services" "asterix" "queues" name]) badNames}
         '';
       }
       {
         assertion = longNames == [];
-        message = "pbx.queues: names longer than 79 bytes, which Asterisk cuts, so Queue() never finds them: ${concatStringsSep ", " longNames}.";
+        message = "services.asterix.queues: names longer than 79 bytes, which Asterisk cuts, so Queue() never finds them: ${concatStringsSep ", " longNames}.";
       }
       {
         assertion = unknownMembers == [];
         message = ''
-          pbx.queues: members that are not extensions of pbx.extensions, where other devices go in services.asterisk.queues.queues.<name>.members:
+          services.asterix.queues: members that are not extensions of services.asterix.extensions, where other devices go in services.asterisk.queues.queues.<name>.members:
             ${concatStringsSep "\n  " unknownMembers}
         '';
       }

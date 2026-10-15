@@ -13,12 +13,12 @@
     household-intercom = [../examples/household-intercom.nix];
     # written with the pbx layer
     small-office = [
-      self.nixosModules.pbx
+      self.nixosModules.default
       ../examples/small-office.nix
     ];
     # the add-on, with the example it extends; phones are part of pbx
     household-intercom-ht801 = [
-      self.nixosModules.pbx
+      self.nixosModules.default
       ../examples/household-intercom.nix
       ../examples/household-intercom-ht801.nix
     ];

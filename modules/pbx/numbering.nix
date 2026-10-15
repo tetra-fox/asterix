@@ -1,4 +1,4 @@
-# pbx-internal, the context the phones of pbx.extensions dial from: every
+# pbx-internal, the context the phones of services.asterix.extensions dial from: every
 # number the pbx objects have, each with exactly one owner, and busy lamp
 # hints.
 {
@@ -24,7 +24,7 @@
     optionals
     ;
 
-  cfg = config.pbx;
+  cfg = config.services.asterix;
   core = config.services.asterisk;
   pbxLib = import ./lib.nix {inherit lib;};
   inherit (import ../../lib {inherit lib;}) format;
@@ -35,7 +35,7 @@
     concatLists (mapAttrsToList (name: object:
       optional (object.number != null) {
         inherit (object) number;
-        owner = "pbx.${option}.${name}";
+        owner = "services.asterix.${option}.${name}";
         steps = [(pbxLib.goto (pbxLib.objectContext kind name))];
       })
     cfg.${option});
@@ -45,7 +45,7 @@
   numbers =
     mapAttrsToList (number: _: {
       inherit number;
-      owner = ''pbx.extensions."${number}"'';
+      owner = ''services.asterix.extensions."${number}"'';
       steps = [(pbxLib.goto (pbxLib.objectContext "extension" number))];
     })
     cfg.extensions
@@ -56,7 +56,7 @@
     ++ numbered "paging" "paging"
     ++ optional (cfg.voicemailMenu != null) {
       number = cfg.voicemailMenu;
-      owner = "pbx.voicemailMenu";
+      owner = "services.asterix.voicemailMenu";
       steps = [
         (pbxLib.app "Answer" [])
         (pbxLib.app "VoiceMailMain" ["\${CALLERID(num)}@default"])
@@ -66,7 +66,7 @@
     ++ concatLists (mapAttrsToList (name: hours:
       optional (hours.closeEarly != null) {
         number = hours.closeEarly;
-        owner = "pbx.hours.${name}.closeEarly";
+        owner = "services.asterix.hours.${name}.closeEarly";
         steps = [(gotoAt (pbxLib.objectContext "hours" name) "toggle")];
       })
     cfg.hours)
@@ -76,8 +76,8 @@
             number = dialled;
             owner =
               if dialled == number
-              then "pbx.emergency.numbers"
-              else "pbx.emergency.numbers (${number} after pbx.outbound.prefix)";
+              then "services.asterix.emergency.numbers"
+              else "services.asterix.emergency.numbers (${number} after services.asterix.outbound.prefix)";
             steps = [(gotoAt "pbx-emergency" number)];
           }) ([number] ++ prefixed number)
       )
@@ -101,7 +101,7 @@
     numbers
     ++ mapAttrsToList (number: _: {
       inherit number;
-      owner = ''pbx.inbound."${number}"'';
+      owner = ''services.asterix.inbound."${number}"'';
     })
     cfg.inbound
   ));
@@ -110,7 +110,7 @@
 in {
   config = mkIf cfg.enable {
     services.asterisk.dialplan.contexts.pbx-internal = {
-      comment = mkDefault "from pbx: what the phones of pbx.extensions dial";
+      comment = mkDefault "from services.asterix: what the phones of services.asterix.extensions dial";
       includes = optional (cfg.outbound != null) "pbx-outbound";
       extensions = generated;
       hints = lib.mapAttrs (_: mkDefault) (
@@ -125,17 +125,17 @@ in {
       {
         assertion = clashes == {};
         message = ''
-          pbx: numbers with more than one owner:
+          services.asterix: numbers with more than one owner:
             ${concatStringsSep "\n  " (mapAttrsToList (number: owners: "${number}: ${concatMapStringsSep ", " (n: n.owner) owners}") clashes)}
         '';
       }
       {
         assertion = malformed == [];
-        message = "pbx: numbers may only contain digits, * and #: ${concatMapStringsSep ", " (n: "${n.number} (${n.owner})") malformed}.";
+        message = "services.asterix: numbers may only contain digits, * and #: ${concatMapStringsSep ", " (n: "${n.number} (${n.owner})") malformed}.";
       }
       {
         assertion = pickedUp == [];
-        message = "pbx: chan_pjsip takes a call to ${pickupExten}, the pickupexten of features.conf, as a call pickup before the dialplan runs, so it never reaches ${concatStringsSep ", " pickedUp}. Use another number, or change services.asterisk.features.general.pickupexten.";
+        message = "services.asterix: chan_pjsip takes a call to ${pickupExten}, the pickupexten of features.conf, as a call pickup before the dialplan runs, so it never reaches ${concatStringsSep ", " pickedUp}. Use another number, or change services.asterisk.features.general.pickupexten.";
       }
     ];
   };

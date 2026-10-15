@@ -1,4 +1,4 @@
-# pbx.conferences: a ConfBridge room with a number, in pbx-conference-<name>
+# services.asterix.conferences: a ConfBridge room with a number, in pbx-conference-<name>
 {
   config,
   lib,
@@ -18,7 +18,7 @@
     types
     ;
 
-  cfg = config.pbx;
+  cfg = config.services.asterix;
   pbxLib = import ./lib.nix {inherit lib;};
   inherit (import ../../lib {inherit lib;}) format;
   inherit (import ../lib.nix {inherit lib;}) confbridgeModules;
@@ -70,11 +70,11 @@
     name: let
       conference = cfg.conferences.${name};
     in
-      optional (undefined bridges conference.bridgeProfile) "pbx.conferences.${name}.bridgeProfile: ${conference.bridgeProfile}"
-      ++ optional (undefined users conference.userProfile) "pbx.conferences.${name}.userProfile: ${conference.userProfile}"
+      optional (undefined bridges conference.bridgeProfile) "services.asterix.conferences.${name}.bridgeProfile: ${conference.bridgeProfile}"
+      ++ optional (undefined users conference.userProfile) "services.asterix.conferences.${name}.userProfile: ${conference.userProfile}"
   ) (builtins.attrNames cfg.conferences);
 in {
-  options.pbx.conferences = mkOption {
+  options.services.asterix.conferences = mkOption {
     type = types.attrsOf conferenceType;
     default = {};
     example = lib.literalExpression ''{ board = { number = "800"; }; }'';
@@ -87,13 +87,13 @@ in {
   };
 
   config = mkIf cfg.enable {
-    services.asterisk.modules.needed."pbx.conferences" = mkIf (cfg.conferences != {}) confbridgeModules;
+    services.asterisk.modules.needed."services.asterix.conferences" = mkIf (cfg.conferences != {}) confbridgeModules;
 
     services.asterisk.dialplan.contexts =
       mapAttrs' (
         name: conference:
           nameValuePair (pbxLib.objectContext "conference" name) {
-            comment = mkDefault "from pbx.conferences.${name}";
+            comment = mkDefault "from services.asterix.conferences.${name}";
             extensions.s = [
               (pbxLib.app "Answer" [])
               {
@@ -124,22 +124,22 @@ in {
       {
         assertion = badNames == [];
         message = ''
-          pbx.conferences: names that Asterisk would misread in the dialplan (they may not be empty, or contain , ; [ ] " \ ''${ $[ or an unclosed parenthesis):
-            ${concatMapStringsSep "\n  " (name: lib.showOption ["pbx" "conferences" name]) badNames}
+          services.asterix.conferences: names that Asterisk would misread in the dialplan (they may not be empty, or contain , ; [ ] " \ ''${ $[ or an unclosed parenthesis):
+            ${concatMapStringsSep "\n  " (name: lib.showOption ["services" "asterix" "conferences" name]) badNames}
         '';
       }
       {
         assertion = longNames == [];
-        message = "pbx.conferences: names longer than 79 bytes, which ConfBridge refuses: ${concatStringsSep ", " longNames}.";
+        message = "services.asterix.conferences: names longer than 79 bytes, which ConfBridge refuses: ${concatStringsSep ", " longNames}.";
       }
       {
         assertion = alike == [];
-        message = "pbx.conferences: names that differ only in case, which ConfBridge takes for one conference: ${concatMapStringsSep "; " (concatStringsSep ", ") alike}.";
+        message = "services.asterix.conferences: names that differ only in case, which ConfBridge takes for one conference: ${concatMapStringsSep "; " (concatStringsSep ", ") alike}.";
       }
       {
         assertion = missingProfiles == [];
         message = ''
-          pbx.conferences: profiles that are not defined:
+          services.asterix.conferences: profiles that are not defined:
             ${concatStringsSep "\n  " missingProfiles}
         '';
       }

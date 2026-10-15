@@ -1,4 +1,4 @@
-# The opening hours oracle (hours.py) against the dialplan of pbx.hours, in
+# The opening hours oracle (hours.py) against the dialplan of services.asterix.hours, in
 # the probe: a few kinds of opening hours in each zone, and a seeded sample
 # of the instants hours.py picks around their edges, offset changes, holidays
 # and leap days, run through each pbx-hours-<name> routine with TESTTIME,
@@ -155,8 +155,8 @@ in {
       name = "hours";
       modules = [
         {
-          imports = [self.nixosModules.pbx];
-          pbx = {
+          imports = [self.nixosModules.default];
+          services.asterix = {
             enable = true;
             inherit hours;
           };

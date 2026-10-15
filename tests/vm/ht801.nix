@@ -27,7 +27,7 @@ in
     nodes = {
       pbx = {config, ...}: {
         imports = [
-          self.nixosModules.pbx
+          self.nixosModules.default
           ../../examples/household-intercom.nix
           ../../examples/household-intercom-ht801.nix
           ./common.nix

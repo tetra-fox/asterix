@@ -2,7 +2,6 @@
 {
   config,
   lib,
-  options,
   ...
 }: let
   inherit
@@ -29,15 +28,6 @@
     };
 
   bridgeType = types.submodule {
-    imports = [
-      # app_confbridge knows music_on_hold_class in user profiles only, and
-      # declines to load a bridge profile with it (apps/confbridge/conf_config_parser.c:2637)
-      (lib.mkRemovedOptionModule ["musicOnHoldClass"] ''
-        services.asterisk.confbridge.bridges.<name>.musicOnHoldClass kept app_confbridge from loading, since only user profiles have a music on hold class. Set services.asterisk.confbridge.users.<name>.musicOnHoldClass instead.
-      '')
-      # where that module's assertion goes, which the config below passes on
-      {options.assertions = options.assertions;}
-    ];
     options = {
       maxMembers = mkOption {
         type = types.nullOr types.ints.positive;
@@ -176,17 +166,15 @@ in {
   };
 
   config = mkIf cfg.enable {
-    assertions =
-      lib.concatMap (bridge: bridge.assertions) (builtins.attrValues ccfg.bridges)
-      ++ [
-        {
-          assertion = badMenuKeys == [];
-          message = ''
-            services.asterisk.confbridge.menus: key sequences other than 1 to 11 of 0-9, A-D, * and #, which ConfBridge refuses or cuts to 11:
-              ${lib.concatStringsSep "\n  " badMenuKeys}
-          '';
-        }
-      ];
+    assertions = [
+      {
+        assertion = badMenuKeys == [];
+        message = ''
+          services.asterisk.confbridge.menus: key sequences other than 1 to 11 of 0-9, A-D, * and #, which ConfBridge refuses or cuts to 11:
+            ${lib.concatStringsSep "\n  " badMenuKeys}
+        '';
+      }
+    ];
 
     services.asterisk.modules.needed."services.asterisk.confbridge" = mkIf (ccfg.bridges != {} || ccfg.users != {} || ccfg.menus != {}) confbridgeModules;
 

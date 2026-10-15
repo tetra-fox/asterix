@@ -1,5 +1,5 @@
 # Options reference: `nix build .#docs` produces options.md, options.html and
-# options.json for services.asterisk and, in a section of its own, pbx.
+# options.json for services.asterix, then the core under it, services.asterisk.
 {
   pkgs,
   self,
@@ -9,7 +9,7 @@
   eval = import "${pkgs.path}/nixos/lib/eval-config.nix" {
     inherit (pkgs.stdenv.hostPlatform) system;
     modules = [
-      self.nixosModules.pbx
+      self.nixosModules.default
       {
         boot.isContainer = true;
         system.stateVersion = "26.05";
@@ -40,8 +40,8 @@
         };
     };
 
+  asterix = optionsDoc {inherit (eval.options.services) asterix;};
   core = optionsDoc {inherit (eval.options.services) asterisk;};
-  pbx = optionsDoc {inherit (eval.options) pbx;};
 in
   pkgs.runCommand "asterix-docs" {
     nativeBuildInputs = [
@@ -51,17 +51,17 @@ in
   } ''
     mkdir -p $out
     {
+      echo '# services.asterix'
+      echo
+      cat ${asterix.optionsCommonMark}
+      echo
       echo '# services.asterisk'
       echo
+      echo 'The core that services.asterix writes into, for what the options above do not cover.'
+      echo
       cat ${core.optionsCommonMark}
-      echo
-      echo '# pbx'
-      echo
-      echo 'The PBX layer of `nixosModules.pbx`, written into the options above.'
-      echo
-      cat ${pbx.optionsCommonMark}
     } > $out/options.md
-    jq -s add ${core.optionsJSON}/share/doc/nixos/options.json ${pbx.optionsJSON}/share/doc/nixos/options.json > $out/options.json
+    jq -s add ${asterix.optionsJSON}/share/doc/nixos/options.json ${core.optionsJSON}/share/doc/nixos/options.json > $out/options.json
     {
       echo '<!DOCTYPE html><html><head><meta charset="utf-8"><title>asterix options</title></head><body>'
       cmark --unsafe $out/options.md

@@ -1,4 +1,4 @@
-# The build-time check of pbx.hours time zones fails on names tzdata does not
+# The build-time check of services.asterix.hours time zones fails on names tzdata does not
 # have as a zone, and passes a real one
 {
   pkgs,
@@ -11,8 +11,8 @@
     lib.findFirst (check: check.name == "pbx-hours-timezones") (throw "no time zone check")
     (evalConfig [
       {
-        imports = [self.nixosModules.pbx];
-        pbx = {
+        imports = [self.nixosModules.default];
+        services.asterix = {
           enable = true;
           hours.office = {
             inherit timezone;
@@ -35,7 +35,7 @@
 in
   pkgs.runCommand "asterisk-pbx-timezone-tests" {} ''
     ${lib.concatMapStrings (zone: ''
-        grep -qF ${lib.escapeShellArg "pbx.hours: ${zone} is not a time zone of tzdata"} ${pkgs.testers.testBuildFailure (checkFor zone)}/testBuildFailure.log
+        grep -qF ${lib.escapeShellArg "services.asterix.hours: ${zone} is not a time zone of tzdata"} ${pkgs.testers.testBuildFailure (checkFor zone)}/testBuildFailure.log
       '')
       failing}
     : ${checkFor "America/Los_Angeles"}

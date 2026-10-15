@@ -165,12 +165,12 @@
   result = probe {
     name = "pbx-destinations";
     modules = [
-      self.nixosModules.pbx
+      self.nixosModules.default
       slots.module
       ({config, ...}: let
         secret = name: config.lib.asterisk.secret "/run/secrets/${name}";
       in {
-        pbx = {
+        services.asterix = {
           enable = true;
           extensions = {
             "201".password = secret "sip-201";

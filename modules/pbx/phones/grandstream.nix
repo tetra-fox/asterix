@@ -1,4 +1,4 @@
-# Provisioning for Grandstream analog adapters and phones: each pbx.phones
+# Provisioning for Grandstream analog adapters and phones: each services.asterix.phones
 # device of one of these models gets a `cfg<mac>.xml` (Grandstream's
 # gs_provision format) in which each line, an adapter's phone port or a
 # phone's SIP account, registers as its endpoint.
@@ -34,8 +34,8 @@
     types
     ;
 
-  cfg = config.pbx.phones.grandstream;
-  pcfg = config.pbx.phones;
+  cfg = config.services.asterix.phones.grandstream;
+  pcfg = config.services.asterix.phones;
   acfg = config.services.asterisk;
   asteriskLib = import ../../../lib {inherit lib;};
   inherit (asteriskLib) format secrets;
@@ -287,11 +287,7 @@
     </gs_provision>
   '';
 in {
-  imports = [
-    (lib.mkRemovedOptionModule ["pbx" "phones" "grandstream" "ht801"] "Grandstream adapters moved to pbx.phones.devices, each with a model: devices.\"101\" = { model = \"grandstream-ht801\"; mac = \"...\"; }. sipServer, ntpServer and adminPassword moved to pbx.phones, timeZone and settings to pbx.phones.grandstream.")
-  ];
-
-  options.pbx.phones.grandstream = {
+  options.services.asterix.phones.grandstream = {
     timeZone = mkOption {
       type = types.nullOr types.str;
       default = null;
@@ -310,31 +306,31 @@ in {
   };
 
   config = mkMerge [
-    {pbx.phones.models = lib.mapAttrs (_: model: {lines = builtins.length model.lines;}) models;}
+    {services.asterix.phones.models = lib.mapAttrs (_: model: {lines = builtins.length model.lines;}) models;}
 
     (mkIf (devices != {}) {
       assertions = [
         {
           assertion = invalidAdminPasswords == [];
-          message = "pbx.phones: the admin password (P2) of ${lib.concatStringsSep ", " invalidAdminPasswords} is not 4 to 30 characters from ASCII 33 (!) to 126 (~), which Grandstream's V2 hardware requires of the length and V1 hardware of the characters.";
+          message = "services.asterix.phones: the admin password (P2) of ${lib.concatStringsSep ", " invalidAdminPasswords} is not 4 to 30 characters from ASCII 33 (!) to 126 (~), which Grandstream's V2 hardware requires of the length and V1 hardware of the characters.";
         }
         {
           assertion = controlCharacters == [];
-          message = "pbx.phones.devices: P-values cannot contain control characters: ${lib.concatStringsSep ", " controlCharacters}.";
+          message = "services.asterix.phones.devices: P-values cannot contain control characters: ${lib.concatStringsSep ", " controlCharacters}.";
         }
         {
           assertion = wildcardServers == [];
-          message = "pbx.phones.devices: P-values that send devices to 0.0.0.0 or ::, which no device can reach: ${lib.concatStringsSep ", " wildcardServers}. Set pbx.phones.listenAddress to the PBX's address on the devices' network, or give that address in pbx.phones.sipServer and settings.P237.";
+          message = "services.asterix.phones.devices: P-values that send devices to 0.0.0.0 or ::, which no device can reach: ${lib.concatStringsSep ", " wildcardServers}. Set services.asterix.phones.listenAddress to the PBX's address on the devices' network, or give that address in services.asterix.phones.sipServer and settings.P237.";
         }
         {
           assertion = builtins.all (p: builtins.match "P[0-9]+" p != null) (
             attrNames cfg.settings ++ lib.concatMap (device: attrNames device.settings) (attrValues devices)
           );
-          message = "pbx.phones: settings of Grandstream devices must be P-values such as P1362.";
+          message = "services.asterix.phones: settings of Grandstream devices must be P-values such as P1362.";
         }
       ];
 
-      pbx.phones.files = mapAttrs' (_: device:
+      services.asterix.phones.files = mapAttrs' (_: device:
         nameValuePair "cfg${device.mac}.xml" {
           text = deviceXml device;
           escape = "xml";

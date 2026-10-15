@@ -30,7 +30,7 @@
     unique
     ;
 
-  cfg = config.pbx.phones;
+  cfg = config.services.asterix.phones;
   asteriskLib = import ../../../lib {inherit lib;};
   inherit (asteriskLib) format secrets;
   moduleLib = import ../../lib.nix {inherit lib;};
@@ -251,12 +251,12 @@ in {
     ./yealink.nix
   ];
 
-  options.pbx.phones = {
+  options.services.asterix.phones = {
     enable =
       mkEnableOption "serving provisioning files for phones over HTTP"
       // {
         default = cfg.devices != {};
-        defaultText = literalExpression "config.pbx.phones.devices != { }";
+        defaultText = literalExpression "config.services.asterix.phones.devices != { }";
       };
 
     listenAddress = mkOption {
@@ -320,7 +320,7 @@ in {
     sipServer = mkOption {
       type = types.str;
       default = cfg.listenAddress;
-      defaultText = literalExpression "config.pbx.phones.listenAddress";
+      defaultText = literalExpression "config.services.asterix.phones.listenAddress";
       example = "pbx.example.org";
       description = "Host name or address of the SIP server the devices' lines register to, without the port.";
     };
@@ -328,7 +328,7 @@ in {
     sipPort = mkOption {
       type = types.port;
       default = 5060;
-      description = "Port of {option}`pbx.phones.sipServer`. Devices that take the server and its port as one value get the port only when it is not 5060, SIP's default.";
+      description = "Port of {option}`services.asterix.phones.sipServer`. Devices that take the server and its port as one value get the port only when it is not 5060, SIP's default.";
     };
 
     ntpServer = mkOption {
@@ -384,66 +384,66 @@ in {
   };
 
   config = mkIf cfg.enable {
-    warnings = lib.optional (cfg.adminPassword != null && !secrets.holdsSecret cfg.adminPassword) "pbx.phones.adminPassword is not a secret reference, so it is stored world-readable in the Nix store; use config.lib.asterisk.secret instead.";
+    warnings = lib.optional (cfg.adminPassword != null && !secrets.holdsSecret cfg.adminPassword) "services.asterix.phones.adminPassword is not a secret reference, so it is stored world-readable in the Nix store; use config.lib.asterisk.secret instead.";
 
     assertions =
       [
         {
           assertion = config.services.asterisk.enable;
-          message = "pbx.phones requires services.asterisk.enable.";
+          message = "services.asterix.phones requires services.asterisk.enable.";
         }
         {
           assertion = builtins.all (name: builtins.match "[A-Za-z0-9_+-][A-Za-z0-9_.+-]*" name != null) (attrNames cfg.files);
-          message = "pbx.phones.files: file names may only contain letters, digits and _.+- (no directories).";
+          message = "services.asterix.phones.files: file names may only contain letters, digits and _.+- (no directories).";
         }
         {
           assertion = cfg.allowedNetworks != [];
-          message = "pbx.phones.allowedNetworks is empty, so systemd would drop every connection; list the phones' networks.";
+          message = "services.asterix.phones.allowedNetworks is empty, so systemd would drop every connection; list the phones' networks.";
         }
         {
           assertion = invalidNetworks == [];
-          message = "pbx.phones.allowedNetworks: entries must be addresses, networks such as 10.0.20.0/24, or any, localhost, link-local or multicast, which is what systemd takes: ${lib.concatMapStringsSep ", " (entry: "`${entry}`") invalidNetworks}.";
+          message = "services.asterix.phones.allowedNetworks: entries must be addresses, networks such as 10.0.20.0/24, or any, localhost, link-local or multicast, which is what systemd takes: ${lib.concatMapStringsSep ", " (entry: "`${entry}`") invalidNetworks}.";
         }
         {
           assertion = invalidAddresses == {};
-          message = "pbx.phones.files: allowedAddress must be one IPv4 or IPv6 address: ${lib.concatStringsSep ", " (mapAttrsToList (name: file: "${name} has `${file.allowedAddress}`") invalidAddresses)}.";
+          message = "services.asterix.phones.files: allowedAddress must be one IPv4 or IPv6 address: ${lib.concatStringsSep ", " (mapAttrsToList (name: file: "${name} has `${file.allowedAddress}`") invalidAddresses)}.";
         }
         {
           # the socket's ListenStream= takes an address and the port
           assertion = isAddress cfg.listenAddress;
-          message = "pbx.phones.listenAddress must be one IPv4 or IPv6 address: ${builtins.toJSON cfg.listenAddress}.";
+          message = "services.asterix.phones.listenAddress must be one IPv4 or IPv6 address: ${builtins.toJSON cfg.listenAddress}.";
         }
         {
           assertion = moduleLib.invalidInterfaces cfg.firewallInterfaces == [];
-          message = "pbx.phones.firewallInterfaces: Linux takes interface names of 1 to 15 bytes without /, : or whitespace: ${
+          message = "services.asterix.phones.firewallInterfaces: Linux takes interface names of 1 to 15 bytes without /, : or whitespace: ${
             lib.concatMapStringsSep ", " builtins.toJSON (moduleLib.invalidInterfaces cfg.firewallInterfaces)
           }.";
         }
         {
           assertion = lib.allUnique macs;
-          message = "pbx.phones.devices: MAC addresses must be unique.";
+          message = "services.asterix.phones.devices: MAC addresses must be unique.";
         }
         {
           # [v6]:port or host:port, where a bare IPv6 address has more colons
           assertion = builtins.match "[[].*|[^:]*:[^:]*" cfg.sipServer == null;
-          message = "pbx.phones.sipServer is ${builtins.toJSON cfg.sipServer}, but takes the host alone; give the port in pbx.phones.sipPort.";
+          message = "services.asterix.phones.sipServer is ${builtins.toJSON cfg.sipServer}, but takes the host alone; give the port in services.asterix.phones.sipPort.";
         }
       ]
       ++ mapAttrsToList (name: device: let
         count = cfg.models.${device.model}.lines;
       in {
         assertion = !tooManyLines device;
-        message = "pbx.phones.devices.${name}: a ${device.model} has ${toString count} line${optionalString (count > 1) "s"}, but lines lists ${toString (builtins.length device.lines)}.";
+        message = "services.asterix.phones.devices.${name}: a ${device.model} has ${toString count} line${optionalString (count > 1) "s"}, but lines lists ${toString (builtins.length device.lines)}.";
       })
       cfg.devices
       ++ mapAttrsToList (name: device: {
         assertion = unregistered device == [];
-        message = "pbx.phones.devices.${name}: endpoints must exist in pjsip.endpoints, have `auth` set and an `aor` named like the endpoint, since the device registers each line with one user name for both: ${lib.concatMapStringsSep ", " (e: "`${e}`") (unregistered device)}.";
+        message = "services.asterix.phones.devices.${name}: endpoints must exist in pjsip.endpoints, have `auth` set and an `aor` named like the endpoint, since the device registers each line with one user name for both: ${lib.concatMapStringsSep ", " (e: "`${e}`") (unregistered device)}.";
       })
       cfg.devices
       ++ map (ref: {
         assertion = !(secrets.isStorePath ref) && secrets.isValidReference ref;
-        message = "pbx.phones: invalid secret reference ${secrets.placeholderOf ref}.";
+        message = "services.asterix.phones: invalid secret reference ${secrets.placeholderOf ref}.";
       })
       secretRefs;
 

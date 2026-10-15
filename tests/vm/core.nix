@@ -70,7 +70,7 @@ pkgs.testers.runNixOSTest {
       };
     in {
       imports = [
-        self.nixosModules.default
+        self.nixosModules.asterisk
         ./freeform.nix
         ./common.nix
         (import ./secrets.nix {

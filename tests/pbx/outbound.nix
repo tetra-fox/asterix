@@ -1,15 +1,16 @@
 # Numbers outside dialled through the probe (tests/campaign/probe.nix),
-# without a services.asterix.outbound.prefix and without services.asterix.outbound.callerId, and with
-# the prefix *9 and a caller ID. The trunk gets the number without
-# the prefix, after the caller ID is set where one is configured, which then
-# goes in P-Asserted-Identity; a number too short for the pattern reaches
-# nothing; a pbx number that starts with the prefix reaches the pbx; and the
-# emergency number works with and without the prefix, with services.asterix.outbound's
-# caller ID, as services.asterix.emergency sets none. A call the trunk does not put
-# through, here to a provider whose name does not resolve in the build
-# sandbox, ends with congestion; through a trunk back to the same Asterisk, a
-# number the far end answers busy stays busy, and outbound and emergency calls
-# it refuses end with congestion.
+# without a services.asterix.outbound.prefix and without
+# services.asterix.outbound.callerId, and with the prefix *9 and a caller ID.
+# The trunk gets the number without the prefix, after the caller ID is set
+# where one is configured, which then goes in P-Asserted-Identity; a number
+# too short for the pattern reaches nothing; a pbx number that starts with the
+# prefix reaches the pbx; and the emergency number works with and without the
+# prefix, with services.asterix.outbound's caller ID, as
+# services.asterix.emergency sets none. A call the trunk does not put through,
+# here to a provider whose name does not resolve in the build sandbox, ends
+# with congestion; through a trunk back to the same Asterisk, a number the far
+# end answers busy stays busy, and outbound and emergency calls it refuses end
+# with congestion.
 {
   pkgs,
   self,

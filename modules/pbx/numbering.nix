@@ -1,6 +1,6 @@
-# pbx-internal, the context the phones of services.asterix.extensions dial from: every
-# number the pbx objects have, each with exactly one owner, and busy lamp
-# hints.
+# pbx-internal, the context the phones of services.asterix.extensions dial
+# from: every number the pbx objects have, each with exactly one owner, and
+# busy lamp hints.
 {
   config,
   lib,

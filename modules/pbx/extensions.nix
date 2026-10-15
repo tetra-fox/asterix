@@ -1,6 +1,7 @@
-# services.asterix.extensions: a phone (PJSIP endpoint), its mailbox and what happens to
-# calls it does not take, in pbx-extension-<number>, and pbx-devices, which
-# rings every device of an extension for queues and emergency notify
+# services.asterix.extensions: a phone (PJSIP endpoint), its mailbox and what
+# happens to calls it does not take, in pbx-extension-<number>, and
+# pbx-devices, which rings every device of an extension for queues and
+# emergency notify
 {
   config,
   lib,

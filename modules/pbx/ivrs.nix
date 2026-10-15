@@ -1,6 +1,7 @@
-# services.asterix.ivrs: a menu that plays a prompt and sends each key to a destination,
-# in pbx-ivr-<name>, which includes pbx-directdial with directDial. A prompt
-# given as text is spoken by flite when the system is built.
+# services.asterix.ivrs: a menu that plays a prompt and sends each key to a
+# destination, in pbx-ivr-<name>, which includes pbx-directdial with
+# directDial. A prompt given as text is spoken by flite when the system is
+# built.
 {
   config,
   lib,

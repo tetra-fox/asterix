@@ -5,8 +5,9 @@
 # 2 starts 201. Asterisk takes a number before a pattern of the same context
 # and before the contexts it includes, and a key that starts a longer number
 # counts on its own once no digit follows within 5 s. From a trunk, a number
-# of services.asterix.inbound goes before its patterns, of which the more specific one
-# takes a number both match, and s takes a call that names no number.
+# of services.asterix.inbound goes before its patterns, of which the more
+# specific one takes a number both match, and s takes a call that names no
+# number.
 {
   pkgs,
   self,

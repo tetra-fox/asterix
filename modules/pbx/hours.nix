@@ -1,7 +1,7 @@
-# services.asterix.hours: when a business is open, as a Gosub routine in pbx-hours-<name>
-# that returns `open` or `closed`. The close-early toggle is a custom device
-# state, which Asterisk keeps in astdb: runtime state, set from a phone, not
-# from Nix.
+# services.asterix.hours: when a business is open, as a Gosub routine in
+# pbx-hours-<name> that returns `open` or `closed`. The close-early toggle is
+# a custom device state, which Asterisk keeps in astdb: runtime state, set
+# from a phone, not from Nix.
 {
   config,
   lib,

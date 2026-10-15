@@ -1,8 +1,8 @@
-# services.asterix.paging: one number that makes several phones answer by themselves, in
-# pbx-paging-<name>. Page() calls each member through a Local channel into
-# the same context, where Dial() rings every device of the member with the
-# headers phones take as an auto-answer request, from its pre-dial routine
-# (the `headers` extension).
+# services.asterix.paging: one number that makes several phones answer by
+# themselves, in pbx-paging-<name>. Page() calls each member through a Local
+# channel into the same context, where Dial() rings every device of the member
+# with the headers phones take as an auto-answer request, from its pre-dial
+# routine (the `headers` extension).
 {
   config,
   lib,

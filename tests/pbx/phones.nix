@@ -1,5 +1,5 @@
-# Evaluation-only tests of the files services.asterix.phones writes: each vendor's format,
-# and the parts of one with logic of their own
+# Evaluation-only tests of the files services.asterix.phones writes: each
+# vendor's format, and the parts of one with logic of their own
 {
   pkgs,
   self,

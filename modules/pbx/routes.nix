@@ -1,6 +1,8 @@
-# services.asterix.inbound, services.asterix.outbound and services.asterix.emergency: calls between the phones and
-# trunks. Calls from a trunk start in pbx-inbound-<trunk>, the default context
-# of services.asterix.trunks, which holds the trunk's numbers of services.asterix.inbound.
+# services.asterix.inbound, services.asterix.outbound and
+# services.asterix.emergency: calls between the phones and trunks. Calls from
+# a trunk start in pbx-inbound-<trunk>, the default context of
+# services.asterix.trunks, which holds the trunk's numbers of
+# services.asterix.inbound.
 {
   config,
   lib,
@@ -209,7 +211,8 @@
     ++ setCallerId emergencyCallerId
     ++ dialTrunk (["PJSIP/${number}@${emergencyTrunk}"] ++ callerIdArguments emergencyCallerId emergencyTrunk);
 
-  # emergency calls without a trunk of their own go out through services.asterix.outbound's
+  # emergency calls without a trunk of their own go out through
+  # services.asterix.outbound's
   emergencyTrunk =
     if cfg.emergency.trunk != null
     then cfg.emergency.trunk

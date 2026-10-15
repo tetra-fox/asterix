@@ -1,5 +1,5 @@
-# services.asterix.queues: a queue of queues.conf with a number, extensions as members and
-# what happens when nobody takes the call, in pbx-queue-<name>
+# services.asterix.queues: a queue of queues.conf with a number, extensions as
+# members and what happens when nobody takes the call, in pbx-queue-<name>
 {
   config,
   lib,

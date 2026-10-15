@@ -1,6 +1,7 @@
-# services.asterix.ringGroups: several phones for one call, in pbx-ringgroup-<name>.
-# External numbers are dialled from the group's own context through a Local
-# channel, so their confirmation prompt only runs on their leg.
+# services.asterix.ringGroups: several phones for one call, in
+# pbx-ringgroup-<name>. External numbers are dialled from the group's own
+# context through a Local channel, so their confirmation prompt only runs on
+# their leg.
 {
   config,
   lib,
@@ -136,7 +137,8 @@
   # Dial splits its channels at &, and the Local channel of an external
   # number names the group's context
   badNames = builtins.filter (name: pbxLib.breaksContext name || pbxLib.breaksArgument name || (withExternal ? ${name} && hasInfix "&" name)) (builtins.attrNames cfg.ringGroups);
-  # a group without a trunk uses services.asterix.outbound's, which routes.nix checks
+  # a group without a trunk uses services.asterix.outbound's, which routes.nix
+  # checks
   unknownTrunks = builtins.attrNames (
     filterAttrs (_: group: group.trunk != null && !(trunks ? ${group.trunk})) cfg.ringGroups
   );

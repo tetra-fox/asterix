@@ -1,5 +1,5 @@
-# The build-time check of services.asterix.hours time zones fails on names tzdata does not
-# have as a zone, and passes a real one
+# The build-time check of services.asterix.hours time zones fails on names
+# tzdata does not have as a zone, and passes a real one
 {
   pkgs,
   self,

@@ -109,8 +109,7 @@
     };
 
   restricted = cfg.networks != {} && builtins.all (n: n.subnets != []) (builtins.attrValues cfg.networks);
-  # every trunk of the final pjsip.conf, core-only ones included, since the
-  # ACL applies to all of them
+  # core-only trunks too, since the ACL applies to all of them
   trunks = config.services.asterisk.pjsip.trunks;
   matchOf = t: lib.optionals (t.identify != null) t.identify.match;
   addressesOf = t: builtins.filter isAddress (matchOf t ++ [t.host]);

@@ -23,7 +23,7 @@ pbx.phones = {
 };
 ```
 
-3. **Point each device at the PBX once**, in DHCP option 66 or as the
+1. **Point each device at the PBX once**, in DHCP option 66 or as the
    provisioning server in its web interface (add `:port` if it isn't 80):
 
    | Vendor                | DHCP                              | First boot                                                 |
@@ -36,7 +36,7 @@ pbx.phones = {
    | Snom                  | 66 = `http://10.0.20.10`, no 67   | asks Snom's redirection service first                      |
    | Yealink               | 66 = `http://10.0.20.10`          |                                                            |
 
-4. **Deploy and watch** `journalctl -u asterisk-provisioning`, which logs every
+2. **Deploy and watch** `journalctl -u asterisk-provisioning`, which logs every
    request. A device registers once it has its file.
 
 [`examples/household-intercom-ht801.nix`](examples/household-intercom-ht801.nix)
@@ -81,10 +81,6 @@ All under `pbx.phones`.
   `restartUnits`) and reboot the device.
 
 ## Supported devices
-
-None has run on real hardware yet: each file is checked against the vendor's
-documentation and against FusionPBX's and Wazo's templates (see
-[Sources](#sources)). Try one device first.
 
 | Vendor      | Devices                                                         | File                                 | Details                                       |
 | ----------- | --------------------------------------------------------------- | ------------------------------------ | --------------------------------------------- |
@@ -563,8 +559,6 @@ pbx.phones.files."0015651234ab.cfg" = {
 | `tftp`           | off     | serve it over TFTP too, on UDP port 69                            |
 
 ## Adding a device
-
-A device nobody has tried on real hardware is fine.
 
 1. Add a module `modules/pbx/phones/<vendor>.nix` like `yealink.nix`, or a
    model to an existing vendor's `models`. It adds its models to

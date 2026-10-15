@@ -131,5 +131,6 @@ in
   // evalSuiteParts "eval" (import ./eval.nix {inherit pkgs self;})
   // evalSuiteParts "assertions" (import ./assertions.nix {inherit pkgs self;})
   // evalSuiteParts "pbx-assertions" (import ./pbx/assertions.nix {inherit pkgs self;})
+  // evalSuiteParts "pbx-networks" (import ./pbx/networks.nix {inherit pkgs self;})
   // evalSuiteParts "pbx-phones" (import ./pbx/phones.nix {inherit pkgs self;})
   // suiteParts "config-check" configCheck.run configCheck.tests

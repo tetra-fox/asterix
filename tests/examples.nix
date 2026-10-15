@@ -9,18 +9,27 @@
   inherit (import ./eval-lib.nix {inherit pkgs self;}) evalConfig systemProblems systemBuild;
 
   examples = {
-    minimal = [../examples/minimal.nix];
-    household-intercom = [../examples/household-intercom.nix];
-    # written with the pbx layer
+    minimal = [
+      self.nixosModules.default
+      ../examples/minimal.nix
+    ];
+    household-intercom = [
+      self.nixosModules.default
+      ../examples/household-intercom.nix
+    ];
     small-office = [
       self.nixosModules.default
       ../examples/small-office.nix
     ];
-    # the add-on, with the example it extends; phones are part of pbx
+    # the add-on, with the example it extends
     household-intercom-ht801 = [
       self.nixosModules.default
       ../examples/household-intercom.nix
       ../examples/household-intercom-ht801.nix
+    ];
+    core-only = [
+      self.nixosModules.asterisk
+      ../examples/core-only.nix
     ];
   };
 

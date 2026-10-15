@@ -2,33 +2,11 @@
 {
   config,
   lib,
-  pkgs,
   ...
 }: let
   inherit (config.lib.asterisk) secret;
 
-  # what someone who dials 911 on these phones hears
-  noEmergencyCalls = pkgs.runCommand "sounds-no-emergency-calls" {nativeBuildInputs = [pkgs.flite];} ''
-    mkdir -p $out/sounds/en/custom
-    flite -voice slt -o $out/sounds/en/custom/no-emergency-calls.wav16 \
-      -t "This phone cannot call nine one one. Use a cell phone."
-  '';
-
-  # adapt to your network
-  site = {
-    trusted = {
-      interface = "lan";
-      address = "10.0.10.10";
-      subnet = "10.0.10.0/24";
-    };
-    voip = {
-      interface = "voip";
-      address = "10.0.20.10";
-      subnet = "10.0.20.0/24";
-    };
-  };
-
-  # extension -> phone; `network` picks the transport the phone is reached on
+  # phones by extension, each on a network of services.asterix.networks
   phones = {
     "101" = {
       name = "Kitchen";
@@ -62,75 +40,42 @@ in {
     )
     phones;
 
-  services.asterisk = {
+  services.asterix = {
     enable = true;
 
-    # SIP and RTP only on the two phone networks.
+    # SIP and RTP only on these interfaces, requests only from the subnets,
+    # and each phone registers only from its own network
     openFirewall = true;
-    firewallInterfaces = [
-      site.trusted.interface
-      site.voip.interface
-    ];
-
-    pjsip = {
-      transports = {
-        trusted.address = site.trusted.address;
-        voip.address = site.voip.address;
+    networks = {
+      trusted = {
+        interface = "lan";
+        address = "10.0.10.10";
+        subnets = ["10.0.10.0/24"];
       };
-
-      # Requests from anywhere else are rejected before authentication.
-      acls.phones = {
-        deny = [
-          "0.0.0.0/0.0.0.0"
-          "::/0"
-        ];
-        permit = [
-          site.trusted.subnet
-          site.voip.subnet
-        ];
+      voip = {
+        interface = "voip";
+        address = "10.0.20.10";
+        subnets = ["10.0.20.0/24"];
       };
-
-      endpoints =
-        lib.mapAttrs (extension: phone: {
-          context = "intercom";
-          transport = phone.network;
-          callerId = ''"${phone.name}" <${extension}>'';
-          auth.password = secret config.sops.secrets."sip-${extension}".path;
-          # Only accept registrations from the phone's own network.
-          settings = {
-            contact_deny = "0.0.0.0/0.0.0.0";
-            contact_permit = site.${phone.network}.subnet;
-          };
-        })
-        phones;
     };
 
-    sounds.packages = [noEmergencyCalls];
+    extensions =
+      lib.mapAttrs (extension: phone: {
+        inherit (phone) name network;
+        password = secret config.sops.secrets."sip-${extension}".path;
+        ringTime = 30;
+      })
+      phones;
 
-    dialplan.contexts.intercom = {
-      hints = lib.mapAttrs (extension: _: "PJSIP/${extension}") phones;
+    # everyone who dials 800 is in the same conference
+    conferences.everyone.number = "800";
 
-      extensions =
-        lib.mapAttrs (extension: _: [
-          "Dial(PJSIP/${extension},30)"
-          "Hangup()"
-        ])
-        phones
-        // {
-          # everyone who dials 800 is in the same conference
-          "800" = [
-            "Answer()"
-            "ConfBridge(800)"
-            "Hangup()"
-          ];
-          # there is no line out, so say that instead of an error tone
-          "911" = [
-            "Answer()"
-            "Playback(custom/no-emergency-calls)"
-            "Playback(custom/no-emergency-calls)"
-            "Hangup()"
-          ];
-        };
+    # there is no line out, so say that instead of an error tone
+    ivrs.no-emergency-calls = {
+      number = "911";
+      prompt.text = "This phone cannot call nine one one. Use a cell phone.";
+      attempts = 2;
+      timeout = 1;
     };
   };
 }

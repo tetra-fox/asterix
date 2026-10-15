@@ -1,13 +1,13 @@
 # asterix
 
-NixOS module for Asterisk, with a provisioning server for phones and an optional, opinionated layer for common setups such as ring groups and business hours.
+NixOS modules for Asterisk: a PBX made of extensions, trunks, ring groups, queues and business hours, with no dialplan to write, on top of Asterisk's config files as Nix options. Comes with a provisioning server for phones.
 
 Intended for anything from a household intercom to a small office PBX with SIP trunks, conferences and queues.
 
 | Docs                               | What                                        |
 | ---------------------------------- | ------------------------------------------- |
 | [Quick start](#quick-start)        | two phones calling each other               |
-| [examples/](examples/)             | complete configs, each run in a VM test     |
+| [examples/](examples/)             | complete configs, most run in a VM test     |
 | [PROVISIONING.md](PROVISIONING.md) | phones that fetch their config from the PBX |
 | `nix build .#docs`                 | the reference of every option               |
 
@@ -62,28 +62,13 @@ in
     reloadUnits = [ "asterisk.service" ];
   });
 
-  services.asterisk = {
+  services.asterix = {
     enable = true;
     openFirewall = true;
-
-    pjsip = {
-      transports.udp = { };
-      endpoints = {
-        "101" = {
-          context = "phones";
-          auth.password = secret config.sops.secrets.sip-101.path;
-        };
-        "102" = {
-          context = "phones";
-          auth.password = secret config.sops.secrets.sip-102.path;
-        };
-      };
+    extensions = {
+      "101".password = secret config.sops.secrets.sip-101.path;
+      "102".password = secret config.sops.secrets.sip-102.path;
     };
-
-    dialplan.contexts.phones.extensions."_10X" = [
-      "Dial(PJSIP/\${EXTEN},30)"
-      "Hangup()"
-    ];
   };
 }
 ```
@@ -99,21 +84,22 @@ in
    `asterisk -rx "pjsip show endpoints"` shows them.
 
 2. **On a host with a public address, narrow the firewall.** `openFirewall`
-   opens SIP and RTP on every interface. Add `firewallInterfaces` and a SIP
-   ACL (`pjsip.acls`), as [the intercom example](examples/household-intercom.nix)
-   does.
+   opens SIP and RTP on every interface. Describe the phones' network in
+   `services.asterix.networks`, with its interface, address and subnets, as
+   [the intercom example](examples/household-intercom.nix) does.
 
 ## Features
 
 | Feature                          | What                                                                                                                                                                          |
 | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Asterisk as Nix options**      | PJSIP phones and trunks, dialplan, voicemail, conferences, queues, music on hold, call features, AMI, ARI and call records. Anything else goes in `settings`                  |
+| **A PBX without dialplan**       | extensions, trunks, voicemail, ring groups, queues, conferences, voice menus, paging, business hours and call routes, in `services.asterix`                                   |
+| **Asterisk as Nix options**      | under it, `services.asterisk`: PJSIP, dialplan, voicemail, conferences, queues, music on hold, call features, AMI, ARI and call records. Anything else goes in `settings`     |
 | **A bad config fails the build** | Asterisk boots the new config in the build sandbox, and any error or warning fails it, as does a dialplan that uses a missing application, sound or extension (`checkConfig`) |
 | **Reloads, not restarts**        | deploys reload where they can, so calls stay up                                                                                                                               |
-| **Several networks**             | each gets its own transport and phones are pinned to it. Asterisk relays the audio between them                                                                               |
+| **Several networks**             | each gets its own transport and firewall rules, and its phones register only from its subnets. Asterisk relays the audio between them                                         |
 | **NAT**                          | on either side, plus STUN and TURN                                                                                                                                            |
 | **Sandboxed**                    | `systemd-analyze security` rates it 1.5                                                                                                                                       |
-| **Phone provisioning**           | Cisco, Fanvil, Grandstream, Poly, Snom and Yealink devices, through the pbx layer: [PROVISIONING.md](PROVISIONING.md)                                                         |
+| **Phone provisioning**           | Cisco, Fanvil, Grandstream, Poly, Snom and Yealink devices, in `services.asterix.phones`: [PROVISIONING.md](PROVISIONING.md)                                                  |
 
 ## Secrets
 
@@ -124,7 +110,7 @@ The file can stay root-only, and any secret manager works. With
 ```nix
 sops.secrets.sip-101.reloadUnits = [ "asterisk.service" ]; # reload on change, no restart
 
-services.asterisk.pjsip.endpoints."101".auth.password = config.lib.asterisk.secret config.sops.secrets.sip-101.path;
+services.asterix.extensions."101".password = config.lib.asterisk.secret config.sops.secrets.sip-101.path;
 ```
 
 | Case                                                           | What happens                                                                                                                                                                                                                                 |
@@ -140,7 +126,116 @@ programs the dialplan starts, AMI users with the write classes listed in
 `services.asterisk.ami.users.<name>.write`, and ARI users (voicemail PINs
 during a call, every PJSIP password if `res_ari_asterisk.so` is loaded).
 
-## Custom config
+## PBX
+
+`services.asterix` is the PBX, in the objects its admin thinks in.
+`nixosModules.default` brings it, with the core under it.
+
+| Object                                      | Option                         |
+| ------------------------------------------- | ------------------------------ |
+| networks the phones and trunks are on       | `services.asterix.networks`    |
+| extensions, each with its own mailbox       | `services.asterix.extensions`  |
+| other mailboxes, and voicemail limits       | `services.asterix.voicemail`   |
+| SIP trunks                                  | `services.asterix.trunks`      |
+| ring groups                                 | `services.asterix.ringGroups`  |
+| queues                                      | `services.asterix.queues`      |
+| conference rooms                            | `services.asterix.conferences` |
+| voice menus                                 | `services.asterix.ivrs`        |
+| paging groups                               | `services.asterix.paging`      |
+| opening hours                               | `services.asterix.hours`       |
+| calls in, by number                         | `services.asterix.inbound`     |
+| calls out, by prefix                        | `services.asterix.outbound`    |
+| emergency numbers                           | `services.asterix.emergency`   |
+| phones that fetch their config from the PBX | `services.asterix.phones`      |
+
+```nix
+# pbx.nix: extensions 201 and 202, and calls to and from a provider
+{ config, lib, ... }:
+let
+  secret = name: config.lib.asterisk.secret config.sops.secrets.${name}.path;
+in
+{
+  sops.defaultSopsFile = ./secrets.yaml;
+  sops.secrets = lib.genAttrs [ "sip-201" "sip-202" "vm-201" "vm-202" "sip-trunk" ] (_: {
+    reloadUnits = [ "asterisk.service" ];
+  });
+
+  services.asterix = {
+    enable = true;
+    extensions = {
+      "201" = { name = "Reception"; password = secret "sip-201"; voicemail.pin = secret "vm-201"; };
+      "202" = { name = "Sales"; password = secret "sip-202"; voicemail.pin = secret "vm-202"; };
+    };
+    trunks.provider = { host = "sip.provider.example"; username = "5551000"; password = secret "sip-trunk"; };
+    ringGroups.front = { members = [ "201" "202" ]; noAnswer.voicemail = "201"; };
+    hours.office = {
+      timezone = "America/Los_Angeles";
+      open = [ { days = "mon-fri"; time = "09:00-17:00"; } ];
+      closeEarly = "*28";
+    };
+    inbound."5551000" = {
+      trunk = "provider";
+      hours = "office";
+      open.ringGroup = "front";
+      closed.voicemail = "201";
+    };
+    outbound = { prefix = "9"; trunk = "provider"; callerId = "5551000"; };
+    # 911 with and without the 9, out through the same trunk
+    emergency.numbers = [ "911" ];
+  };
+}
+```
+
+| Rule                  | What                                                                                                                                                                                             |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| networks              | without `networks`, SIP is open on every address, to anyone. With several, each extension and trunk names its `network`. Once every network lists `subnets`, requests from elsewhere are refused |
+| contexts              | each object gets its own, `pbx-<kind>-<name>`. phones dial from `pbx-internal`                                                                                                                   |
+| overrides             | everything the PBX generates is a default on `services.asterisk`, which a definition there or `settings` overrides                                                                               |
+| refused at evaluation | a number with two owners, a missing trunk, member or destination, a loop of destinations that no key press breaks                                                                                |
+| emergency numbers     | no default, since they depend on where the PBX is. `outbound` requires them, or `emergency.numbers = [ ];` for a PBX that makes no emergency calls                                               |
+
+Voice menus and paging groups:
+
+```nix
+services.asterix = {
+  ivrs.main = {
+    number = "700";
+    prompt.text = "For sales, press 1. For the front desk, press 2.";
+    options = {
+      "1".extension = "202";
+      "2".ringGroup = "front";
+    };
+    noInput.voicemail = "201";
+  };
+
+  paging.all = { number = "650"; members = [ "201" "202" ]; };
+};
+```
+
+| Object     | What                                                                                                                                                                   |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| voice menu | plays a prompt, recorded or spoken by flite at build time, and sends each key to a destination. `{ ivr = "main"; }` works as a destination anywhere, like in `inbound` |
+|            | after `attempts` prompts, a caller who pressed nothing goes to `noInput`, one who pressed an unknown key to `invalid`                                                  |
+| paging     | calls several phones and asks them to auto-answer. Pages are one-way unless `duplex` is set, skip phones in a call, and only reach phones set to allow auto-answer     |
+
+[small-office.nix](examples/small-office.nix) is a complete example.
+
+## Core
+
+`services.asterisk` writes Asterisk's config files from Nix options. The PBX
+writes into it, and what the PBX has no option for goes there. A `context`
+destination sends a call into dialplan of your own:
+
+```nix
+services.asterix.ivrs.main.options."9".context.context = "weasels";
+services.asterisk.dialplan.contexts.weasels.extensions.s = [ "Answer()" "Playback(tt-weasels)" "Hangup()" ];
+```
+
+To run the core alone, import `asterix.nixosModules.asterisk` instead of
+`nixosModules.default`. [core-only.nix](examples/core-only.nix) is the quick
+start written that way.
+
+### Custom config
 
 | To                                    | Use                                                              |
 | ------------------------------------- | ---------------------------------------------------------------- |
@@ -162,7 +257,7 @@ services.asterisk.settings."followme.conf"."101".number = [ "5551234,30" ];
 services.asterisk.settings."pjsip.conf"."endpoint:101".direct_media = true;
 ```
 
-## Dialplan
+### Dialplan
 
 Asterisk's `${VAR}` looks like Nix interpolation, so escape it. Semicolons
 need no escaping. Each of these produces `Dial(PJSIP/${EXTEN},30)`:
@@ -222,101 +317,6 @@ exten => 101,1,Dial(PJSIP/101,20)
 exten => 800,1,Answer()
  same => n,ConfBridge(800)
 ```
-
-## PBX layer
-
-`nixosModules.pbx` adds `pbx.*`, the objects a PBX admin thinks in. It
-includes the core, so use it in place of `asterix.nixosModules.default` in the
-quick start's flake.nix.
-
-| Object                    | Option            |
-| ------------------------- | ----------------- |
-| extensions with voicemail | `pbx.extensions`  |
-| ring groups               | `pbx.ringGroups`  |
-| queues                    | `pbx.queues`      |
-| conference rooms          | `pbx.conferences` |
-| voice menus               | `pbx.ivrs`        |
-| paging groups             | `pbx.paging`      |
-| opening hours             | `pbx.hours`       |
-| calls in, by number       | `pbx.inbound`     |
-| calls out, by prefix      | `pbx.outbound`    |
-| emergency numbers         | `pbx.emergency`   |
-
-```nix
-# pbx.nix: extensions 201 and 202, and calls to and from a provider
-{ config, lib, ... }:
-let
-  secret = name: config.lib.asterisk.secret config.sops.secrets.${name}.path;
-in
-{
-  sops.defaultSopsFile = ./secrets.yaml;
-  sops.secrets = lib.genAttrs [ "sip-201" "sip-202" "vm-201" "vm-202" "sip-trunk" ] (_: {
-    reloadUnits = [ "asterisk.service" ];
-  });
-
-  pbx = {
-    enable = true;
-    extensions = {
-      "201" = { name = "Reception"; password = secret "sip-201"; voicemail.pin = secret "vm-201"; };
-      "202" = { name = "Sales"; password = secret "sip-202"; voicemail.pin = secret "vm-202"; };
-    };
-    ringGroups.front = { members = [ "201" "202" ]; noAnswer.voicemail = "201"; };
-    hours.office = {
-      timezone = "America/Los_Angeles";
-      open = [ { days = "mon-fri"; time = "09:00-17:00"; } ];
-      closeEarly = "*28";
-    };
-    inbound."5551000" = {
-      trunk = "provider";
-      hours = "office";
-      open.ringGroup = "front";
-      closed.voicemail = "201";
-    };
-    outbound = { prefix = "9"; trunk = "provider"; callerId = "5551000"; };
-    # 911 with and without the 9, out through the same trunk
-    emergency.numbers = [ "911" ];
-  };
-
-  # trunks, transports and everything else stay core options
-  services.asterisk.pjsip = {
-    transports.udp = { };
-    trunks.provider = { host = "sip.provider.example"; username = "5551000"; password = secret "sip-trunk"; };
-  };
-}
-```
-
-| Rule                  | What                                                                                                                                               |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| contexts              | each object gets its own, `pbx-<kind>-<name>`. phones dial from `pbx-internal`                                                                     |
-| overrides             | everything the layer generates is a default on the core options, which or `settings` override                                                      |
-| refused at evaluation | a number with two owners, a missing trunk, member or destination, a loop of destinations that no key press breaks                                  |
-| emergency numbers     | no default, since they depend on where the PBX is. `outbound` requires them, or `emergency.numbers = [ ];` for a PBX that makes no emergency calls |
-
-Voice menus and paging groups:
-
-```nix
-pbx = {
-  ivrs.main = {
-    number = "700";
-    prompt.text = "For sales, press 1. For the front desk, press 2.";
-    options = {
-      "1".extension = "202";
-      "2".ringGroup = "front";
-    };
-    noInput.voicemail = "201";
-  };
-
-  paging.all = { number = "650"; members = [ "201" "202" ]; };
-};
-```
-
-| Object     | What                                                                                                                                                                   |
-| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| voice menu | plays a prompt, recorded or spoken by flite at build time, and sends each key to a destination. `{ ivr = "main"; }` works as a destination anywhere, like in `inbound` |
-|            | after `attempts` prompts, a caller who pressed nothing goes to `noInput`, one who pressed an unknown key to `invalid`                                                  |
-| paging     | calls several phones and asks them to auto-answer. Pages are one-way unless `duplex` is set, skip phones in a call, and only reach phones set to allow auto-answer     |
-
-[small-office.nix](examples/small-office.nix) is a complete example.
 
 ## Development
 

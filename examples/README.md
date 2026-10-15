@@ -1,14 +1,16 @@
 # Examples
 
-Copy one and fill in your addresses, extensions and names. Each runs as written
-in a VM test.
+Copy one and fill in your addresses, extensions and names. All but
+core-only.nix run as written in a VM test, and every one builds in
+`nix flake check`.
 
-| Example                                                      | What                                                        | Import                                   | Secrets                                                   | VM test                 |
-| ------------------------------------------------------------ | ----------------------------------------------------------- | ---------------------------------------- | --------------------------------------------------------- | ----------------------- |
-| [minimal.nix](minimal.nix)                                   | two SIP phones that call each other by dialing 101 and 102  | `nixosModules.default`                   | `sip-101`, `sip-102`                                      | `vm-reload`             |
-| [household-intercom.nix](household-intercom.nix)             | an intercom across several networks, with a conference room | `nixosModules.default`                   | `sip-101`, `sip-102`, `sip-201`, `sip-202`                | `vm-household-intercom` |
-| [household-intercom-ht801.nix](household-intercom-ht801.nix) | provisioning for the intercom's two HT801 adapters          | `nixosModules.pbx`, next to the intercom | `ht801-admin`                                             | `vm-ht801`              |
-| [small-office.nix](small-office.nix)                         | a small office PBX with a SIP trunk, on the pbx layer       | `nixosModules.pbx`                       | `sip-trunk`, `sip-201` to `sip-203`, `vm-200` to `vm-203` | `vm-small-office`       |
+| Example                                                      | What                                                             | Import                                    | Secrets                                                   | VM test                 |
+| ------------------------------------------------------------ | ---------------------------------------------------------------- | ----------------------------------------- | --------------------------------------------------------- | ----------------------- |
+| [minimal.nix](minimal.nix)                                   | two SIP phones that call each other by dialing 101 and 102       | `nixosModules.default`                    | `sip-101`, `sip-102`                                      | `vm-reload`             |
+| [household-intercom.nix](household-intercom.nix)             | an intercom across several networks, with a conference room      | `nixosModules.default`                    | `sip-101`, `sip-102`, `sip-201`, `sip-202`                | `vm-household-intercom` |
+| [household-intercom-ht801.nix](household-intercom-ht801.nix) | provisioning for the intercom's two HT801 adapters               | `nixosModules.default`, with the intercom | `ht801-admin`                                             | `vm-ht801`              |
+| [small-office.nix](small-office.nix)                         | a small office PBX with a SIP trunk                              | `nixosModules.default`                    | `sip-trunk`, `sip-201` to `sip-203`, `vm-200` to `vm-203` | `vm-small-office`       |
+| [core-only.nix](core-only.nix)                               | minimal.nix with `services.asterisk` alone, and its own dialplan | `nixosModules.asterisk`                   | `sip-101`, `sip-102`                                      |                         |
 
 Passwords come from sops-nix. A changed secret reloads Asterisk, or restarts
 the provisioning server, through sops-nix's `reloadUnits` and `restartUnits`.
@@ -37,11 +39,12 @@ the provisioning server, through sops-nix's `reloadUnits` and `restartUnits`.
   across them.
 - SIP and RTP are open only on the trusted LAN and the VoIP VLAN, each with its
   own transport, and a phone's password only works from its own network.
-- To adapt it, change the `site` block.
+- To adapt it, change `services.asterix.networks`.
+- 911 is a voice menu without keys, which plays its prompt twice and hangs up.
 
 ## household-intercom-ht801.nix
 
-1. Import it next to the intercom, with `asterix.nixosModules.pbx`.
+1. Import it next to the intercom.
 2. Fill in the adapters' MACs, from the label underneath.
 3. Point each adapter at `http://10.0.20.10` once, in DHCP option 66 or its web
    interface.
@@ -66,7 +69,5 @@ ASCII without spaces.
 | 800        | conference bridge                                                           |
 | \*97       | voicemail menu                                                              |
 
-- The trunk, queue strategy and conference profiles are core options, next to
-  `pbx`.
-- A few keys that have no typed option are set through a typed object's
-  `settings`.
+- The wan network lists the provider's subnet so that SIP requests from
+  anywhere else are refused. No phone is on it.

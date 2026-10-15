@@ -1,5 +1,4 @@
-# Small office PBX with a SIP trunk, written with the pbx layer: import
-# asterix.nixosModules.pbx (see README.md)
+# Small office PBX with a SIP trunk (see README.md)
 {
   config,
   lib,
@@ -34,15 +33,61 @@ in {
   services.asterix = {
     enable = true;
 
+    # SIP and RTP open on both interfaces, and requests only from the two
+    # subnets
+    openFirewall = true;
+    networks = {
+      lan = {
+        interface = "lan";
+        address = "10.1.0.10";
+        subnets = ["10.1.0.0/24"];
+      };
+      # no phones here. The provider's subnet, since without it the networks
+      # set no SIP ACL
+      wan = {
+        interface = "wan";
+        address = "203.0.113.10";
+        subnets = ["203.0.113.0/24"];
+      };
+    };
+
+    trunks.provider = {
+      network = "wan";
+      host = "sip.provider.example";
+      username = "5551000";
+      password = sopsSecret "sip-trunk";
+      allow = [
+        "g722"
+        "alaw"
+        "ulaw"
+      ];
+      # inbound calls arrive for the number we register
+      registration.contactUser = "5551000";
+      # the provider's servers. This network contains sip.provider.example.
+      identify.match = ["203.0.113.0/24"];
+      matchProviderHost = false;
+    };
+
     # calls a phone does not take go to its own mailbox
     extensions =
       builtins.mapAttrs (extension: name: {
         inherit name;
+        network = "lan";
         password = sopsSecret "sip-${extension}";
         voicemail.pin = sopsSecret "vm-${extension}";
       })
       phones;
     voicemailMenu = "*97";
+
+    voicemail = {
+      # the sales team's mailbox, which belongs to no phone
+      mailboxes."200" = {
+        name = "Sales team";
+        pin = sopsSecret "vm-200";
+      };
+      maxMessages = 100;
+      maxSeconds = 300;
+    };
 
     ringGroups.sales = {
       members = [
@@ -55,15 +100,24 @@ in {
 
     queues.support = {
       number = "600";
-      timeout = 120;
       members = [
         "201"
         "202"
       ];
+      strategy = "ringall";
+      memberTimeout = 20;
+      retry = 5;
+      musicOnHold = "default";
+      maxWait = 120;
       noAnswer.voicemail = "200";
     };
 
-    conferences."800".number = "800";
+    conferences.office = {
+      number = "800";
+      maxMembers = 20;
+      musicOnHoldWhenEmpty = true;
+      announceJoinLeave = false;
+    };
 
     # the office's number
     inbound."5551000" = {
@@ -84,73 +138,6 @@ in {
       trunk = "provider";
       callerId = "5551000";
       notify = ["201"];
-    };
-  };
-
-  services.asterisk = {
-    openFirewall = true;
-    firewallInterfaces = [
-      "lan"
-      "wan"
-    ];
-
-    pjsip = {
-      transports.udp = {};
-
-      acls.office = {
-        deny = [
-          "0.0.0.0/0.0.0.0"
-          "::/0"
-        ];
-        permit = [
-          "10.1.0.0/24"
-          # the provider's signalling and media servers
-          "203.0.113.0/24"
-        ];
-      };
-
-      trunks.provider = {
-        host = "sip.provider.example";
-        username = "5551000";
-        password = sopsSecret "sip-trunk";
-        allow = [
-          "g722"
-          "alaw"
-          "ulaw"
-        ];
-        # inbound calls arrive for the number we register
-        registration.contactUser = "5551000";
-        # the provider's servers; this network contains sip.provider.example
-        identify.match = ["203.0.113.0/24"];
-        matchProviderHost = false;
-      };
-    };
-
-    voicemail = {
-      # the sales team's mailbox, which belongs to no phone
-      mailboxes."200" = {
-        fullName = "Sales team";
-        pin = sopsSecret "vm-200";
-      };
-      maxMessages = 100;
-      maxSeconds = 300;
-    };
-
-    # services.asterix.queues.support gives this queue its number and members
-    queues.queues.support = {
-      strategy = "ringall";
-      timeout = 20;
-      retry = 5;
-      musicOnHoldClass = "default";
-    };
-
-    confbridge = {
-      bridges.default_bridge.maxMembers = 20;
-      users.default_user = {
-        musicOnHoldWhenEmpty = true;
-        # no typed option for this one: set the key directly
-        settings.announce_join_leave = false;
-      };
     };
   };
 }

@@ -49,7 +49,7 @@ in
     nodes = {
       pbx = {
         imports = [
-          self.nixosModules.asterisk
+          self.nixosModules.default
           ../../examples/household-intercom.nix
           ./common.nix
           (sopsSecrets (pkgs.lib.mapAttrs' (ext: pw: pkgs.lib.nameValuePair "sip-${ext}" pw) passwords))

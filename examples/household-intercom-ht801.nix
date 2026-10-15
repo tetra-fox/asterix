@@ -10,10 +10,8 @@
   });
 
   services.asterix.phones = {
-    listenAddress = "10.0.20.10";
-    allowedNetworks = ["10.0.20.0/24"];
-    openFirewall = true;
-    firewallInterfaces = ["voip"];
+    # served on the voip network's address, to its subnets only
+    network = "voip";
 
     adminPassword = config.lib.asterisk.secret config.sops.secrets.ht801-admin.path;
     grandstream.timeZone = "CET-1CEST-2,M3.5.0/02:00:00,M10.5.0/03:00:00";

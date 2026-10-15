@@ -5,20 +5,25 @@ serves it over HTTP. You list the devices, and they fetch their file on boot.
 
 ## Quick start
 
-1. **Import the pbx layer**: `asterix.nixosModules.pbx` instead of
-   `nixosModules.default`. It includes the core.
-2. **Add the provisioning server and your devices**:
+1. **Start from the PBX** of the [README's quick start](README.md#quick-start),
+   `services.asterix`, with the phones' network in `networks`.
+2. **Add your devices**:
 
 ```nix
-pbx.phones = {
-  listenAddress = "10.0.20.10"; # the PBX's address on the phones' network
-  allowedNetworks = [ "10.0.20.0/24" ];
-  openFirewall = true;
-  firewallInterfaces = [ "voip" ];
+services.asterix = {
+  openFirewall = true; # the HTTP port too, on the network's interface
+  networks.voip = {
+    interface = "voip";
+    address = "10.0.20.10"; # the PBX's address on the phones' network
+    subnets = [ "10.0.20.0/24" ];
+  };
 
-  devices."101" = {
-    model = "grandstream-ht801";
-    mac = "c0:74:ad:00:01:01"; # line 1 registers as endpoint 101
+  phones = {
+    network = "voip"; # files are served on its address, to its subnets
+    devices."101" = {
+      model = "grandstream-ht801";
+      mac = "c0:74:ad:00:01:01"; # line 1 registers as extension 101
+    };
   };
 };
 ```
@@ -44,14 +49,14 @@ is a complete config.
 
 ## Options
 
-All under `pbx.phones`.
+All under `services.asterix.phones`.
 
 | Option                                  | Default                 | What                                                                    |
 | --------------------------------------- | ----------------------- | ----------------------------------------------------------------------- |
-| `listenAddress`                         | required                | the PBX's address on the phones' network, where files are served        |
+| `network`                               | the only network        | the network of `services.asterix.networks` the devices are on           |
+| `listenAddress`                         | the network's address   | where files are served                                                  |
 | `port`                                  | `80`                    | HTTP port                                                               |
-| `allowedNetworks`                       | required                | the only networks that can connect                                      |
-| `openFirewall`, `firewallInterfaces`    | off, all                | open the HTTP port, and UDP 69 when TFTP is in use                      |
+| `allowedNetworks`                       | the network's subnets   | the only networks that can connect                                      |
 | `sipServer`, `sipPort`                  | `listenAddress`, `5060` | where lines register: the host alone, and its port                      |
 | `ntpServer`                             | device's own            | NTP server                                                              |
 | `adminPassword`                         | device's own            | web interface password, normally a secret reference                     |
@@ -75,8 +80,11 @@ All under `pbx.phones`.
   provisioning, even one set up on the device.
 - A DHCP option 66 that names another server usually wins over the one in a
   device's file.
-- A `listenAddress` of `0.0.0.0` or `::` fails evaluation until `sipServer` and
-  the vendor's server setting name a real address.
+- A `listenAddress` of `0.0.0.0` or `::`, as on a network without an
+  `address`, fails evaluation until `sipServer` and the vendor's server
+  setting name a real address.
+- `services.asterix.openFirewall` opens the HTTP port, and UDP 69 when TFTP is
+  in use, on the network's interface, or on every interface if it has none.
 - After a password changes, restart `asterisk-provisioning.service` (sops-nix:
   `restartUnits`) and reboot the device.
 
@@ -543,7 +551,7 @@ Desk and conference phones on firmware V84 or later.
 Write their files yourself. Or upstream them pls :3
 
 ```nix
-pbx.phones.files."0015651234ab.cfg" = {
+services.asterix.phones.files."0015651234ab.cfg" = {
   text = ''
     account.1.password = ${config.lib.asterisk.secret config.sops.secrets.sip-101.path}
   '';
@@ -562,8 +570,8 @@ pbx.phones.files."0015651234ab.cfg" = {
 
 1. Add a module `modules/pbx/phones/<vendor>.nix` like `yealink.nix`, or a
    model to an existing vendor's `models`. It adds its models to
-   `pbx.phones.models` as `<vendor>-<model>` and writes their devices' files
-   into `pbx.phones.files`.
+   `services.asterix.phones.models` as `<vendor>-<model>` and writes their
+   devices' files into `services.asterix.phones.files`.
 2. Set only settings the vendor documents for that device, cite the source and
    its version, and cross-check them against FusionPBX's and Wazo's templates.
 3. Test one file of each format it writes in `tests/pbx/phones.nix`.

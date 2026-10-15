@@ -94,6 +94,7 @@ in
     examples-config-minimal = examples.derivations.minimal;
     examples-config-household-intercom-ht801 = examples.derivations.household-intercom-ht801;
     examples-config-small-office = examples.derivations.small-office;
+    examples-config-core-only = examples.derivations.core-only;
     examples-config-asterisk_20 = examplesWith "asterisk_20";
     examples-config-asterisk_23 = examplesWith "asterisk_23";
 

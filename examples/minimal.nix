@@ -12,27 +12,12 @@ in {
     reloadUnits = ["asterisk.service"];
   });
 
-  services.asterisk = {
+  services.asterix = {
     enable = true;
     openFirewall = true;
-
-    pjsip = {
-      transports.udp = {};
-      endpoints = {
-        "101" = {
-          context = "phones";
-          auth.password = secret config.sops.secrets.sip-101.path;
-        };
-        "102" = {
-          context = "phones";
-          auth.password = secret config.sops.secrets.sip-102.path;
-        };
-      };
+    extensions = {
+      "101".password = secret config.sops.secrets.sip-101.path;
+      "102".password = secret config.sops.secrets.sip-102.path;
     };
-
-    dialplan.contexts.phones.extensions."_10X" = [
-      "Dial(PJSIP/\${EXTEN},30)"
-      "Hangup()"
-    ];
   };
 }

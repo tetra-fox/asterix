@@ -105,6 +105,8 @@
         "services.asterix.paging.clash"
         "services.asterix.voicemailMenu"
         "services.asterix.hours.clash.closeEarly"
+        "services.asterix.featureCodes.dnd"
+        "services.asterix.featureCodes.forward.always.on"
         "services.asterix.emergency.numbers (911 after services.asterix.outbound.prefix)"
         "services.asterix.emergency.numbers"
       ];
@@ -133,6 +135,17 @@
             members = ["201"];
           });
           voicemailMenu = "9911";
+          featureCodes = {
+            dnd = "9911";
+            forward.always = {
+              on = "9911";
+              off = "607";
+            };
+            forward.busy = {
+              on = "608";
+              off = "607";
+            };
+          };
           hours = named "606" (closeEarly: {
             inherit closeEarly;
             timezone = "UTC";
@@ -163,10 +176,31 @@
             604: services.asterix.ivrs.one, services.asterix.ivrs.two
             605: services.asterix.paging.one, services.asterix.paging.two
             606: services.asterix.hours.one.closeEarly, services.asterix.hours.two.closeEarly
+            607: services.asterix.featureCodes.forward.always.off, services.asterix.featureCodes.forward.busy.off
             9911: ${lib.concatStringsSep ", " owners}
         ''
         ''services.asterix: chan_pjsip takes a call to 9911, the pickupexten of features.conf, as a call pickup before the dialplan runs, so it never reaches ${lib.concatStringsSep ", " owners}, services.asterix.inbound."9911". Use another number, or change services.asterisk.features.general.pickupexten.''
       ];
+    };
+
+    # a phone could set the forward, but not stop it
+    forwardWithoutOff = {
+      module.services.asterix.featureCodes.forward.noAnswer.on = "*52";
+      assertions = ["services.asterix.featureCodes.forward: noAnswer need both `on` and `off`, so a phone can stop the forward it set."];
+    };
+
+    # 600 and the call pickup code 605 start with the forward code 60, so a
+    # phone that dials them reaches the ring group or a pickup, not a forward
+    # to 0 or 5
+    numbersAfterForwardCode = {
+      module = {
+        services.asterix.featureCodes.forward.always = {
+          on = "60";
+          off = "*73";
+        };
+        services.asterisk.features.general.pickupexten = "605";
+      };
+      assertions = ["services.asterix: numbers that start with a code of services.asterix.featureCodes.forward, after which phones dial the number to forward to, so a phone cannot forward to the rest of them: 600 (services.asterix.ringGroups.front), 605 (the pickupexten of features.conf)."];
     };
 
     # a number, s or a pattern of numbers: an extension of the trunk's

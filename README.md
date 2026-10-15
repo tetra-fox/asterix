@@ -144,6 +144,7 @@ during a call, every PJSIP password if `res_ari_asterisk.so` is loaded).
 | announcements                               | `services.asterix.announcements` |
 | paging groups                               | `services.asterix.paging`        |
 | opening hours                               | `services.asterix.hours`         |
+| do not disturb and call forwarding codes    | `services.asterix.featureCodes`  |
 | calls in, by number                         | `services.asterix.inbound`       |
 | callers turned away on calls from trunks    | `services.asterix.blocklist`     |
 | calls out, by prefix                        | `services.asterix.outbound`      |
@@ -195,6 +196,7 @@ in
 | overrides             | everything the PBX generates is a default on `services.asterisk`, which a definition there or `settings` overrides                                                                               |
 | refused at evaluation | a number with two owners, a missing trunk, member or destination, a loop of destinations that no key press breaks                                                                                |
 | emergency numbers     | no default, since they depend on where the PBX is. `outbound` requires them, or `emergency.numbers = [ ];` for a PBX that makes no emergency calls                                               |
+| feature codes         | none until set, such as FreePBX's `*76` for do not disturb and `*72`/`*73` to forward every call. A phone sets them for its own extension. Forwards go to extensions, or out through `outbound`, never to an emergency number |
 
 Voice menus, announcements and paging groups:
 

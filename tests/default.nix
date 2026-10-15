@@ -78,6 +78,7 @@ in
     pbx-external = import ./pbx/external.nix {inherit pkgs self;};
     pbx-blocklist = import ./pbx/blocklist.nix {inherit pkgs self;};
     pbx-extensions = import ./pbx/extensions.nix {inherit pkgs self;};
+    pbx-forwarding = import ./pbx/forwarding.nix {inherit pkgs self;};
     pbx-names = import ./pbx/names.nix {inherit pkgs self;};
     pbx-menus = import ./pbx/menus.nix {inherit pkgs self;};
     pbx-paging = import ./pbx/paging.nix {inherit pkgs self;};

@@ -1,8 +1,8 @@
 # services.asterix: extensions, trunks, ring groups, queues, conferences,
-# voice menus, announcements, paging, business hours, routes, a blocklist and
-# phone provisioning, written into the options of the core module
-# (services.asterisk), which stays usable on its own. Every object gets a
-# context of its own, pbx-<kind>-<name>, and phones dial from pbx-internal.
+# voice menus, announcements, paging, business hours, feature codes, routes,
+# a blocklist and phone provisioning, written into the options of the core
+# module (services.asterisk), which stays usable on its own. Every object gets
+# a context of its own, pbx-<kind>-<name>, and phones dial from pbx-internal.
 {
   config,
   lib,
@@ -60,6 +60,8 @@
     map (extension: "${context}/${extension}") (builtins.filter (extension: builtins.length (lines.${extension} or []) > builtins.length (merged.${context}.extensions.${extension} or [])) (builtins.attrNames extensions)))
   generated);
 
+  codesSet = cfg.featureCodes.dnd != null || builtins.any (kind: builtins.any (code: code != null) (builtins.attrValues kind)) (builtins.attrValues cfg.featureCodes.forward);
+
   ownSteps = "steps of your own can go in the context's extraConfig, which is written as it is, or in a context of your own that a `context` destination names.";
 in {
   # the core by the path the flake exports it as, so importing both is fine
@@ -70,6 +72,7 @@ in {
     ./conferences.nix
     ./destinations.nix
     ./extensions.nix
+    ./feature-codes.nix
     ./hours.nix
     ./ivrs.nix
     ./networks.nix
@@ -101,7 +104,7 @@ in {
       ];
     })
     {
-      warnings = lib.optional (!cfg.enable && (builtins.any (name: !(builtins.elem cfg.${name} [{} [] null])) objects || cfg.voicemail.mailboxes != {} || pbxLib.blocksCallers cfg.blocklist)) "services.asterix objects are defined, but services.asterix.enable is not set, so they do nothing.";
+      warnings = lib.optional (!cfg.enable && (builtins.any (name: !(builtins.elem cfg.${name} [{} [] null])) objects || cfg.voicemail.mailboxes != {} || pbxLib.blocksCallers cfg.blocklist || codesSet)) "services.asterix objects are defined, but services.asterix.enable is not set, so they do nothing.";
     }
   ];
 }

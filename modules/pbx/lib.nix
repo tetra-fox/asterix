@@ -316,10 +316,31 @@ in rec {
     else builtins.seq dest.hangup [(app "Hangup" [unansweredCause])];
 
   # `steps`, the first one labelled
-  labelled = label: dest: let
-    all = steps dest;
-  in
-    [(builtins.head all // {inherit label;})] ++ builtins.tail all;
+  labelled = label: dest: labelFirst label (steps dest);
+
+  labelFirst = label: all: [(builtins.head all // {inherit label;})] ++ builtins.tail all;
+
+  # the forwards of services.asterix.featureCodes.forward, each with the
+  # sound that names it
+  forwardSounds = {
+    always = "call-fwd-unconditional";
+    busy = "call-fwd-on-busy";
+    noAnswer = "call-fwd-no-ans";
+  };
+
+  # the astdb key, as DB() takes it, of the target of forward `kind` of an
+  # extension
+  forwardKey = extension: kind: "pbx-forward/${extension}/${kind}";
+
+  # the custom device state of an extension's do not disturb
+  dndDevice = extension: "Custom:pbx-dnd-${extension}";
+
+  # an expression that is true when the number in variable `var` is one a
+  # forward may go to: a number of pbx-forward that pbx-forward-refused does
+  # not hold
+  forwardable = var: let
+    v = "\${${var}}";
+  in ''"${v}" != "" & ''${DIALPLAN_EXISTS(pbx-forward,${v},1)} & !''${DIALPLAN_EXISTS(pbx-forward-refused,${v},1)}'';
 
   app = name: args: {
     app = name;

@@ -16,13 +16,16 @@ switches, Goto, GotoIf and GotoIfTime (both ways), Gosub and GosubIf, Dial,
 Queue, Page and Originate of Local channels, the routines of their b(), B()
 and U() options, the digits WaitExten and Background take and those a caller
 dials into a transfer (Dial's T) or DISA, the o and a extensions VoiceMail
-leaves to, what Read and Set store, and the `h` extension. A Dial of
-`PJSIP/NUMBER@TRUNK` is a path to an outside number, named when NUMBER is
-fixed and POLICY names it for TRUNK. A number from the caller's digits or
-caller ID, a fixed one POLICY does not name, a trunk dialled without a number
-and a number the walk cannot work out are findings: toll fraud, or a path to
-check by hand. Not followed: a queue's `context`, ConfBridge menus and
-switches other than Loopback, which are reported.
+leaves to, what Read and Set store, astdb through DB(), and the `h`
+extension. A Dial of `PJSIP/NUMBER@TRUNK` is a path to an outside number,
+named when NUMBER is fixed and POLICY names it for TRUNK. A number from the
+caller's digits or caller ID, a fixed one POLICY does not name, a trunk
+dialled without a number and a number the walk cannot work out are findings:
+toll fraud, or a path to check by hand. A number read from astdb is the
+caller's when a path from a trunk may have written that key, and otherwise
+stored: set from a phone, such as a call forward, or by hand, which is no
+finding. Not followed: a queue's `context`, ConfBridge menus and switches
+other than Loopback, which are reported.
 
 Prints the paths as JSON, one per trunk, way through and number, and exits
 with 1 if one is a finding or something could not be followed. Extensions
@@ -36,9 +39,12 @@ import json
 import re
 import sys
 
-# a part of a value the caller chooses, and one the walk cannot know
+# a part of a value the caller chooses, one the walk cannot know, and one
+# read from astdb that no path from a trunk writes
 ANY = "\x01"
 UNKNOWN = "\x02"
+STORED = "\x03"
+MARKERS = (ANY, UNKNOWN, STORED)
 # applications after which the caller's digits pick the next extension
 DIGITS = {"waitexten", "background"}
 ENDS = {"hangup", "busy", "congestion"}
@@ -333,19 +339,30 @@ def expression_end(text, start):
 
 
 def shown(value):
-    return value.replace(ANY, "<caller>").replace(UNKNOWN, "<unknown>")
+    return value.replace(ANY, "<caller>").replace(UNKNOWN, "<unknown>").replace(STORED, "<stored>")
+
+
+def may_equal(a, b):
+    """Whether two values the walk knows in part can be the same: their text
+    agrees up to the first part either does not know."""
+    cut = min((v.find(m) for v in (a, b) for m in MARKERS if m in v), default=None)
+    if cut is None:
+        return a == b
+    return a[:cut] == b[:cut]
 
 
 @dataclasses.dataclass(frozen=True)
 class Channel:
     """What a step reads on its channel: the dialled extension, with the
-    pattern it matched when the caller chose it, its variables, and whether
-    its caller ID comes from outside."""
+    pattern it matched when the caller chose it, its variables, whether its
+    caller ID comes from outside, and the trunk it is the call from, which
+    CHANNEL(endpoint) names."""
 
     exten: str
     variables: tuple = ()
     outside: bool = True
     pattern: str | None = None
+    endpoint: str | None = None
 
     def get(self, name):
         return dict(self.variables).get(name)
@@ -385,13 +402,22 @@ class Walk:
                 self.starts[trunk] = m.group(1).strip()
             else:
                 self.unresolved.append({"where": trunk, "what": "no context"})
-        self.seen = set()
-        self.dials = []
+        self.unstarted = list(self.unresolved)
+        # the astdb keys paths from a trunk write, as DB() names them
+        self.written = set()
 
     def run(self):
-        for trunk, context in self.starts.items():
-            self.enter(trunk, context, ANY, [], Channel(ANY), ())
-        return self
+        """Walks from every trunk until a walk finds no key written that the
+        one before did not know, so every read sees the writes of any path."""
+        while True:
+            known = set(self.written)
+            self.seen = set()
+            self.dials = []
+            self.unresolved = list(self.unstarted)
+            for trunk, context in self.starts.items():
+                self.enter(trunk, context, ANY, [], Channel(ANY, endpoint=trunk), ())
+            if self.written == known:
+                return self
 
     # values
 
@@ -421,6 +447,10 @@ class Walk:
             # a caller from outside sends any caller ID they like
             if function == "CALLERID" and channel.outside:
                 return ANY
+            if function == "CHANNEL" and args.strip() == "endpoint" and channel.endpoint is not None:
+                return channel.endpoint
+            if function == "DB":
+                return ANY if any(may_equal(args, written) for written in self.written) else STORED
             return UNKNOWN
         name, _, rest = expression.partition(":")
         if name == "EXTEN":
@@ -429,7 +459,7 @@ class Walk:
             value = channel.get(name)
         else:
             value = self.globals.get(name, UNKNOWN)
-        if not rest or ANY in value or UNKNOWN in value:
+        if not rest or any(m in value for m in MARKERS):
             return value
         numbers = [int(x) if x else None for x in rest.split(":")]
         part = value[numbers[0] or 0 :]
@@ -441,23 +471,24 @@ class Walk:
 
     def enter(self, trunk, context, exten, path, channel, stack):
         """A channel that starts in `context` for `exten`, which may be the
-        caller's to choose."""
-        if ANY in exten:
+        caller's to choose, or stored."""
+        if ANY in exten or STORED in exten:
+            marker = ANY if ANY in exten else STORED
             for switched, extension in self.extensions(context, path):
                 if 1 in extension.steps:
                     pattern = extension.name if extension.name.startswith("_") else None
-                    chosen = dataclasses.replace(channel, exten=ANY if pattern else extension.name, pattern=pattern)
+                    chosen = dataclasses.replace(channel, exten=marker if pattern else extension.name, pattern=pattern)
                     self.steps(trunk, Place(context, extension, switched, 1), path, chosen, stack)
             return
         self.jump(trunk, context, exten, "1", path, channel, stack)
 
     def jump(self, trunk, context, exten, priority, path, channel, stack):
         """Goes to a priority or label of `exten` in `context`, or to `i`."""
-        if context is None or UNKNOWN in context + exten + priority:
-            what = f"goto {context},{shown(exten)},{shown(priority)}"
+        if context is None or UNKNOWN in context + exten + priority or STORED in context + priority:
+            what = f"goto {shown(str(context))},{shown(exten)},{shown(priority)}"
             self.unresolved.append({"where": path[-1] if path else trunk, "what": what})
             return
-        if ANY in exten:
+        if ANY in exten or STORED in exten:
             self.enter(trunk, context, exten, path, channel, stack)
             return
         number = int(priority) if re.fullmatch(r"\s*\d+\s*", priority) else None
@@ -534,6 +565,8 @@ class Walk:
             name, _, value = step.data.partition("=")
             if "(" not in name:
                 channel = channel.setting({name.strip(): self.value(value, channel)})
+            elif m := re.fullmatch(r"\s*DB\((.*)\)\s*", name):
+                self.written.add(self.value(m.group(1), channel))
         elif app == "read":
             channel = channel.setting({split_top(step.data, ",")[0].strip(): ANY})
         elif app in ("dial", "page", "queue"):
@@ -629,7 +662,7 @@ class Walk:
                 dialled = {"trunk": trunk, "number": number if at else None, "path": path}
                 if endpoint in self.trunks:
                     self.dials.append(dialled | {"via": endpoint})
-                elif UNKNOWN in endpoint:
+                elif UNKNOWN in endpoint or STORED in endpoint:
                     self.unresolved.append({"where": path[-1], "what": f"dial {shown(device)}"})
                 elif ANY in endpoint:
                     # the trunks whose name the caller can put there, which is
@@ -639,7 +672,7 @@ class Walk:
                     for via in sorted(self.trunks):
                         if re.fullmatch(shape, via) and (not whole or matches(channel.pattern, via)):
                             self.dials.append(dialled | {"via": via, "chosen": True})
-            elif ANY in device or UNKNOWN in device:
+            elif any(m in device for m in MARKERS):
                 self.unresolved.append({"where": path[-1], "what": f"dial {shown(device)}"})
 
     def report(self):
@@ -656,7 +689,7 @@ class Walk:
                 why = "the caller chooses the number"
             elif UNKNOWN in number:
                 why = "a number the walk cannot work out"
-            elif (d["via"], number) in self.named:
+            elif STORED in number or (d["via"], number) in self.named:
                 why = None
             else:
                 why = "a number the configuration does not name"

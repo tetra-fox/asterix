@@ -38,10 +38,61 @@
     };
   };
 
+  # 201 takes the calls to 5551000 and forwards them to the number its phone
+  # stored, and the calls from trunk other start in `codes`
+  forwarding = codes: {config, ...}: {
+    services.asterix = {
+      featureCodes.forward.always = {
+        on = "*72";
+        off = "*73";
+      };
+      inbound."5551000" = {
+        trunk = "provider";
+        destination.extension = "201";
+      };
+      trunks.other = {
+        host = "sip.other.example";
+        username = "5552000";
+        password = config.lib.asterisk.secret "/run/secrets/other";
+        context = "codes";
+      };
+    };
+    services.asterisk.dialplan.contexts.codes.extensions."_X." = codes;
+  };
+
   # each configuration and the ways out its walk finds: the trunk the call
   # comes from, the trunk it goes out through, the number and why it is a
   # finding, or null for a named one
   cases = {
+    # the forward code keys the number by the endpoint that dials it, so a
+    # trunk that reaches it stores a number for itself and not for 201
+    forward = {
+      modules = [
+        office
+        (forwarding [
+          "Set(PBX_TARGET=\${EXTEN})"
+          "Goto(pbx-features,always-on,1)"
+        ])
+      ];
+      paths = [
+        ["provider" "provider" "<stored>" null]
+      ];
+    };
+    # a context of its own that stores the caller's number as 201's forward,
+    # which leaves 202's, where 201's may lead, to its phone
+    forwardFromTrunk = {
+      modules = [
+        office
+        (forwarding [
+          "Set(DB(pbx-forward/201/always)=\${EXTEN})"
+          "Hangup()"
+        ])
+      ];
+      paths = [
+        ["provider" "provider" "<caller>" "the caller chooses the number"]
+        ["provider" "provider" "<stored>" null]
+      ];
+    };
     # calls from the trunk start where the phones dial from, which takes 9
     # and any number, and 911; pbx takes that only from a tie line
     trunkInPhoneContext = {

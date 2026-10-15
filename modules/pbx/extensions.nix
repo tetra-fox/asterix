@@ -111,7 +111,8 @@
         description = ''
           Where a call goes when the phone answers busy, as a phone in a call
           does without call waiting, or when every device of the extension
-          does.
+          does, and while do not disturb is on
+          ({option}`services.asterix.featureCodes.dnd`).
         '';
       };
     };
@@ -130,6 +131,19 @@
   # an endpoint's caller ID name is read into 80 bytes, and the rest cut off
   # (res/res_pjsip/pjsip_configuration.c, caller_id_handler)
   longNames = filterAttrs (_: e: builtins.stringLength e.name > 79) cfg.extensions;
+
+  codes = cfg.featureCodes;
+  forwards = kind: codes.forward.${kind}.on != null;
+  anyForward = builtins.any forwards (builtins.attrNames pbxLib.forwardSounds);
+
+  # steps to `forward`, with the target of forward `kind` of the extension in
+  # PBX_FORWARD, when one is set that a forward may go to. A call that left
+  # the extension by a forward before stays, so a loop of forwards ends.
+  forwardIf = number: kind:
+    lib.optionals (forwards kind) [
+      (pbxLib.app "Set" ["PBX_FORWARD=\${DB(${pbxLib.forwardKey number kind})}"])
+      (pbxLib.app "GotoIf" [''$["''${HASH(pbx-forwarded,${number})}" = "" & ${pbxLib.forwardable "PBX_FORWARD"}]?forward''])
+    ];
 
   # the extensions a Local channel into pbx-devices rings
   rungThroughLocal = lib.unique (
@@ -219,23 +233,39 @@ in {
             nameValuePair (pbxLib.objectContext "extension" number) {
               comment = mkDefault ''from services.asterix.extensions."${number}"'';
               extensions.s =
-                [
+                forwardIf number "always"
+                ++ optional (codes.dnd != null) (
+                  pbxLib.app "GotoIf" [''$["''${DEVICE_STATE(${pbxLib.dndDevice number})}" = "INUSE"]?busy'']
+                )
+                ++ [
                   (pbxLib.app "Dial" [
                     (pbxLib.devices number)
                     e.ringTime
                   ])
                   (pbxLib.app "GotoIf" [''$["''${DIALSTATUS}" = "BUSY"]?busy''])
                 ]
+                ++ forwardIf number "noAnswer"
                 ++ pbxLib.steps (
                   if e.noAnswer != null
                   then e.noAnswer
                   else fallback number e "unavailable"
                 )
-                ++ pbxLib.labelled "busy" (
-                  if e.busy != null
-                  then e.busy
-                  else fallback number e "busy"
-                );
+                ++ pbxLib.labelFirst "busy" (
+                  forwardIf number "busy"
+                  ++ pbxLib.steps (
+                    if e.busy != null
+                    then e.busy
+                    else fallback number e "busy"
+                  )
+                )
+                ++ lib.optionals anyForward [
+                  {
+                    app = "Set";
+                    args = ["HASH(pbx-forwarded,${number})=1"];
+                    label = "forward";
+                  }
+                  (pbxLib.app "Goto" ["pbx-forward" "\${PBX_FORWARD}" "1"])
+                ];
             }
         )
         cfg.extensions

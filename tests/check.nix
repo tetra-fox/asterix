@@ -26,6 +26,8 @@
     imports = [self.nixosModules.default];
     services.asterix = {
       enable = true;
+      # base's transport
+      networks.udp = {};
       extensions."201" = {
         password = config.lib.asterisk.secret "/run/secrets/201";
         voicemail.pin = config.lib.asterisk.secret "/run/secrets/vm-201";

@@ -40,7 +40,6 @@
         services.asterisk = {
           enable = true;
           pjsip = {
-            transports.udp = {};
             endpoints."101" = {
               context = "roundtrip";
               auth.password = secret "101";

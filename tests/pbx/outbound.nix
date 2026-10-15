@@ -134,7 +134,6 @@
             };
           };
           services.asterisk.pjsip = {
-            transports.udp = {};
             trunks.provider = {
               host = "sip.provider.example";
               username = "5551000";
@@ -190,7 +189,6 @@
         };
         services.asterisk = {
           pjsip = {
-            transports.udp = {};
             trunks.loop = {
               host = "127.0.0.1";
               username = "5551000";

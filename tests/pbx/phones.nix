@@ -26,7 +26,6 @@
             allowedNetworks = ["10.0.20.0/24"];
           };
         };
-        services.asterisk.pjsip.transports.udp = {};
       })
       module
     ]).services.asterix.phones.files;

@@ -104,7 +104,6 @@
         };
         services.asterisk = {
           pjsip = {
-            transports.udp = {};
             endpoints =
               lib.listToAttrs (map (kind: lib.nameValuePair (ringing kind) (phone "ring")) kindNames)
               // lib.listToAttrs (map (kind: lib.nameValuePair (answersBusy kind) (phone "busy")) kindNames)

@@ -69,6 +69,7 @@ in {
     ./extensions.nix
     ./hours.nix
     ./ivrs.nix
+    ./networks.nix
     ./numbering.nix
     ./paging.nix
     ./phones

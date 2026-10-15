@@ -31,6 +31,16 @@
     ;
 
   cfg = config.services.asterix.phones;
+  networks = config.services.asterix.networks;
+  # the only network, the default of `network`
+  network =
+    if builtins.length (attrNames networks) == 1
+    then builtins.head (attrNames networks)
+    else null;
+  net =
+    if cfg.network != null && networks ? ${cfg.network}
+    then networks.${cfg.network}
+    else throw "services.asterix.phones.network must name a network of services.asterix.networks (${lib.concatStringsSep ", " (attrNames networks)}).";
   asteriskLib = import ../../../lib {inherit lib;};
   inherit (asteriskLib) format secrets;
   moduleLib = import ../../lib.nix {inherit lib;};
@@ -259,8 +269,17 @@ in {
         defaultText = literalExpression "config.services.asterix.phones.devices != { }";
       };
 
+    network = mkOption {
+      type = types.nullOr types.str;
+      default = network;
+      defaultText = lib.literalMD "the only network of {option}`services.asterix.networks`";
+      description = "Network of {option}`services.asterix.networks` the devices are on, which gives the defaults of `listenAddress` and `allowedNetworks` and the interface the firewall opens.";
+    };
+
     listenAddress = mkOption {
       type = types.str;
+      default = net.address;
+      defaultText = lib.literalMD "the address of `network`";
       example = "10.0.20.10";
       description = ''
         Address the provisioning files are served on, on the phones' network
@@ -277,24 +296,13 @@ in {
 
     allowedNetworks = mkOption {
       type = types.listOf types.str;
+      default = net.subnets;
+      defaultText = lib.literalMD "the subnets of `network`";
       example = ["10.0.20.0/24"];
       description = ''
         Networks allowed to connect. systemd drops connections from anywhere
         else (`IPAddressAllow=` on the socket) before the server sees them.
       '';
-    };
-
-    openFirewall = mkOption {
-      type = types.bool;
-      default = false;
-      description = "Open the HTTP port on `firewallInterfaces`, and UDP port 69 if a file is served over TFTP.";
-    };
-
-    firewallInterfaces = mkOption {
-      type = types.listOf types.str;
-      default = [];
-      example = ["voip"];
-      description = "Interfaces the firewall is opened on; empty means all.";
     };
 
     files = mkOption {
@@ -389,8 +397,8 @@ in {
     assertions =
       [
         {
-          assertion = config.services.asterisk.enable;
-          message = "services.asterix.phones requires services.asterisk.enable.";
+          assertion = config.services.asterix.enable;
+          message = "services.asterix.phones requires services.asterix.enable.";
         }
         {
           assertion = builtins.all (name: builtins.match "[A-Za-z0-9_+-][A-Za-z0-9_.+-]*" name != null) (attrNames cfg.files);
@@ -412,12 +420,6 @@ in {
           # the socket's ListenStream= takes an address and the port
           assertion = isAddress cfg.listenAddress;
           message = "services.asterix.phones.listenAddress must be one IPv4 or IPv6 address: ${builtins.toJSON cfg.listenAddress}.";
-        }
-        {
-          assertion = moduleLib.invalidInterfaces cfg.firewallInterfaces == [];
-          message = "services.asterix.phones.firewallInterfaces: Linux takes interface names of 1 to 15 bytes without /, : or whitespace: ${
-            lib.concatMapStringsSep ", " builtins.toJSON (moduleLib.invalidInterfaces cfg.firewallInterfaces)
-          }.";
         }
         {
           assertion = lib.allUnique macs;
@@ -528,7 +530,7 @@ in {
       };
     };
 
-    networking.firewall = mkIf cfg.openFirewall (moduleLib.firewallOn cfg.firewallInterfaces {
+    networking.firewall = mkIf config.services.asterix.openFirewall (moduleLib.firewallOn (lib.optional (net.interface != null) net.interface) {
       allowedTCPPorts = [cfg.port];
       allowedUDPPorts = lib.optional serveTftp tftpPort;
     });

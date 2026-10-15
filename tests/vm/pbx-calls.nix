@@ -117,7 +117,6 @@ in
           ];
           settings."asterisk.conf".options.verbose = 3;
           pjsip = {
-            transports.udp = {};
             trunks = {
               provider = {
                 host = "10.2.0.5";

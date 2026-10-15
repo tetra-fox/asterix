@@ -28,7 +28,6 @@
         };
         services.asterisk = {
           pjsip = {
-            transports.udp = {};
             endpoints =
               lib.genAttrs members (member: {
                 aor = {

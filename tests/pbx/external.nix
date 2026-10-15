@@ -35,7 +35,6 @@
         };
         services.asterisk = {
           pjsip = {
-            transports.udp = {};
             trunks.loop = {
               host = "127.0.0.1";
               username = "5551000";

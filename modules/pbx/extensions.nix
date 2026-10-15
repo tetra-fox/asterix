@@ -59,6 +59,13 @@
         default = null;
         description = "Mailbox `<number>@default` for the extension, so the number is a mailbox number too, which cannot start with `*` or `#` (see {option}`services.asterisk.voicemail.mailboxes`).";
       };
+      network = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        defaultText = lib.literalMD "the only network of {option}`services.asterix.networks`";
+        example = "voip";
+        description = "Network of {option}`services.asterix.networks` the phone is on.";
+      };
       ringTime = mkOption {
         type = types.ints.positive;
         default = 20;

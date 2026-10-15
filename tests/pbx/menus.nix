@@ -112,7 +112,6 @@
           };
         };
         services.asterisk = {
-          pjsip.transports.udp = {};
           dialplan.contexts.done.extensions = {
             five = ["Hangup()"];
             sub = ["Hangup()"];

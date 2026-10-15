@@ -138,7 +138,6 @@ in
           settings."asterisk.conf".options.verbose = 3;
 
           pjsip = {
-            transports.udp = {};
             # an extension with two devices
             endpoints."230".aor.maxContacts = 2;
             trunks =

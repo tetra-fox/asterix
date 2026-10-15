@@ -145,6 +145,7 @@ during a call, every PJSIP password if `res_ari_asterisk.so` is loaded).
 | paging groups                               | `services.asterix.paging`        |
 | opening hours                               | `services.asterix.hours`         |
 | calls in, by number                         | `services.asterix.inbound`       |
+| callers turned away on calls from trunks    | `services.asterix.blocklist`     |
 | calls out, by prefix                        | `services.asterix.outbound`      |
 | emergency numbers                           | `services.asterix.emergency`     |
 | phones that fetch their config from the PBX | `services.asterix.phones`        |

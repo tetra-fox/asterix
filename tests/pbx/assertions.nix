@@ -183,6 +183,17 @@
       ];
     };
 
+    # a number or a pattern of numbers: a word such as those `anonymous`
+    # covers, s, or a number with a dash, a space or a + inside is none of
+    # them. The entries from +15551234567 on are valid and stay out of the
+    # message.
+    blocklistNumbers = {
+      module.services.asterix.blocklist.numbers = ["anonymous" "" "s" "555-1234" "555 1234" "1+5551234" "_" "_555abc" "+15551234567" "*67#" "_1800XXXXXXX" "_[2-9]XX!"];
+      assertions = [
+        ''services.asterix.blocklist.numbers: an entry must be a number of digits, * and #, with an optional leading +, or a pattern of such numbers that starts with _, such as _555XXXXXXX: "anonymous", "", "s", "555-1234", "555 1234", "1+5551234", "_", "_555abc".''
+      ];
+    };
+
     # list definitions concatenate, so steps added to a context the pbx writes
     # run before or after its own; replaced steps, an extension of its own and
     # raw lines are the user's

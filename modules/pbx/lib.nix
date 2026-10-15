@@ -225,6 +225,15 @@ in rec {
     then "${name}-tcp"
     else "${name}-tls";
 
+  # a number of digits, * and #, with an optional leading +, or a pattern of
+  # such numbers: X, Z and N, sets in brackets, and . and ! at the end
+  # (main/pbx.c ext_cmp_pattern_pos)
+  numberOrPattern = "[+]?[0-9*#]+|_([0-9*#+XZNxzn.!]|\\[[0-9*#+-]+])+";
+
+  # whether services.asterix.blocklist turns away any caller, and so
+  # pbx-blocklist exists
+  blocksCallers = blocklist: blocklist.numbers != [] || blocklist.anonymous;
+
   # the generated context of a pbx object
   objectContext = kind: name: "pbx-${kind}-${name}";
 

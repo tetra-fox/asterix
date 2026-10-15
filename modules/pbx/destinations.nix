@@ -40,6 +40,8 @@
     (concatLists (mapAttrsToList (name: group: use "services.asterix.ringGroups.${name}.noAnswer" "ringGroup ${name}" group.noAnswer) cfg.ringGroups))
     (concatLists (mapAttrsToList (name: queue: use "services.asterix.queues.${name}.noAnswer" "queue ${name}" queue.noAnswer) cfg.queues))
     (concatLists (mapAttrsToList (number: route: concatMap (field: use ''services.asterix.inbound."${number}".${field}'' null route.${field}) ["destination" "open" "closed"]) cfg.inbound))
+    # a call reaches the blocklist only from a route of services.asterix.inbound
+    (use "services.asterix.blocklist.destination" null cfg.blocklist.destination)
     (concatLists (mapAttrsToList (name: ivr:
       concatLists (mapAttrsToList (key: use ''services.asterix.ivrs.${name}.options."${key}"'' null) ivr.options)
       ++ use "services.asterix.ivrs.${name}.noInput" "ivr ${name}" ivr.noInput

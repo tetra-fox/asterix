@@ -1,6 +1,6 @@
 # services.asterix: extensions, trunks, ring groups, queues, conferences,
-# voice menus, announcements, paging, business hours, routes and phone
-# provisioning, written into the options of the core module
+# voice menus, announcements, paging, business hours, routes, a blocklist and
+# phone provisioning, written into the options of the core module
 # (services.asterisk), which stays usable on its own. Every object gets a
 # context of its own, pbx-<kind>-<name>, and phones dial from pbx-internal.
 {
@@ -12,6 +12,7 @@
   cfg = config.services.asterix;
   core = config.services.asterisk;
   asteriskLib = import ../../lib {inherit lib;};
+  pbxLib = import ./lib.nix {inherit lib;};
   objects = ["extensions" "ringGroups" "queues" "conferences" "ivrs" "announcements" "paging" "hours" "inbound" "outbound" "emergency" "voicemailMenu" "tieLines" "trunks"];
 
   # the steps the pbx modules write, by context and extension, read from
@@ -65,6 +66,7 @@ in {
   imports = [
     ../.
     ./announcements.nix
+    ./blocklist.nix
     ./conferences.nix
     ./destinations.nix
     ./extensions.nix
@@ -99,7 +101,7 @@ in {
       ];
     })
     {
-      warnings = lib.optional (!cfg.enable && (builtins.any (name: !(builtins.elem cfg.${name} [{} [] null])) objects || cfg.voicemail.mailboxes != {})) "services.asterix objects are defined, but services.asterix.enable is not set, so they do nothing.";
+      warnings = lib.optional (!cfg.enable && (builtins.any (name: !(builtins.elem cfg.${name} [{} [] null])) objects || cfg.voicemail.mailboxes != {} || pbxLib.blocksCallers cfg.blocklist)) "services.asterix objects are defined, but services.asterix.enable is not set, so they do nothing.";
     }
   ];
 }

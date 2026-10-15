@@ -65,6 +65,11 @@
         default = null;
         description = "Where calls go outside `hours`, on holidays and after closing early.";
       };
+      blocklist = mkOption {
+        type = types.bool;
+        default = true;
+        description = "Whether {option}`services.asterix.blocklist` turns away callers to this number.";
+      };
     };
   };
 
@@ -159,20 +164,31 @@
   # trunks whose calls start in pbx-inbound-<trunk>
   pbxTrunks = builtins.attrNames (filterAttrs (name: trunk: trunk.context == pbxLib.objectContext "inbound" name) trunks);
 
+  # pbx-blocklist (blocklist.nix) returns `blocked` for a caller the
+  # blocklist turns away
+  blocklistSteps = route:
+    lib.optionals (route.blocklist && pbxLib.blocksCallers cfg.blocklist) [
+      (pbxLib.app "Gosub" ["pbx-blocklist" "s" "1"])
+      (pbxLib.app "GotoIf" [''$["''${GOSUB_RETVAL}" = "blocked"]?pbx-blocklist,blocked,1''])
+    ];
+
   inboundSteps = route:
-    if route.destination != null
-    then pbxLib.steps route.destination
-    else
-      [
-        (pbxLib.app "Gosub" [
-          (pbxLib.objectContext "hours" route.hours)
-          "s"
-          "1"
-        ])
-        (pbxLib.app "GotoIf" [''$["''${GOSUB_RETVAL}" = "open"]?open''])
-      ]
-      ++ pbxLib.steps route.closed
-      ++ pbxLib.labelled "open" route.open;
+    blocklistSteps route
+    ++ (
+      if route.destination != null
+      then pbxLib.steps route.destination
+      else
+        [
+          (pbxLib.app "Gosub" [
+            (pbxLib.objectContext "hours" route.hours)
+            "s"
+            "1"
+          ])
+          (pbxLib.app "GotoIf" [''$["''${GOSUB_RETVAL}" = "open"]?open''])
+        ]
+        ++ pbxLib.steps route.closed
+        ++ pbxLib.labelled "open" route.open
+    );
 
   setCallerId = callerId: optional (callerId != null) (pbxLib.app "Set" ["CALLERID(num)=${callerId}"]);
 
@@ -260,9 +276,7 @@
     }) (filterAttrs (_: group: group.external != [] && group.trunk != null) cfg.ringGroups)
   );
 
-  # a number, s, or a pattern of numbers: X, Z and N, sets in brackets, and
-  # . and ! at the end (main/pbx.c ext_cmp_pattern_pos)
-  badKeys = builtins.filter (key: builtins.match "[+]?[0-9*#]+|s|_([0-9*#+XZNxzn.!]|\\[[0-9*#+-]+])+" key == null) (builtins.attrNames cfg.inbound);
+  badKeys = builtins.filter (key: builtins.match "${pbxLib.numberOrPattern}|s" key == null) (builtins.attrNames cfg.inbound);
   unknownHours = builtins.filter (number: cfg.inbound.${number}.hours != null && !(cfg.hours ? ${cfg.inbound.${number}.hours})) (builtins.attrNames cfg.inbound);
   unknownNotify = builtins.filter (extension: !(cfg.extensions ? ${extension})) (lib.optionals (cfg.emergency != null) cfg.emergency.notify);
   # where calls from a trunk start is the context of its endpoint in the final

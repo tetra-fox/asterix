@@ -2,7 +2,8 @@
 # tests/campaign/probe.nix): a menu key goes to a ring group, whose no-answer
 # destination is a queue, whose timeout goes to a mailbox; the timeout of a
 # queue leads to each kind of destination; a number with opening hours goes
-# to its open and its closed destination; and a key the menu has no
+# to its open and its closed destination, past the blocklist, which does not
+# list the caller; and a key the menu has no
 # destination for goes to its invalid one. The configuration has each kind of
 # destination in each slot that takes one (./slots.nix), which Asterisk has to
 # load. Nobody is registered, so ring groups and extensions have no phone to
@@ -130,6 +131,8 @@
       };
       contexts = [
         "pbx-inbound-provider"
+        "pbx-blocklist"
+        "pbx-inbound-provider"
         "pbx-hours-office"
         "pbx-inbound-provider"
       ];
@@ -144,6 +147,8 @@
         time = "2026-12-02T20:00:00Z";
       };
       contexts = [
+        "pbx-inbound-provider"
+        "pbx-blocklist"
         "pbx-inbound-provider"
         "pbx-hours-office"
         "pbx-inbound-provider"

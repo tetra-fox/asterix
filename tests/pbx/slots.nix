@@ -1,8 +1,8 @@
-# The eleven slots of pbx objects that take a destination (the uses of
+# The twelve slots of pbx objects that take a destination (the uses of
 # modules/pbx/destinations.nix), each with every kind of destination of
 # `targets`: extensions 211, 212, ..., ring groups, queues, voice menus and
 # announcements to-<kind>, and inbound numbers 5552001, ... and, by hours,
-# 5553001, ...
+# 5553001, ... The blocklist, which turns away 5550000, has the first kind.
 # Kinds are numbered alphabetically, and each slot of an object after the
 # first gets the kind after the one before, so they lead to different places.
 # The objects need extension 201, trunk provider and hours office.
@@ -10,6 +10,7 @@
   inherit (lib) concatLists concatMap listToAttrs nameValuePair;
 
   names = builtins.attrNames targets;
+  first = builtins.head names;
   count = builtins.length names;
   # the kind `shift` places after the kind numbered `index`
   kindAfter = index: shift: builtins.elemAt names (lib.mod (index - 1 + shift) count);
@@ -72,6 +73,10 @@ in {
           prompt.sound = "beep";
           destination = targets.${o.kind};
         });
+      blocklist = {
+        numbers = ["5550000"];
+        destination = targets.${first};
+      };
     };
   };
 
@@ -97,6 +102,7 @@ in {
           (slot ''services.asterix.inbound."${o.inboundByHours}".closed'' (o.next 1))
         ])
         objects)
+      [(slot "services.asterix.blocklist.destination" first)]
       (concatMap (o: [
           (slot ''services.asterix.ivrs.${o.name}.options."1"'' o.kind)
           (slot "services.asterix.ivrs.${o.name}.noInput" (o.next 1))

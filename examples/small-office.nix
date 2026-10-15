@@ -42,12 +42,10 @@ in {
         address = "10.1.0.10";
         subnets = ["10.1.0.0/24"];
       };
-      # no phones here. The provider's subnet, since without it the networks
-      # set no SIP ACL
+      # only the trunk, whose identify.match the SIP ACL lets in
       wan = {
         interface = "wan";
         address = "203.0.113.10";
-        subnets = ["203.0.113.0/24"];
       };
     };
 

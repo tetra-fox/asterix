@@ -533,7 +533,7 @@
       };
       assertions = [
         "services.asterix.trunks: elsewhere (wan) name networks that are not in services.asterix.networks."
-        "services.asterix.trunks: bare, named have no address as host or in identify.match, or host names in identify.match. Every network lists subnets, so the PBX takes SIP requests only from them and from those addresses of the trunks, and a pjsip ACL takes no host names, so it would reject the provider's requests, the BYE that ends a call included. List the provider's addresses or networks in identify.match."
+        "services.asterix.trunks: bare, named have no address as host or in identify.match, or host names in identify.match. Every network with extensions lists subnets, so the PBX takes SIP requests only from them and from those addresses of the trunks, and a pjsip ACL takes no host names, so it would reject the provider's requests, the BYE that ends a call included. List the provider's addresses or networks in identify.match."
       ];
     };
 

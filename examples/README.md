@@ -57,7 +57,7 @@ ASCII without spaces.
 | Network | Addresses      | Devices                                          |
 | ------- | -------------- | ------------------------------------------------ |
 | lan     | 10.1.0.0/24    | desk phones and softphones                       |
-| wan     | 203.0.113.0/24 | the provider's network (here: directly attached) |
+| wan     | 203.0.113.10   | the provider's trunk                             |
 
 | Extension  | What                                                                        |
 | ---------- | --------------------------------------------------------------------------- |
@@ -69,5 +69,5 @@ ASCII without spaces.
 | 800        | conference bridge                                                           |
 | \*97       | voicemail menu                                                              |
 
-- The wan network lists the provider's subnet so that SIP requests from
-  anywhere else are refused. No phone is on it.
+- No phone is on the wan network, so it needs no subnets. SIP requests reach
+  the PBX only from the lan and from the trunk's `identify.match`.

@@ -188,7 +188,7 @@ in
 
 | Rule                  | What                                                                                                                                                                                             |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| networks              | without `networks`, SIP is open on every address, to anyone. With several, each extension and trunk names its `network`. Once every network lists `subnets`, requests from elsewhere are refused |
+| networks              | without `networks`, SIP is open on every address, to anyone. With several, each extension and trunk names its `network`. Once every network with extensions lists `subnets`, requests from elsewhere are refused |
 | contexts              | each object gets its own, `pbx-<kind>-<name>`. phones dial from `pbx-internal`                                                                                                                   |
 | overrides             | everything the PBX generates is a default on `services.asterisk`, which a definition there or `settings` overrides                                                                               |
 | refused at evaluation | a number with two owners, a missing trunk, member or destination, a loop of destinations that no key press breaks                                                                                |

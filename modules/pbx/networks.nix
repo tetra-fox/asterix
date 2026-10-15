@@ -43,9 +43,9 @@
         example = ["10.0.20.0/24"];
         description = ''
           Networks the phones of this network are in. Their extensions accept
-          registrations only from there. When every network lists subnets,
-          the PBX takes SIP requests only from them and from the
-          `identify.match` addresses of the trunks; empty, from anywhere.
+          registrations only from there. When every network with extensions
+          lists subnets, the PBX takes SIP requests only from them and from
+          the addresses of the trunks. A network of trunks alone needs none.
         '';
       };
       protocols = mkOption {
@@ -108,7 +108,10 @@
         };
     };
 
-  restricted = cfg.networks != {} && builtins.all (n: n.subnets != []) (builtins.attrValues cfg.networks);
+  # a network of trunks alone needs no subnets, the trunks' addresses cover it
+  onNetwork = name: objects: builtins.any (o: networkOf o == name) (builtins.attrValues objects);
+  trunksOnly = name: onNetwork name cfg.trunks && !(onNetwork name cfg.extensions);
+  restricted = cfg.networks != {} && builtins.all (name: cfg.networks.${name}.subnets != [] || trunksOnly name) networkNames;
   # core-only trunks too, since the ACL applies to all of them
   trunks = config.services.asterisk.pjsip.trunks;
   matchOf = t: lib.optionals (t.identify != null) t.identify.match;
@@ -178,7 +181,7 @@ in {
       ++ [
         {
           assertion = !restricted || unreachableTrunks == [];
-          message = "services.asterix.trunks: ${concatStringsSep ", " unreachableTrunks} have no address as host or in identify.match, or host names in identify.match. Every network lists subnets, so the PBX takes SIP requests only from them and from those addresses of the trunks, and a pjsip ACL takes no host names, so it would reject the provider's requests, the BYE that ends a call included. List the provider's addresses or networks in identify.match.";
+          message = "services.asterix.trunks: ${concatStringsSep ", " unreachableTrunks} have no address as host or in identify.match, or host names in identify.match. Every network with extensions lists subnets, so the PBX takes SIP requests only from them and from those addresses of the trunks, and a pjsip ACL takes no host names, so it would reject the provider's requests, the BYE that ends a call included. List the provider's addresses or networks in identify.match.";
         }
         {
           assertion = tlsWithoutKeys == [];
@@ -199,7 +202,7 @@ in {
             "0.0.0.0/0.0.0.0"
             "::/0"
           ];
-          permit = concatMap (n: n.subnets) (builtins.attrValues cfg.networks) ++ trunkAddresses;
+          permit = lib.unique (concatMap (n: n.subnets) (builtins.attrValues cfg.networks) ++ trunkAddresses);
         };
       };
 

@@ -18,8 +18,8 @@ until the call ends, so a voicemail ends 4 s after the beep. Nobody
 registers, so a phone the dialplan rings is unavailable, or rings unanswered
 at a static contact. `callerId` ("Name" <number>) is the caller ID the
 dialplan sees, `time` (ISO 8601 with an offset) is the time GotoIfTime sees
-(TESTTIME), and after `limit` seconds (60) the probe hangs up whatever is
-left of the call.
+(TESTTIME), and after `limit` seconds (60) the caller hangs up, after which
+the rest of the call has 30 s to end.
 
 Background() gets a key sent as the call is answered, WaitExten() right after
 Answer() does not: the channel carries no audio, and Asterisk leaves the end
@@ -115,20 +115,35 @@ def call_file(call):
     return "".join(line + "\n" for line in lines)
 
 
-def place(asterisk, spool, name, text, limit):
+def caller(asterisk, call):
+    """The caller's end of a call, the first half of the Local channel its
+    call file places, or None once it is gone."""
+    name = re.compile(rf"Local/{re.escape(call['extension'])}@{re.escape(call['context'])}-[0-9a-f]{{8}};1")
+    for line in cli(asterisk, "core show channels concise").splitlines():
+        channel = line.split("!", 1)[0]
+        if name.fullmatch(channel):
+            return channel
+    return None
+
+
+def place(asterisk, spool, name, call):
     """Places a call and waits until it has ended and every channel is gone."""
     done = spool / "outgoing_done" / name
+    limit = call.get("limit", LIMIT)
     start = time.monotonic()
     # pbx_spool reads a file once it is moved into outgoing/, and holds it until
     # time(2) reaches its mtime, which for a file written just now can be the next second
-    (spool / name).write_text(text)
+    (spool / name).write_text(call_file(call))
     os.utime(spool / name, (0, 0))
     os.rename(spool / name, spool / "outgoing" / name)
     limit_reached = False
     while not done.exists() or active_channels(asterisk) > 0:
         elapsed = time.monotonic() - start
         if not limit_reached and elapsed > limit:
-            cli(asterisk, "channel request hangup all")
+            # hanging up every channel instead races Page() hanging up its members'
+            # channels and can crash Asterisk (main/dial.c monitor_dial, ast_dial_join)
+            if channel := caller(asterisk, call):
+                cli(asterisk, f"channel request hangup {channel}")
             limit_reached = True
         elif elapsed > limit + 30:
             raise RuntimeError(f"call {name} did not end 30 s after it was hung up")
@@ -152,8 +167,8 @@ def drive(spec_path, out, asterisk):
         for line in CALLER:
             cli(asterisk, f"dialplan add extension {line} into {CONTEXT}")
         for index, call in enumerate(spec["calls"]):
-            calls.append(call | place(asterisk, spool, f"call-{index}", call_file(call), call.get("limit", LIMIT)))
-        place(asterisk, spool, "end", call_file({"extension": "end", "context": CONTEXT}), LIMIT)
+            calls.append(call | place(asterisk, spool, f"call-{index}", call))
+        place(asterisk, spool, "end", {"extension": "end", "context": CONTEXT})
     (out / "drive.json").write_text(json.dumps({"commands": commands, "calls": calls}))
 
 

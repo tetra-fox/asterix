@@ -3,6 +3,7 @@
 {
   config,
   lib,
+  options,
   ...
 }: let
   inherit
@@ -10,7 +11,6 @@
     concatMap
     concatMapStringsSep
     concatStringsSep
-    filterAttrs
     mapAttrs
     mapAttrs'
     mkDefault
@@ -21,9 +21,9 @@
     ;
 
   cfg = config.services.asterix;
-  core = config.services.asterisk;
   pbxLib = import ./lib.nix {inherit lib;};
   inherit (import ../../lib {inherit lib;}) format;
+  coreQueue = options.services.asterisk.queues.queues.type.getSubOptions [];
 
   queueType = types.submodule {
     options = {
@@ -47,51 +47,61 @@
           {option}`services.asterisk.queues.queues.<name>.members`.
         '';
       };
-      timeout = mkOption {
+      strategy = mkOption {
+        inherit (coreQueue.strategy) type default description;
+      };
+      memberTimeout = mkOption {
+        inherit (coreQueue.timeout) type default;
+        description = "Seconds a member's phone rings before the queue tries the next one (the queue's `timeout`).";
+      };
+      retry = mkOption {
+        inherit (coreQueue.retry) type default description;
+      };
+      musicOnHold = mkOption {
+        inherit (coreQueue.musicOnHoldClass) type default;
+        example = "office";
+        description = "Music on hold class of {option}`services.asterisk.musicOnHold.classes` that waiting callers hear (`musicclass`).";
+      };
+      maxWait = mkOption {
         type = types.nullOr types.ints.positive;
         default = null;
-        description = "Seconds a caller waits before the call goes to `noAnswer`; without it, callers wait until someone answers, unless the queue turns them away.";
+        description = "Seconds a caller waits before the call goes to `noAnswer`. Without it, callers wait until someone answers, unless the queue turns them away.";
       };
       noAnswer = mkOption {
         type = pbxLib.destination;
         default = {hangup = true;};
         example = {voicemail = "200";};
-        description = "Where the call goes after `timeout`, and at once when the queue turns the caller away: when it is full (`maxLength`) or has no member to take calls (`joinempty` and `leavewhenempty` of its `settings`).";
+        description = "Where the call goes after `maxWait`, and at once when the queue turns the caller away: when it is full (`maxLength`) or has no member to take calls (`joinempty` and `leavewhenempty` of its `settings`), both of {option}`services.asterisk.queues.queues.<name>`.";
       };
     };
   };
 
-  # the queues of the final queues.conf, in lower case as app_queue finds a
-  # queue in any case (apps/app_queue.c queue_cmp_cb), without the section it
-  # takes for its settings; null when included files can define more
-  queueNames = let
-    names = format.sectionNames {
-      sections = lib.filterAttrs (_: section: !(section.template or false)) (core.settings."queues.conf" or {});
-      includes = core.includes."queues.conf" or [];
-      extraConfig = core.extraConfig."queues.conf" or "";
-    };
-  in
-    if names == null
-    then null
-    else lib.remove "general" (map lib.toLower names);
-  missing = lib.optionals (queueNames != null) (builtins.filter (name: !(builtins.elem (lib.toLower name) queueNames)) (builtins.attrNames cfg.queues));
   badNames = builtins.filter (name: pbxLib.breaksContext name || pbxLib.breaksArgument name) (builtins.attrNames cfg.queues);
+  # app_queue finds a queue by its name in any case (apps/app_queue.c
+  # queue_cmp_cb)
+  alike = builtins.filter (names: builtins.length names > 1) (builtins.attrValues (builtins.groupBy lib.toLower (builtins.attrNames cfg.queues)));
   unknownMembers = concatMap (name: map (member: "services.asterix.queues.${name}: ${member}") (builtins.filter (member: !(cfg.extensions ? ${member})) cfg.queues.${name}.members)) (builtins.attrNames cfg.queues);
-  # queues.conf keeps the first 79 bytes of a queue's name (main/config.c
-  # struct ast_category), and Queue() looks for the whole name
-  longNames = builtins.filter (name: builtins.stringLength name > 79) (builtins.attrNames cfg.queues);
 in {
   options.services.asterix.queues = mkOption {
     type = types.attrsOf queueType;
     default = {};
     example = lib.literalExpression ''
-      { support = { number = "600"; timeout = 120; noAnswer.voicemail = "200"; }; }
+      {
+        support = {
+          number = "600";
+          members = [ "201" "202" ];
+          strategy = "rrmemory";
+          memberTimeout = 15;
+          maxWait = 120;
+          noAnswer.voicemail = "200";
+        };
+      }
     '';
     description = ''
-      Queues of {file}`queues.conf`, as numbers, members and destinations.
-      The strategy and other settings of a queue stay in
-      {option}`services.asterisk.queues.queues` or `settings`, which also
-      have to define a queue without `members` here. A name has 1 to 79
+      Call queues, with a number, extensions as members, how they ring and
+      where an unanswered call goes. Each one defines
+      {option}`services.asterisk.queues.queues.<name>`, where settings
+      without an option here can be added. A name has 1 to 79
       bytes and cannot contain `,` `;` `[` `]` `"` `\` `''${` `$[`, an
       unclosed `(` or a line break, nor start or end with white space.
     '';
@@ -102,15 +112,21 @@ in {
 
     # PJSIP/<number> would call one device, so a member is a Local channel
     # into pbx-devices, with the state of its endpoint
-    services.asterisk.queues.queues = mapAttrs (_: queue: {
-      members =
-        map (number: {
-          interface = "Local/${number}@pbx-devices/n";
-          name = number;
-          stateInterface = "PJSIP/${number}";
-        })
-        queue.members;
-    }) (filterAttrs (_: queue: queue.members != []) cfg.queues);
+    services.asterisk.queues.queues =
+      mapAttrs (_: queue: {
+        strategy = mkDefault queue.strategy;
+        timeout = mkDefault queue.memberTimeout;
+        retry = mkDefault queue.retry;
+        musicOnHoldClass = mkDefault queue.musicOnHold;
+        members =
+          map (number: {
+            interface = "Local/${number}@pbx-devices/n";
+            name = number;
+            stateInterface = "PJSIP/${number}";
+          })
+          queue.members;
+      })
+      cfg.queues;
 
     services.asterisk.dialplan.contexts =
       mapAttrs' (
@@ -129,9 +145,9 @@ in {
                       ""
                       ""
                       (
-                        if queue.timeout == null
+                        if queue.maxWait == null
                         then ""
-                        else toString queue.timeout
+                        else toString queue.maxWait
                       )
                     ])
                   ];
@@ -144,10 +160,6 @@ in {
 
     assertions = [
       {
-        assertion = missing == [];
-        message = "services.asterix.queues: ${concatStringsSep ", " missing} are not queues of queues.conf (services.asterisk.queues.queues or settings).";
-      }
-      {
         assertion = badNames == [];
         message = ''
           services.asterix.queues: names that Asterisk would misread in the dialplan (they may not contain , ; [ ] " \ ''${ $[ or an unclosed parenthesis):
@@ -155,8 +167,8 @@ in {
         '';
       }
       {
-        assertion = longNames == [];
-        message = "services.asterix.queues: names longer than 79 bytes, which Asterisk cuts, so Queue() never finds them: ${concatStringsSep ", " longNames}.";
+        assertion = alike == [];
+        message = "services.asterix.queues: names that differ only in case, which app_queue takes for one queue: ${concatMapStringsSep "; " (concatStringsSep ", ") alike}.";
       }
       {
         assertion = unknownMembers == [];

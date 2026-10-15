@@ -161,7 +161,7 @@
       expect = [
         "(pbx-ivr-lobby, s): no sound custom/main-menu"
         "(pbx-ivr-main, s): no sound basic-pbx-ivr-main in language de"
-        "bridge profile default_bridge: no sound conf-onlyperson in language de"
+        "bridge profile pbx-conference-board: no sound conf-onlyperson in language de"
         "language fr has no sounds"
       ];
     };

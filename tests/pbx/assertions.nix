@@ -79,7 +79,6 @@
           password = secret "/run/secrets/trunk";
         };
       };
-      queues.queues.support.members = ["PJSIP/201"];
     };
   };
 
@@ -156,10 +155,7 @@
             destination.hangup = true;
           };
         };
-        services.asterisk = {
-          queues.queues = lib.genAttrs ["clash" "one" "two"] (_: {members = ["PJSIP/201"];});
-          features.general.pickupexten = "9911";
-        };
+        services.asterisk.features.general.pickupexten = "9911";
       };
       assertions = [
         ''
@@ -443,66 +439,6 @@
           services.asterix.emergency.trunk: e''${f}
           services.asterix.ringGroups.front.trunk: c/d
       '';
-    };
-
-    # [general], in any case, holds app_queue's own settings; a queue of
-    # settings counts, found in any case
-    queueOnlyInPbx = {
-      module = {
-        services.asterix.queues = {
-          Sales.number = "620";
-          General.number = "621";
-          east.number = "622";
-        };
-        services.asterisk.settings."queues.conf".sales.member = ["PJSIP/202"];
-      };
-      assertions = ["services.asterix.queues: General, east are not queues of queues.conf (services.asterisk.queues.queues or settings)."];
-    };
-
-    # default_bridge and default_user exist without configuration, a user
-    # profile is no bridge profile, and profiles of settings count, found in
-    # any case, with the type their template gives them
-    conferenceProfiles = {
-      module = {
-        services.asterix.conferences = {
-          board = {
-            bridgeProfile = "quiet";
-            userProfile = "default_user";
-          };
-          team = {
-            bridgeProfile = "default_bridge";
-            userProfile = "nobody";
-          };
-          lobby = {
-            bridgeProfile = "Small";
-            userProfile = "guest";
-          };
-        };
-        services.asterisk = {
-          confbridge.users.quiet.quiet = true;
-          settings."confbridge.conf" = {
-            guests = {
-              template = true;
-              type = "user";
-            };
-            guest = {
-              inherits = ["guests"];
-              startmuted = true;
-            };
-            small = {
-              type = "bridge";
-              max_members = 3;
-            };
-          };
-        };
-      };
-      assertions = [
-        ''
-          services.asterix.conferences: profiles that are not defined:
-            services.asterix.conferences.board.bridgeProfile: quiet
-            services.asterix.conferences.team.userProfile: nobody
-        ''
-      ];
     };
 
     # a destination and hours, hours without closed, neither, and open and
@@ -863,12 +799,9 @@
         services.asterix.queues = {
           "a,b" = {};
           "a\\b" = {};
-          "c(d".timeout = 60;
+          "c(d".maxWait = 60;
           "support (east)" = {};
         };
-        services.asterisk.queues.queues = lib.genAttrs ["a,b" "a\\b" "c(d" "support (east)"] (_: {
-          members = ["PJSIP/201"];
-        });
       };
       assertion = ''
         services.asterix.queues: names that Asterisk would misread in the dialplan (they may not contain , ; [ ] " \ ''${ $[ or an unclosed parenthesis):

@@ -19,7 +19,8 @@
     # the names hours only take without closeEarly
     hours = ["a=>b" long];
     paging = ["a=>b" " lead" "héllo wörld" "" long];
-    conferences = ["a)b" "a(b)" "a=>b" " lead" "héllo wörld"];
+    # the longest name, whose profiles' name takes the 79 bytes Asterisk keeps
+    conferences = ["a)b" "a(b)" "a=>b" " lead" "héllo wörld" (lib.strings.replicate 64 "n")];
     queues = ["a)b" "a(b)" "a=>b" "héllo wörld"];
   };
   objects = kind: lib.imap1 (i: name: {inherit i name;}) names.${kind};
@@ -109,7 +110,7 @@
         limit = 1;
       };
       contexts = ["pbx-internal" (context "conference" o.name)];
-      last = "ConfBridge(${o.name})";
+      last = "ConfBridge(${o.name},pbx-conference-${o.name},pbx-conference-${o.name})";
       answered = true;
       limitReached = true;
     }) (objects "conferences")
@@ -173,7 +174,10 @@
           queues = forEach "queues" (o:
             lib.nameValuePair o.name {
               number = "61${toString o.i}";
-              timeout = 1;
+              members = ["201"];
+              # a queue tries its busy member again after a second, not five
+              retry = 1;
+              maxWait = 1;
               noAnswer = done "q${toString o.i}";
             });
         };
@@ -201,12 +205,6 @@
               };
             };
           };
-          # a queue tries its busy member again after a second, not five
-          queues.queues = forEach "queues" (o:
-            lib.nameValuePair o.name {
-              members = ["PJSIP/201"];
-              retry = 1;
-            });
           dialplan.contexts = {
             busy-line.extensions.busy = ["Busy()"];
             done.extensions = lib.genAttrs (

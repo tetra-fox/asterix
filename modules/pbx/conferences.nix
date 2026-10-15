@@ -1,12 +1,13 @@
-# services.asterix.conferences: a ConfBridge room with a number, in pbx-conference-<name>
+# services.asterix.conferences: a ConfBridge room with a number, in
+# pbx-conference-<name>, with a bridge and a user profile of that name
 {
   config,
   lib,
+  options,
   ...
 }: let
   inherit
     (lib)
-    concatMap
     concatMapStringsSep
     concatStringsSep
     mapAttrs'
@@ -14,7 +15,6 @@
     mkIf
     mkOption
     nameValuePair
-    optional
     types
     ;
 
@@ -22,7 +22,15 @@
   pbxLib = import ./lib.nix {inherit lib;};
   inherit (import ../../lib {inherit lib;}) format;
   inherit (import ../lib.nix {inherit lib;}) confbridgeModules;
-  core = config.services.asterisk;
+  coreBridge = options.services.asterisk.confbridge.bridges.type.getSubOptions [];
+  coreUser = options.services.asterisk.confbridge.users.type.getSubOptions [];
+
+  # the bridge and the user profile share a name, since ConfBridge keeps the
+  # profiles of each type apart (conf_config_parser.c struct confbridge_cfg)
+  profile = pbxLib.objectContext "conference";
+  # confbridge.conf keeps 79 bytes of a profile's name (main/config.c struct
+  # ast_category), and ConfBridge looks for the whole name
+  maxName = 79 - builtins.stringLength (profile "");
 
   conferenceType = types.submodule {
     options = {
@@ -32,66 +40,75 @@
         example = "800";
         description = "Number phones dial to join the conference.";
       };
-      bridgeProfile = mkOption {
-        type = types.nullOr types.str;
-        default = null;
-        description = "Bridge profile of {file}`confbridge.conf`, from {option}`services.asterisk.confbridge.bridges` or `settings`; Asterisk's `default_bridge` without it.";
+      maxMembers = mkOption {
+        inherit (coreBridge.maxMembers) type default;
+        description = "Maximum number of callers in the conference (`max_members`).";
       };
-      userProfile = mkOption {
-        type = types.nullOr types.str;
+      musicOnHoldWhenEmpty = mkOption {
+        inherit (coreUser.musicOnHoldWhenEmpty) type default;
+        description = "Play music on hold to a caller who is alone in the conference (`music_on_hold_when_empty`).";
+      };
+      announceJoinLeave = mkOption {
+        type = types.nullOr types.bool;
         default = null;
-        description = "User profile of {file}`confbridge.conf`, from {option}`services.asterisk.confbridge.users` or `settings`; Asterisk's `default_user` without it.";
+        description = "Ask each caller for their name on joining, and announce it when they join and leave (`announce_join_leave`).";
       };
     };
   };
 
   # ConfBridge needs a conference name
   badNames = builtins.filter (name: name == "" || pbxLib.breaksContext name || pbxLib.breaksArgument name) (builtins.attrNames cfg.conferences);
-  # ConfBridge refuses a name of 80 bytes or more (apps/app_confbridge.c
-  # confbridge_exec), and finds a conference by its name in any case
-  # (conference_bridge_cmp_cb)
-  longNames = builtins.filter (name: builtins.stringLength name > 79) (builtins.attrNames cfg.conferences);
+  longNames = builtins.filter (name: builtins.stringLength name > maxName) (builtins.attrNames cfg.conferences);
+  # ConfBridge finds a conference and a profile by its name in any case
+  # (apps/app_confbridge.c conference_bridge_cmp_cb, conf_config_parser.c
+  # bridge_cmp_cb and user_cmp_cb)
   alike = builtins.filter (names: builtins.length names > 1) (builtins.attrValues (builtins.groupBy lib.toLower (builtins.attrNames cfg.conferences)));
-
-  # the profiles of a type in the final confbridge.conf, with the default one
-  # Asterisk adds, in lower case as ConfBridge finds a profile in any case
-  # (conf_config_parser.c bridge_cmp_cb); null when included files or raw
-  # text can define more
-  profiles = type:
-    if core.includes."confbridge.conf" or [] != [] || core.extraConfig."confbridge.conf" or "" != ""
-    then null
-    else
-      map (section: lib.toLower section.name) (builtins.filter (section: section.type or null == type) (format.resolveInheritance (core.settings."confbridge.conf" or {})).sections)
-      ++ ["default_${type}"];
-  bridges = profiles "bridge";
-  users = profiles "user";
-  undefined = known: profile: profile != null && known != null && !(builtins.elem (lib.toLower profile) known);
-  missingProfiles = concatMap (
-    name: let
-      conference = cfg.conferences.${name};
-    in
-      optional (undefined bridges conference.bridgeProfile) "services.asterix.conferences.${name}.bridgeProfile: ${conference.bridgeProfile}"
-      ++ optional (undefined users conference.userProfile) "services.asterix.conferences.${name}.userProfile: ${conference.userProfile}"
-  ) (builtins.attrNames cfg.conferences);
 in {
   options.services.asterix.conferences = mkOption {
     type = types.attrsOf conferenceType;
     default = {};
-    example = lib.literalExpression ''{ board = { number = "800"; }; }'';
+    example = lib.literalExpression ''
+      {
+        board = {
+          number = "800";
+          maxMembers = 10;
+          musicOnHoldWhenEmpty = true;
+        };
+      }
+    '';
     description = ''
-      Conference rooms, keyed by room name. ConfBridge takes names of up to
-      79 bytes and tells them apart without regard to case. A name cannot be
-      empty or contain `,` `;` `[` `]` `"` `\` `''${` `$[`, an unclosed `(`
-      or a line break, nor end with white space.
+      Conference rooms, keyed by room name. Each one defines the bridge and
+      the user profile `pbx-conference-<name>` of
+      {option}`services.asterisk.confbridge.bridges` and `users`, where
+      settings without an option here can be added. A name has up to
+      ${toString maxName} bytes, so the profile's name fits the 79 bytes
+      confbridge.conf keeps, and ConfBridge tells names apart without regard
+      to case. A name cannot be empty or contain `,` `;` `[` `]` `"` `\`
+      `''${` `$[`, an unclosed `(` or a line break, nor end with white space.
     '';
   };
 
   config = mkIf cfg.enable {
     services.asterisk.modules.needed."services.asterix.conferences" = mkIf (cfg.conferences != {}) confbridgeModules;
 
+    services.asterisk.confbridge.bridges = mapAttrs' (name: conference:
+      nameValuePair (profile name) {
+        maxMembers = mkDefault conference.maxMembers;
+      })
+    cfg.conferences;
+
+    services.asterisk.confbridge.users = mapAttrs' (name: conference:
+      nameValuePair (profile name) {
+        musicOnHoldWhenEmpty = mkDefault conference.musicOnHoldWhenEmpty;
+        settings = lib.optionalAttrs (conference.announceJoinLeave != null) {
+          announce_join_leave = mkDefault conference.announceJoinLeave;
+        };
+      })
+    cfg.conferences;
+
     services.asterisk.dialplan.contexts =
       mapAttrs' (
-        name: conference:
+        name: _:
           nameValuePair (pbxLib.objectContext "conference" name) {
             comment = mkDefault "from services.asterix.conferences.${name}";
             extensions.s = [
@@ -101,16 +118,8 @@ in {
                 args = [
                   (format.joinFields [
                     name
-                    (
-                      if conference.bridgeProfile == null
-                      then ""
-                      else conference.bridgeProfile
-                    )
-                    (
-                      if conference.userProfile == null
-                      then ""
-                      else conference.userProfile
-                    )
+                    (profile name)
+                    (profile name)
                   ])
                 ];
               }
@@ -130,18 +139,11 @@ in {
       }
       {
         assertion = longNames == [];
-        message = "services.asterix.conferences: names longer than 79 bytes, which ConfBridge refuses: ${concatStringsSep ", " longNames}.";
+        message = "services.asterix.conferences: names longer than ${toString maxName} bytes, whose profile pbx-conference-<name> confbridge.conf cuts to 79 bytes, so ConfBridge does not find it: ${concatStringsSep ", " longNames}.";
       }
       {
         assertion = alike == [];
         message = "services.asterix.conferences: names that differ only in case, which ConfBridge takes for one conference: ${concatMapStringsSep "; " (concatStringsSep ", ") alike}.";
-      }
-      {
-        assertion = missingProfiles == [];
-        message = ''
-          services.asterix.conferences: profiles that are not defined:
-            ${concatStringsSep "\n  " missingProfiles}
-        '';
       }
     ];
   };

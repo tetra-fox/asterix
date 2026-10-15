@@ -41,7 +41,7 @@ in {
         });
       queues = forEach (o:
         nameValuePair o.name {
-          timeout = 1;
+          maxWait = 1;
           noAnswer = targets.${o.kind};
         });
       inbound =
@@ -67,7 +67,6 @@ in {
           invalid = targets.${o.next 2};
         });
     };
-    services.asterisk.queues.queues = forEach (o: nameValuePair o.name {members = ["PJSIP/201"];});
   };
 
   # the inbound numbers by hours, by the kind in their `open` slot

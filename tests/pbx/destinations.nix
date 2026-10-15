@@ -49,7 +49,7 @@
       ended = [
         {
           application = "ConfBridge";
-          data = "board";
+          data = "board,pbx-conference-board,pbx-conference-board";
           how = "hangup";
         }
       ];
@@ -200,10 +200,10 @@
           };
           queues = {
             support = {
-              timeout = 1;
+              maxWait = 1;
               noAnswer.voicemail = "200";
             };
-            desk.timeout = 1;
+            desk.maxWait = 1;
           };
           conferences.board = {};
           voicemail.mailboxes."200".pin = secret "vm-200";
@@ -224,13 +224,6 @@
               username = "5551000";
               password = secret "trunk";
             };
-          };
-          queues.queues = {
-            support.members = [
-              "PJSIP/201"
-              "PJSIP/202"
-            ];
-            desk.members = ["PJSIP/201"];
           };
           dialplan.contexts.done.extensions.s = ["Hangup()"];
         };

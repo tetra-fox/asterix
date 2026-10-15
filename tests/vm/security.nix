@@ -299,9 +299,14 @@ in
               `mark` messages of its capture."""
               return [m["text"].split()[1] for m in sip_messages(pbx)[mark:] if m["source"] == "10.3.0.10:5060" and m["text"].startswith("INVITE ")]
 
-          # the line of the trunk's registration, which nobody answers
-          pbx.wait_until_succeeds("asterisk -rx 'pjsip show registrations' | grep -q '^ provider/'")
-          register = next(m for m in sip_messages(pbx) if m["source"] == "10.3.0.10:5060" and m["text"].startswith("REGISTER sip:10.3.0.5"))
+          # the line of the trunk's registration, which nobody answers. Asterisk
+          # sends the first REGISTER 1 to 10 s after it loads the registration
+          # (max_random_initial_delay)
+          def registers():
+              return [m for m in sip_messages(pbx) if m["source"] == "10.3.0.10:5060" and m["text"].startswith("REGISTER sip:10.3.0.5")]
+
+          retry(lambda _: registers(), timeout_seconds=30)
+          register = registers()[0]
           contact = re.search(r"^Contact: <sip:[^>]*;line=(\w+)>", register["text"], re.M)
           assert contact, register["text"]
           line = contact.group(1)

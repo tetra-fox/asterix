@@ -1,5 +1,6 @@
 # Helpers the pbx modules share: the destination type, the dialplan steps
-# a destination turns into, and the network of an extension or trunk.
+# a destination turns into, prompts, and the network of an extension or
+# trunk.
 {lib}: let
   inherit (lib) mkOption types;
   inherit (import ../lib.nix {inherit lib;}) splitMailbox;
@@ -84,6 +85,65 @@ in rec {
   in
     builtins.isString value && (host == "0.0.0.0" || (lib.hasInfix ":" host && builtins.match "[0:.]*" host != null));
 
+  # what a voice menu or an announcement plays
+  prompt = types.attrTag {
+    sound = mkOption {
+      type = types.str;
+      example = "custom/main-menu";
+      description = "Sound file, as Playback() names it: without extension, relative to the sounds directory.";
+    };
+    text = mkOption {
+      type = types.str;
+      example = "For sales, press 1. For support, press 2.";
+      description = ''
+        Text spoken by flite (voice slt) when the system is built. The
+        English voice skips characters outside ASCII, so a text needs an
+        ASCII letter or digit, or it plays as silence.
+      '';
+    };
+  };
+
+  # the sound the prompt of object `name` of `kind` plays, for a text the
+  # file promptSounds speaks it into
+  promptSound = kind: name: prompt:
+    if prompt ? text
+    then "pbx/${kind}-${name}"
+    else prompt.sound;
+
+  # the text prompts of `objects`, by name, spoken by flite into a package
+  # for services.asterisk.sounds.packages, in a list that is empty without
+  # text prompts
+  promptSounds = pkgs: kind: objects: let
+    spoken = lib.filterAttrs (_: object: object.prompt ? text) objects;
+  in
+    lib.optional (spoken != {}) (pkgs.runCommand "pbx-${kind}-prompts" {nativeBuildInputs = [pkgs.flite];} ''
+      mkdir -p $out/sounds/pbx
+      ${lib.concatStrings (lib.mapAttrsToList (name: object: ''
+          flite -voice slt -o $out/sounds/${promptSound kind name object.prompt}.wav16 -t ${lib.escapeShellArg object.prompt.text}
+        '')
+        spoken)}
+    '');
+
+  # the assertions on the names and prompts of services.asterix.<option>,
+  # given as `objects`: a text prompt's file is named after its object, and
+  # flite speaks a text with no ASCII letter or digit as 0.185 s of silence
+  promptAssertions = option: objects: let
+    badNames = builtins.filter (name: builtins.match "[A-Za-z0-9_-]+" name == null) (builtins.attrNames objects);
+    silent = builtins.filter (name: let
+      inherit (objects.${name}) prompt;
+    in
+      prompt ? text && !(builtins.any (c: builtins.match "[A-Za-z0-9]" c != null) (lib.stringToCharacters prompt.text))) (builtins.attrNames objects);
+  in [
+    {
+      assertion = badNames == [];
+      message = "services.asterix.${option}: names may only contain letters, digits, _ and -: ${lib.concatMapStringsSep ", " (name: lib.showOption ["services" "asterix" option name]) badNames}.";
+    }
+    {
+      assertion = silent == [];
+      message = ''services.asterix.${option}: flite speaks these prompt texts as silence, since they hold no ASCII letter or digit: ${lib.concatMapStringsSep ", " (name: lib.showOption ["services" "asterix" option name "prompt" "text"]) silent}. Write the text in English, or for no prompt use prompt.sound = "silence/1".'';
+    }
+  ];
+
   destination = types.attrTag {
     extension = mkOption {
       type = types.str;
@@ -105,6 +165,10 @@ in rec {
     ivr = mkOption {
       type = types.str;
       description = "Voice menu of {option}`services.asterix.ivrs`.";
+    };
+    announcement = mkOption {
+      type = types.str;
+      description = "Announcement of {option}`services.asterix.announcements`.";
     };
     voicemail = mkOption {
       type = types.coercedTo types.str (mailbox: {inherit mailbox;}) mailboxType;
@@ -211,6 +275,8 @@ in rec {
     then [(goto (objectContext "conference" dest.conference))]
     else if dest ? ivr
     then [(goto (objectContext "ivr" dest.ivr))]
+    else if dest ? announcement
+    then [(goto (objectContext "announcement" dest.announcement))]
     else if dest ? voicemail
     then let
       box = splitMailbox dest.voicemail.mailbox;

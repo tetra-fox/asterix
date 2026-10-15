@@ -52,6 +52,7 @@
     ++ numbered "ringGroups" "ringgroup"
     ++ numbered "queues" "queue"
     ++ numbered "conferences" "conference"
+    ++ numbered "announcements" "announcement"
     ++ numbered "ivrs" "ivr"
     ++ numbered "paging" "paging"
     ++ optional (cfg.voicemailMenu != null) {

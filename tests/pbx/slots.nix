@@ -1,7 +1,8 @@
-# The ten slots of pbx objects that take a destination (the uses of
+# The eleven slots of pbx objects that take a destination (the uses of
 # modules/pbx/destinations.nix), each with every kind of destination of
-# `targets`: extensions 211, 212, ..., ring groups, queues and voice menus
-# to-<kind>, and inbound numbers 5552001, ... and, by hours, 5553001, ...
+# `targets`: extensions 211, 212, ..., ring groups, queues, voice menus and
+# announcements to-<kind>, and inbound numbers 5552001, ... and, by hours,
+# 5553001, ...
 # Kinds are numbered alphabetically, and each slot of an object after the
 # first gets the kind after the one before, so they lead to different places.
 # The objects need extension 201, trunk provider and hours office.
@@ -66,6 +67,11 @@ in {
           noInput = targets.${o.next 1};
           invalid = targets.${o.next 2};
         });
+      announcements = forEach (o:
+        nameValuePair o.name {
+          prompt.sound = "beep";
+          destination = targets.${o.kind};
+        });
     };
   };
 
@@ -97,5 +103,6 @@ in {
           (slot "services.asterix.ivrs.${o.name}.invalid" (o.next 2))
         ])
         objects)
+      (map (o: slot "services.asterix.announcements.${o.name}.destination" o.kind) objects)
     ];
 }

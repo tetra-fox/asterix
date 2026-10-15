@@ -11,12 +11,9 @@
   inherit
     (lib)
     concatMap
-    concatMapStringsSep
     concatStringsSep
-    filterAttrs
     genAttrs
     mapAttrs'
-    mapAttrsToList
     mkDefault
     mkIf
     mkOption
@@ -38,22 +35,7 @@
         description = "Number phones dial to reach the menu.";
       };
       prompt = mkOption {
-        type = types.attrTag {
-          sound = mkOption {
-            type = types.str;
-            example = "custom/main-menu";
-            description = "Sound file, as Playback() names it: without extension, relative to the sounds directory.";
-          };
-          text = mkOption {
-            type = types.str;
-            example = "For sales, press 1. For support, press 2.";
-            description = ''
-              Text spoken by flite (voice slt) when the system is built. The
-              English voice skips characters outside ASCII, so a text needs an
-              ASCII letter or digit, or it plays as silence.
-            '';
-          };
-        };
+        type = pbxLib.prompt;
         description = "What the caller hears before choosing.";
       };
       options = mkOption {
@@ -94,17 +76,6 @@
     };
   };
 
-  soundFile = name: "pbx/ivr-${name}";
-
-  spoken = filterAttrs (_: ivr: ivr.prompt ? text) cfg.ivrs;
-  prompts = pkgs.runCommand "pbx-ivr-prompts" {nativeBuildInputs = [pkgs.flite];} ''
-    mkdir -p $out/sounds/pbx
-    ${concatStringsSep "\n" (mapAttrsToList (name: ivr: ''
-        flite -voice slt -o $out/sounds/${soundFile name}.wav16 -t ${lib.escapeShellArg ivr.prompt.text}
-      '')
-      spoken)}
-  '';
-
   ivrSection = name: ivr: let
     again = pbxLib.app "GotoIf" [''$[''${PBX_ATTEMPT} < ${toString ivr.attempts}]?s,prompt''];
   in {
@@ -121,13 +92,7 @@
             args = [''PBX_ATTEMPT=$[''${PBX_ATTEMPT} + 1]''];
             label = "prompt";
           }
-          (pbxLib.app "Background" [
-            (
-              if ivr.prompt ? text
-              then soundFile name
-              else ivr.prompt.sound
-            )
-          ])
+          (pbxLib.app "Background" [(pbxLib.promptSound "ivr" name ivr.prompt)])
           (pbxLib.app "WaitExten" [ivr.timeout])
         ];
         t = [again] ++ pbxLib.steps ivr.noInput;
@@ -138,9 +103,6 @@
 
   directDial = builtins.any (ivr: ivr.directDial) (builtins.attrValues cfg.ivrs);
 
-  # flite speaks a text with no ASCII letter or digit as 0.185 s of silence
-  silent = builtins.filter (name: !(builtins.any (c: builtins.match "[A-Za-z0-9]" c != null) (lib.stringToCharacters spoken.${name}.prompt.text))) (builtins.attrNames spoken);
-  badNames = builtins.filter (name: builtins.match "[A-Za-z0-9_-]+" name == null) (builtins.attrNames cfg.ivrs);
   badKeys = concatMap (name: map (key: "services.asterix.ivrs.${name}.options.${key}") (builtins.filter (key: builtins.match "[0-9*#]" key == null) (builtins.attrNames cfg.ivrs.${name}.options))) (builtins.attrNames cfg.ivrs);
   # a key that is also an extension number would hide that number from
   # directDial, as the menu's own keys come before its includes
@@ -183,26 +145,20 @@ in {
             ]);
           };
         };
-      sounds.packages = lib.optional (spoken != {}) prompts;
+      sounds.packages = pbxLib.promptSounds pkgs "ivr" cfg.ivrs;
     };
 
-    assertions = [
-      {
-        assertion = badNames == [];
-        message = "services.asterix.ivrs: menu names may only contain letters, digits, _ and -: ${concatMapStringsSep ", " (name: lib.showOption ["services" "asterix" "ivrs" name]) badNames}.";
-      }
-      {
-        assertion = badKeys == [];
-        message = "services.asterix.ivrs: keys must be one digit, * or #: ${concatStringsSep ", " badKeys}.";
-      }
-      {
-        assertion = shadowed == [];
-        message = "services.asterix.ivrs: these keys are also extension numbers, which directDial makes dialable: ${concatStringsSep ", " shadowed}.";
-      }
-      {
-        assertion = silent == [];
-        message = ''services.asterix.ivrs: flite speaks these prompt texts as silence, since they hold no ASCII letter or digit: ${concatMapStringsSep ", " (name: lib.showOption ["services" "asterix" "ivrs" name "prompt" "text"]) silent}. Write the text in English, or for a menu without a prompt use prompt.sound = "silence/1".'';
-      }
-    ];
+    assertions =
+      pbxLib.promptAssertions "ivrs" cfg.ivrs
+      ++ [
+        {
+          assertion = badKeys == [];
+          message = "services.asterix.ivrs: keys must be one digit, * or #: ${concatStringsSep ", " badKeys}.";
+        }
+        {
+          assertion = shadowed == [];
+          message = "services.asterix.ivrs: these keys are also extension numbers, which directDial makes dialable: ${concatStringsSep ", " shadowed}.";
+        }
+      ];
   };
 }

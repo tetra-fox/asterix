@@ -15,6 +15,7 @@
   probe = import ../campaign/probe.nix {inherit pkgs self;};
 
   slots = import ./slots.nix {inherit lib;} {
+    announcement.announcement = "notice";
     conference.conference = "board";
     context = {context.context = "done";};
     extension.extension = "201";
@@ -44,6 +45,10 @@
   # a queue's timeout into each kind of destination: the context that follows,
   # where the call ends, and when the probe ends a conference or a mailbox
   queueTimeouts = {
+    announcement = {
+      next = "pbx-announcement-notice";
+      ended = hangup;
+    };
     conference = {
       next = "pbx-conference-board";
       ended = [
@@ -206,6 +211,7 @@
             desk.maxWait = 1;
           };
           conferences.board = {};
+          announcements.notice.prompt.sound = "beep";
           voicemail.mailboxes."200".pin = secret "vm-200";
           hours.office = {
             timezone = "UTC";

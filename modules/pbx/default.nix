@@ -1,8 +1,8 @@
 # services.asterix: extensions, trunks, ring groups, queues, conferences,
-# voice menus, paging, business hours, routes and phone provisioning, written
-# into the options of the core module (services.asterisk), which stays usable
-# on its own. Every object gets a context of its own, pbx-<kind>-<name>, and
-# phones dial from pbx-internal.
+# voice menus, announcements, paging, business hours, routes and phone
+# provisioning, written into the options of the core module
+# (services.asterisk), which stays usable on its own. Every object gets a
+# context of its own, pbx-<kind>-<name>, and phones dial from pbx-internal.
 {
   config,
   lib,
@@ -12,7 +12,7 @@
   cfg = config.services.asterix;
   core = config.services.asterisk;
   asteriskLib = import ../../lib {inherit lib;};
-  objects = ["extensions" "ringGroups" "queues" "conferences" "ivrs" "paging" "hours" "inbound" "outbound" "emergency" "voicemailMenu" "tieLines" "trunks"];
+  objects = ["extensions" "ringGroups" "queues" "conferences" "ivrs" "announcements" "paging" "hours" "inbound" "outbound" "emergency" "voicemailMenu" "tieLines" "trunks"];
 
   # the steps the pbx modules write, by context and extension, read from
   # their own definitions of the contexts: those of the files in this
@@ -64,6 +64,7 @@ in {
   # the core by the path the flake exports it as, so importing both is fine
   imports = [
     ../.
+    ./announcements.nix
     ./conferences.nix
     ./destinations.nix
     ./extensions.nix

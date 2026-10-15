@@ -40,7 +40,7 @@ the provisioning server, through sops-nix's `reloadUnits` and `restartUnits`.
 - SIP and RTP are open only on the trusted LAN and the VoIP VLAN, each with its
   own transport, and a phone's password only works from its own network.
 - To adapt it, change `services.asterix.networks`.
-- 911 is a voice menu without keys, which plays its prompt twice and hangs up.
+- 911 is an announcement, which plays its prompt twice and hangs up.
 
 ## household-intercom-ht801.nix
 

@@ -45,6 +45,7 @@
       ++ use "services.asterix.ivrs.${name}.noInput" "ivr ${name}" ivr.noInput
       ++ use "services.asterix.ivrs.${name}.invalid" null ivr.invalid)
     cfg.ivrs))
+    (concatLists (mapAttrsToList (name: announcement: use "services.asterix.announcements.${name}.destination" "announcement ${name}" announcement.destination) cfg.announcements))
   ];
 
   exists = dest:
@@ -58,6 +59,8 @@
     then cfg.conferences ? ${dest.conference}
     else if dest ? ivr
     then cfg.ivrs ? ${dest.ivr}
+    else if dest ? announcement
+    then cfg.announcements ? ${dest.announcement}
     else if dest ? voicemail
     then reachesMailbox dest.voicemail.mailbox
     else if dest ? context

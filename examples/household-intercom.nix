@@ -71,11 +71,10 @@ in {
     conferences.everyone.number = "800";
 
     # there is no line out, so say that instead of an error tone
-    ivrs.no-emergency-calls = {
+    announcements.no-emergency-calls = {
       number = "911";
       prompt.text = "This phone cannot call nine one one. Use a cell phone.";
-      attempts = 2;
-      timeout = 1;
+      repeat = 2;
     };
   };
 }

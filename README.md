@@ -131,22 +131,23 @@ during a call, every PJSIP password if `res_ari_asterisk.so` is loaded).
 `services.asterix` is the PBX, in the objects its admin thinks in.
 `nixosModules.default` brings it, with the core under it.
 
-| Object                                      | Option                         |
-| ------------------------------------------- | ------------------------------ |
-| networks the phones and trunks are on       | `services.asterix.networks`    |
-| extensions, each with its own mailbox       | `services.asterix.extensions`  |
-| other mailboxes, and voicemail limits       | `services.asterix.voicemail`   |
-| SIP trunks                                  | `services.asterix.trunks`      |
-| ring groups                                 | `services.asterix.ringGroups`  |
-| queues                                      | `services.asterix.queues`      |
-| conference rooms                            | `services.asterix.conferences` |
-| voice menus                                 | `services.asterix.ivrs`        |
-| paging groups                               | `services.asterix.paging`      |
-| opening hours                               | `services.asterix.hours`       |
-| calls in, by number                         | `services.asterix.inbound`     |
-| calls out, by prefix                        | `services.asterix.outbound`    |
-| emergency numbers                           | `services.asterix.emergency`   |
-| phones that fetch their config from the PBX | `services.asterix.phones`      |
+| Object                                      | Option                           |
+| ------------------------------------------- | -------------------------------- |
+| networks the phones and trunks are on       | `services.asterix.networks`      |
+| extensions, each with its own mailbox       | `services.asterix.extensions`    |
+| other mailboxes, and voicemail limits       | `services.asterix.voicemail`     |
+| SIP trunks                                  | `services.asterix.trunks`        |
+| ring groups                                 | `services.asterix.ringGroups`    |
+| queues                                      | `services.asterix.queues`        |
+| conference rooms                            | `services.asterix.conferences`   |
+| voice menus                                 | `services.asterix.ivrs`          |
+| announcements                               | `services.asterix.announcements` |
+| paging groups                               | `services.asterix.paging`        |
+| opening hours                               | `services.asterix.hours`         |
+| calls in, by number                         | `services.asterix.inbound`       |
+| calls out, by prefix                        | `services.asterix.outbound`      |
+| emergency numbers                           | `services.asterix.emergency`     |
+| phones that fetch their config from the PBX | `services.asterix.phones`        |
 
 ```nix
 # pbx.nix: extensions 201 and 202, and calls to and from a provider
@@ -194,7 +195,7 @@ in
 | refused at evaluation | a number with two owners, a missing trunk, member or destination, a loop of destinations that no key press breaks                                                                                |
 | emergency numbers     | no default, since they depend on where the PBX is. `outbound` requires them, or `emergency.numbers = [ ];` for a PBX that makes no emergency calls                                               |
 
-Voice menus and paging groups:
+Voice menus, announcements and paging groups:
 
 ```nix
 services.asterix = {
@@ -205,18 +206,21 @@ services.asterix = {
       "1".extension = "202";
       "2".ringGroup = "front";
     };
-    noInput.voicemail = "201";
+    noInput.announcement = "goodbye";
   };
+
+  announcements.goodbye.prompt.text = "Nobody chose. Goodbye.";
 
   paging.all = { number = "650"; members = [ "201" "202" ]; };
 };
 ```
 
-| Object     | What                                                                                                                                                                   |
-| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| voice menu | plays a prompt, recorded or spoken by flite at build time, and sends each key to a destination. `{ ivr = "main"; }` works as a destination anywhere, like in `inbound` |
-|            | after `attempts` prompts, a caller who pressed nothing goes to `noInput`, one who pressed an unknown key to `invalid`                                                  |
-| paging     | calls several phones and asks them to auto-answer. Pages are one-way unless `duplex` is set, skip phones in a call, and only reach phones set to allow auto-answer     |
+| Object       | What                                                                                                                                                                   |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| voice menu   | plays a prompt, recorded or spoken by flite at build time, and sends each key to a destination. `{ ivr = "main"; }` works as a destination anywhere, like in `inbound` |
+|              | after `attempts` prompts, a caller who pressed nothing goes to `noInput`, one who pressed an unknown key to `invalid`                                                  |
+| announcement | plays a prompt `repeat` times, then sends the call to `destination`, by default a hangup                                                                               |
+| paging       | calls several phones and asks them to auto-answer. Pages are one-way unless `duplex` is set, skip phones in a call, and only reach phones set to allow auto-answer     |
 
 [small-office.nix](examples/small-office.nix) is a complete example.
 

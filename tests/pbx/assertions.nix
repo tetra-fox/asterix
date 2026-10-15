@@ -220,6 +220,7 @@
     # every kind of destination, with nothing it names, in every slot
     missingDestinationInEverySlot = let
       missing = slots {
+        announcement.announcement = "nope";
         conference.conference = "nope";
         context = {context.context = "nowhere";};
         extension.extension = "299";
@@ -229,6 +230,7 @@
         voicemail.voicemail = "299";
       };
       described = {
+        announcement = "announcement nope";
         conference = "conference nope";
         context = "context nowhere";
         extension = "extension 299";
@@ -249,9 +251,10 @@
 
     # each comes back to where it started without a key press, so the call
     # rings or plays on until the caller hangs up: an extension that is busy
-    # and a group that rings it, two groups, a queue and a menu on their own.
-    # A key press breaks the round: the menu's key 9 and invalid key lead back
-    # to it, and lobby sends callers back to the menu whose key 2 rings it.
+    # and a group that rings it, two groups, an announcement and a queue, a
+    # queue and a menu on their own. A key press breaks the round: the menu's
+    # key 9 and invalid key lead back to it, and lobby sends callers back to
+    # the menu whose key 2 rings it.
     destinationLoops = {
       module.services.asterix = {
         extensions."202".busy.ringGroup = "front";
@@ -270,6 +273,11 @@
             noAnswer.ivr = "main";
           };
         };
+        announcements.closed = {
+          prompt.sound = "beep";
+          destination.queue = "line";
+        };
+        queues.line.noAnswer.announcement = "closed";
         queues.support.noAnswer.queue = "support";
         ivrs.main = {
           options = {
@@ -287,8 +295,10 @@
             services.asterix.ringGroups.back.noAnswer: ringGroup side
             services.asterix.ringGroups.front.noAnswer: extension 202
             services.asterix.ringGroups.side.noAnswer: ringGroup back
+            services.asterix.queues.line.noAnswer: announcement closed
             services.asterix.queues.support.noAnswer: queue support
             services.asterix.ivrs.main.noInput: ivr main
+            services.asterix.announcements.closed.destination: queue line
           Send one of them elsewhere, such as to voicemail; a voice menu's options and invalid key may lead back, since the caller presses a key for those.
         ''
       ];

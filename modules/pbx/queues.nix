@@ -76,7 +76,12 @@
       record = mkOption {
         type = types.bool;
         default = false;
-        description = "Whether to record the queue's calls from when a member answers, not the wait before ({option}`services.asterix.recordings`).";
+        description = ''
+          Whether to record the queue's calls from when a member answers, not
+          the wait before ({option}`services.asterix.recordings`). It covers
+          the members of `members`, not those added by hand in
+          {option}`services.asterisk.queues.queues.<name>.members`.
+        '';
       };
     };
   };

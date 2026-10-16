@@ -136,6 +136,17 @@ in {
   options.services.asterix.recordings = mkOption {
     type = types.submodule {
       options = {
+        group = mkOption {
+          type = types.nullOr types.str;
+          default = null;
+          example = "syncthing";
+          description = ''
+            Group of {option}`users.groups` that can list and read the
+            recordings, such as the one of a user who copies them elsewhere.
+            It cannot change or delete them, nor read anything else of
+            Asterisk's.
+          '';
+        };
         keepDays = mkOption {
           type = types.nullOr types.ints.positive;
           default = null;
@@ -178,7 +189,7 @@ in {
 
       A call is recorded once, from when it is answered, into one WAV file
       of both sides in {file}`/var/lib/asterisk/spool/monitor`, readable
-      only by root and the asterisk user, named
+      only by root, the asterisk user and `group`, named
       `<date>-<time>-<from>-<to>-<id>.wav`. One started with the code has
       the Unix time it was pressed before `<id>`. When the side that answered
       transfers the call, its file ends, and the call is recorded again where
@@ -210,6 +221,23 @@ in {
 
     (mkIf (code != null) {
       services.asterisk.features.featureMap.automixmon = code;
+    })
+
+    # ACLs: the directories above monitor let the group pass, and monitor's
+    # default ACL gives it each new recording. An ACL rule skips a path that
+    # does not exist yet, so the directories are declared as the service
+    # makes them, spool and monitor under asterisk-config's umask 0077.
+    (mkIf (rcfg.group != null) {
+      systemd.tmpfiles.rules = let
+        inherit (config.services.asterisk) paths;
+      in [
+        "d ${paths.state} ${config.systemd.services.asterisk.serviceConfig.StateDirectoryMode} asterisk asterisk -"
+        "a+ ${paths.state} - - - - group:${rcfg.group}:--x"
+        "d ${paths.spool} 0700 asterisk asterisk -"
+        "a+ ${paths.spool} - - - - group:${rcfg.group}:--x"
+        "d ${directory} 0700 asterisk asterisk -"
+        "A+ ${directory} - - - - group:${rcfg.group}:r-x,default:group:${rcfg.group}:r--"
+      ];
     })
 
     (mkIf (rcfg.keepDays != null) {
@@ -252,6 +280,10 @@ in {
 
     {
       assertions = [
+        {
+          assertion = rcfg.group == null || config.users.groups ? ${rcfg.group};
+          message = "services.asterix.recordings.group: ${toString rcfg.group} is not a group of users.groups.";
+        }
         {
           assertion = rcfg.notice == null || !(pbxLib.silentPrompt rcfg.notice);
           message = ''services.asterix.recordings.notice: flite speaks the text as silence, since it holds no ASCII letter or digit. Write the text in English, or play a sound file with notice.sound.'';

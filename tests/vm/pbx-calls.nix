@@ -66,6 +66,13 @@ in
           (onlyAddress "10.2.0.10")
         ];
 
+        # a user who copies the recordings elsewhere
+        users.groups.archive = {};
+        users.users.archiver = {
+          isSystemUser = true;
+          group = "archive";
+        };
+
         services.asterix = {
           enable = true;
           extensions =
@@ -76,7 +83,10 @@ in
               record = extension == "203";
             })
             names;
-          recordings.keepDays = 1;
+          recordings = {
+            keepDays = 1;
+            group = "archive";
+          };
 
           voicemail.mailboxes."200" = {
             name = "Front desk";
@@ -289,10 +299,13 @@ in
             hang_up(boss)
             (name,) = pbx.succeed(f"ls {monitor}").split()
             assert re.fullmatch(r"\d{8}-\d{6}-203-5559998-\d+\.\d+\.wav", name), name
-            # the directory and the file are the asterisk user's alone to read
-            assert pbx.succeed(f"stat -c '%a %U %G' {monitor}").strip() == "700 asterisk asterisk"
-            mode, owner, group, size = pbx.succeed(f"stat -c '%a %U %G %s' {monitor}/{name}").split()
-            assert (mode, owner, group) == ("640", "asterisk", "asterisk"), (mode, owner, group)
+            # the asterisk user's, which recordings.group can only read
+            assert pbx.succeed(f"stat -c '%U %G' {monitor} {monitor}/{name}").split() == ["asterisk"] * 4
+            pbx.succeed(f"runuser -u archiver -- cat {monitor}/{name} > /dev/null")
+            pbx.fail(f"runuser -u archiver -- rm -f {monitor}/{name}")
+            pbx.fail("runuser -u archiver -- ls /var/lib/asterisk/spool/voicemail")
+            pbx.fail(f"runuser -u nobody -- cat {monitor}/{name}")
+            size = pbx.succeed(f"stat -c %s {monitor}/{name}")
             # more than the WAV header
             assert int(size) > 44, size
             pbx.succeed(f"touch -d '25 hours ago' {monitor}/{name}", f"runuser -u asterisk -- touch {monitor}/recent.wav")

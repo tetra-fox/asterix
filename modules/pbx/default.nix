@@ -104,7 +104,7 @@ in {
       ];
     })
     {
-      warnings = lib.optional (!cfg.enable && (builtins.any (name: !(builtins.elem cfg.${name} [{} [] null])) objects || cfg.voicemail.mailboxes != {} || pbxLib.blocksCallers cfg.blocklist || codesSet || cfg.recordings.keepDays != null || cfg.recordings.notice != null)) "services.asterix objects are defined, but services.asterix.enable is not set, so they do nothing.";
+      warnings = lib.optional (!cfg.enable && (builtins.any (name: !(builtins.elem cfg.${name} [{} [] null])) objects || cfg.voicemail.mailboxes != {} || pbxLib.blocksCallers cfg.blocklist || codesSet || cfg.recordings.keepDays != null || cfg.recordings.notice != null || cfg.recordings.group != null || cfg.recordings.emergency)) "services.asterix objects are defined, but services.asterix.enable is not set, so they do nothing.";
     }
   ];
 }

@@ -221,10 +221,19 @@
     }
   ];
 
+  # with recordings.emergency, recorded from the answer with no notice to
+  # hold the call up, under the caller's number rather than the site's
   emergencySteps = e: number:
     map (extension: pbxLib.app "Gosub" ["notify" "1(${extension})"]) e.notify
+    ++ lib.optionals cfg.recordings.emergency ([(pbxLib.app "Set" ["__PBX_RECORD=1"])] ++ pbxLib.recordCall cfg false false number)
     ++ setCallerId emergencyCallerId
-    ++ dialTrunk "PJSIP/${number}@${emergencyTrunk}" (callerIdOption emergencyCallerId emergencyTrunk);
+    ++ dialTrunk "PJSIP/${number}@${emergencyTrunk}" (
+      callerIdOption emergencyCallerId emergencyTrunk
+      + lib.optionalString cfg.recordings.emergency (pbxLib.recordOptions cfg {
+        called = false;
+        calling = false;
+      })
+    );
 
   # emergency calls without a trunk of their own go out through
   # services.asterix.outbound's

@@ -342,7 +342,9 @@ in rec {
 
   # whether any `record` of services.asterix is on, so the layer records
   # calls without the code (recordings.nix)
-  recordsCalls = cfg: builtins.any (option: builtins.any (object: object.record) (builtins.attrValues cfg.${option})) ["extensions" "inbound" "ringGroups" "queues"];
+  recordsCalls = cfg:
+    builtins.any (option: builtins.any (object: object.record) (builtins.attrValues cfg.${option})) ["extensions" "inbound" "ringGroups" "queues"]
+    || (cfg.recordings.emergency && cfg.emergency != null);
 
   # whether one of the extensions `members` records its calls; one that is
   # not an extension is an assertion of the ring group or queue

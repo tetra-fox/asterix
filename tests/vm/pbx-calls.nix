@@ -86,6 +86,7 @@ in
           recordings = {
             keepDays = 1;
             group = "archive";
+            emergency = true;
           };
 
           voicemail.mailboxes."200" = {
@@ -327,7 +328,7 @@ in
             )
             return out["time"] - dialling["time"]
 
-        with subtest("each emergency number, with and without the prefix, leaves within a second from every extension, and notify rings the others but not the caller"):
+        with subtest("each emergency number, with and without the prefix, leaves within a second from every extension, notify rings the others but not the caller, and the call is recorded"):
             for caller, dialled, number in [(desk, "911", "911"), (sales, "#112", "112")]:
                 (other,) = [p for p in (desk, sales) if p is not caller]
                 before = invites([desk, sales])
@@ -341,5 +342,9 @@ in
                 time.sleep(1)
                 assert caller.requests("INVITE") == before[caller.name], f"{caller.name} was notified of its own emergency call"
                 hang_up(desk, sales)
+            # recordings.emergency, under the caller's own number
+            recordings = pbx.succeed("ls /var/lib/asterisk/spool/monitor").split()
+            for part in ("-201-911-", "-202-112-"):
+                assert any(part in name for name in recordings), (part, recordings)
       '';
   }

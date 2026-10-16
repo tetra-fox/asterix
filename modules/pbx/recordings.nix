@@ -136,6 +136,14 @@ in {
   options.services.asterix.recordings = mkOption {
     type = types.submodule {
       options = {
+        emergency = mkOption {
+          type = types.bool;
+          default = false;
+          description = ''
+            Record emergency calls of {option}`services.asterix.emergency`,
+            from when they are answered, without the notice.
+          '';
+        };
         group = mkOption {
           type = types.nullOr types.str;
           default = null;
@@ -193,8 +201,8 @@ in {
       `<date>-<time>-<from>-<to>-<id>.wav`. One started with the code has
       the Unix time it was pressed before `<id>`. When the side that answered
       transfers the call, its file ends, and the call is recorded again where
-      it goes if that records. Voicemail, conferences, pages and emergency
-      calls are not recorded.
+      it goes if that records. Voicemail, conferences and pages are not
+      recorded, nor emergency calls without `emergency`.
     '';
   };
 

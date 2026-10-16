@@ -10,7 +10,9 @@
 # to the members with 2, and stops hearing the confirmation prompt as soon as
 # a member answers. Paging: members get the auto-answer headers, members in a
 # call are left out unless skipBusy is off, and the pager's own extension
-# always is.
+# always is. Parking: a phone parks its call with a blind transfer to the park
+# number, any phone takes it from its slot, and a call nobody takes rings the
+# phone that parked it again.
 #
 #   pbx     the trunks provider (services.asterix.outbound's) and second lead to carrier-a
 #           and carrier-b on the phones' machine
@@ -143,6 +145,13 @@ in
               qualifyFrequency = 5;
             })
             carrierPorts;
+
+          parking = {
+            number = "700";
+            slots = 2;
+            # long enough for the test to take the call from its slot first
+            timeout = 10;
+          };
         };
 
         services.asterisk = {
@@ -243,6 +252,37 @@ in
         def called(cursor):
             """Extensions Dial called since `cursor`, in order."""
             return re.findall(r"Called PJSIP/(\d+)/", journal_since(pbx, cursor))
+
+        def parked():
+            """Parked calls by slot: the parked channel and the dial string of
+            the phone that parked it."""
+            return {
+                slot: (channel, parker)
+                for slot, channel, parker in re.findall(
+                    r"Space *: *(\d+)\n *Channel *: *(\S+)\n *Parker Dial String *: *(\S*)",
+                    asterisk(pbx, "parking show default"),
+                )
+            }
+
+        def park(caller, parker):
+            """`caller` calls `parker`, who blind-transfers the call to the park
+            number, and the call waits in the first slot."""
+            invites = parker.requests("INVITE")
+            ended_calls = parker.disconnects()
+            caller.call(parker.user)
+            parker.wait_request("INVITE", after=invites)
+            answer(parker)
+            wait_bridged(pbx, caller.user, parker.user)
+            parker.cli(f"call transfer {parker.uri('700')}")
+            parker.wait_disconnected(after=ended_calls)
+            deadline = time.time() + 30
+            while "701" not in parked():
+                if time.time() > deadline:
+                    raise Exception(f"no call parked in 701: {asterisk(pbx, 'parking show default')!r}")
+                time.sleep(1)
+            channel, dial_string = parked()["701"]
+            assert endpoint_of(channel) == caller.user, parked()
+            assert dial_string == f"PJSIP/{parker.user}", parked()
 
         def wait_confirming(cursor):
             """Wait until an outside member hears the confirmation prompt."""
@@ -416,6 +456,29 @@ in
             assert len(calls_of("200")) == 1, calls_of("200")
             boss.hangup()
             member.cli("call hangup_all")
+            wait_idle(pbx)
+
+        with subtest("a blind transfer to the park number parks the call in the first slot, and a phone dialling the slot takes it"):
+            taker = phone["203"]
+            park(boss, phone["201"])
+            taker.call("701")
+            wait_bridged(pbx, "200", "203")
+            hear_each_other(boss, taker)
+            assert parked() == {}, parked()
+            boss.hangup()
+            wait_idle(pbx)
+
+        with subtest("a parked call nobody takes rings the phone that parked it after the timeout"):
+            parker = phone["201"]
+            invites = parker.requests("INVITE")
+            cursor = journal_cursor(pbx)
+            park(boss, parker)
+            parker.wait_request("INVITE", after=invites + 1, timeout=30)
+            wait_journal(pbx, cursor, r"Executing \[PJSIP_201@pbx-parking-timeout:1\] Dial")
+            answer(parker)
+            wait_bridged(pbx, "200", "201")
+            hear_each_other(boss, parker)
+            boss.hangup()
             wait_idle(pbx)
       '';
   }

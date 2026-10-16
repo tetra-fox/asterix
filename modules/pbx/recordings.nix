@@ -158,7 +158,8 @@ in {
           description = ''
             What is played before a call is recorded. When what the caller
             called records, the caller is answered and hears it before
-            anything rings. On a call that a phone with `record` makes,
+            anything rings, so a call from outside is charged from then even
+            if nobody picks up. On a call that a phone with `record` makes,
             whoever answers hears it before the recording starts. A recording
             started with {option}`services.asterix.featureCodes.record` plays
             it to both sides.

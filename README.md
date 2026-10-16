@@ -122,6 +122,10 @@ systemd.services.asterisk.reloadTriggers = [ ./secrets/sip-101.age ];
 services.asterix.extensions."101".password = config.lib.asterisk.secret config.age.secrets.sip-101.path;
 ```
 
+A reload re-reads secrets on systemd 260 and later (NixOS 26.05). Older
+systemd keeps the old copy until a restart, so use `restartUnits` or
+`restartTriggers` there instead.
+
 | Case                                                           | What happens                                                                                                                                                                                                                                 |
 | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | a plain string instead                                         | works, but lands in the world-readable Nix store, and the module warns                                                                                                                                                                       |

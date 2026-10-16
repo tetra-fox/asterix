@@ -129,7 +129,7 @@ in {
       `]` `"` `\` `''${` `$[` `(` `)` `^` `&` or a line break, nor end with
       white space.
 
-      Asterisk 22 can crash when a member's phone ends its leg of a page at
+      Asterisk can crash when a member's phone ends its leg of a page at
       the moment the person paging hangs up.
     '';
   };

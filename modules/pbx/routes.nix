@@ -70,6 +70,11 @@
         default = true;
         description = "Whether {option}`services.asterix.blocklist` turns away callers to this number.";
       };
+      record = mkOption {
+        type = types.bool;
+        default = false;
+        description = "Whether to record the calls to this number, wherever they go, from when they are answered ({option}`services.asterix.recordings`).";
+      };
     };
   };
 
@@ -172,8 +177,12 @@
       (pbxLib.app "GotoIf" [''$["''${GOSUB_RETVAL}" = "blocked"]?pbx-blocklist,blocked,1''])
     ];
 
+  # the number the trunk sent, for file names
+  dialled = "\${FILTER(0-9*#+,\${EXTEN})}";
+
   inboundSteps = route:
     blocklistSteps route
+    ++ lib.optionals route.record (pbxLib.recordCall cfg true false dialled)
     ++ (
       if route.destination != null
       then pbxLib.steps route.destination
@@ -200,19 +209,15 @@
     then cfg.outbound.callerId
     else null;
 
-  # Dial's arguments after the dial string for a call that presents
-  # `callerId`; an assertion below reports a trunk that does not exist
-  callerIdArguments = callerId: trunk:
-    lib.optionals (callerId != null && trunks ? ${trunk}) [
-      ""
-      (pbxLib.callerIdOption trunks.${trunk})
-    ];
+  # Dial's option for a call that presents `callerId`; an assertion below
+  # reports a trunk that does not exist
+  callerIdOption = callerId: trunk: lib.optionalString (callerId != null && trunks ? ${trunk}) (pbxLib.callerIdOption trunks.${trunk});
 
   # a call the trunk does not put through, as to a provider that does not
   # answer, ends with congestion (503), which phones play as a fast busy; a
   # busy one keeps the busy cause Dial left on the channel (486)
-  dialTrunk = arguments: [
-    (pbxLib.app "Dial" arguments)
+  dialTrunk = channel: options: [
+    (pbxLib.app "Dial" ([channel] ++ lib.optionals (options != "") ["" options]))
     (pbxLib.app "GotoIf" [''$["''${DIALSTATUS}" = "BUSY"]?busy''])
     (pbxLib.app "Congestion" [])
     {
@@ -225,7 +230,7 @@
   emergencySteps = e: number:
     map (extension: pbxLib.app "Gosub" ["notify" "1(${extension})"]) e.notify
     ++ setCallerId emergencyCallerId
-    ++ dialTrunk (["PJSIP/${number}@${emergencyTrunk}"] ++ callerIdArguments emergencyCallerId emergencyTrunk);
+    ++ dialTrunk "PJSIP/${number}@${emergencyTrunk}" (callerIdOption emergencyCallerId emergencyTrunk);
 
   # emergency calls without a trunk of their own go out through
   # services.asterix.outbound's
@@ -458,8 +463,14 @@ in {
       services.asterisk.dialplan.contexts.pbx-outbound = {
         comment = mkDefault "from services.asterix.outbound";
         extensions."_${prefix}X." =
-          setCallerId cfg.outbound.callerId
-          ++ dialTrunk (["PJSIP/${numberAfterPrefix}@${cfg.outbound.trunk}"] ++ callerIdArguments cfg.outbound.callerId cfg.outbound.trunk);
+          # before the caller ID changes, which names the caller in file names
+          pbxLib.recordCall cfg false false "\${FILTER(0-9*#+,${numberAfterPrefix})}"
+          ++ setCallerId cfg.outbound.callerId
+          ++ dialTrunk "PJSIP/${numberAfterPrefix}@${cfg.outbound.trunk}" (callerIdOption cfg.outbound.callerId cfg.outbound.trunk
+            + pbxLib.recordOptions cfg {
+              called = false;
+              calling = true;
+            });
       };
 
       assertions = [

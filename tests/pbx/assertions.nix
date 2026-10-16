@@ -197,6 +197,22 @@
       ];
     };
 
+    # flite would speak it as silence, so a recorded caller would hear no
+    # notice
+    silentRecordingNotice = {
+      module.services.asterix.recordings.notice.text = "...";
+      assertions = ["services.asterix.recordings.notice: flite speaks the text as silence, since it holds no ASCII letter or digit. Write the text in English, or play a sound file with notice.sound."];
+    };
+
+    # the code is automixmon of features.conf, which takes one key sequence
+    recordCodeBesideAutomixmon = {
+      module = {
+        services.asterix.featureCodes.record = "*1";
+        services.asterisk.features.featureMap.automixmon = "*3";
+      };
+      throws = true;
+    };
+
     # a phone could set the forward, but not stop it
     forwardWithoutOff = {
       module.services.asterix.featureCodes.forward.noAnswer.on = "*52";

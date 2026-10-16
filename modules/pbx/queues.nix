@@ -73,6 +73,11 @@
         example = {voicemail = "200";};
         description = "Where the call goes after `maxWait`, and at once when the queue turns the caller away: when it is full (`maxLength`) or has no member to take calls (`joinempty` and `leavewhenempty` of its `settings`), both of {option}`services.asterisk.queues.queues.<name>`.";
       };
+      record = mkOption {
+        type = types.bool;
+        default = false;
+        description = "Whether to record the queue's calls from when a member answers, not the wait before ({option}`services.asterix.recordings`).";
+      };
     };
   };
 
@@ -134,14 +139,21 @@ in {
           nameValuePair (pbxLib.objectContext "queue" name) {
             comment = mkDefault "from services.asterix.queues.${name}";
             extensions.s =
-              [
-                (pbxLib.app "Answer" [])
+              [(pbxLib.app "Answer" [])]
+              ++ pbxLib.recordCall cfg queue.record (pbxLib.recordingMember cfg queue.members) (pbxLib.fileNamePart name)
+              ++ [
                 {
                   app = "Queue";
                   args = [
                     (format.joinFields [
                       name
-                      ""
+                      # a member's phone records and gets the code in
+                      # pbx-devices
+                      (pbxLib.recordOptions cfg {
+                        answered = false;
+                        called = false;
+                        calling = true;
+                      })
                       ""
                       ""
                       (

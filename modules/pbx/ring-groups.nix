@@ -83,6 +83,11 @@
         example = {voicemail = "200";};
         description = "Where the call goes when nobody answers.";
       };
+      record = mkOption {
+        type = types.bool;
+        default = false;
+        description = "Whether to record the group's calls, whoever answers ({option}`services.asterix.recordings`).";
+      };
     };
   };
 
@@ -96,11 +101,17 @@
   groupSection = name: group: let
     members = map pbxLib.devices group.members;
     external = map (number: "Local/${number}@${pbxLib.objectContext "ringgroup" name}/n") group.external;
+    recordOptions = pbxLib.recordOptions cfg {
+      called = true;
+      calling = true;
+    };
     # b() runs `leg` of pbx-confirm on each channel before it is called
-    dial = channels: withLocal:
+    dial = channels: withLocal: let
+      options = lib.optionalString withLocal "b(pbx-confirm^leg^1)" + recordOptions;
+    in
       pbxLib.app "Dial" (
         [(concatStringsSep "&" channels) group.ringTime]
-        ++ optional withLocal "b(pbx-confirm^leg^1)"
+        ++ optional (options != "") options
       );
     withCallerId = cfg.outbound != null && cfg.outbound.callerId != null;
     outsideCallerId = optional withCallerId (
@@ -113,7 +124,8 @@
     extensions =
       {
         s =
-          (
+          pbxLib.recordCall cfg group.record (pbxLib.recordingMember cfg group.members) (pbxLib.fileNamePart name)
+          ++ (
             if group.strategy == "ringall"
             then [(dial (members ++ external) (external != []))]
             else map (channel: dial [channel] false) members ++ map (channel: dial [channel] true) external

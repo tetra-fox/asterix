@@ -1,5 +1,6 @@
 # services.asterix.featureCodes: do not disturb and call forwarding, which a
-# phone sets for its own extension by dialling a code, in pbx-features.
+# phone sets for its own extension by dialling a code, in pbx-features, and
+# the code that records a call, which recordings.nix applies.
 # Asterisk keeps the state in astdb, by extension: do not disturb as a custom
 # device state, each forward's number under pbx-forward. Calls to the
 # extension read it in pbx-extension-<number>, and numbering.nix routes the
@@ -119,6 +120,21 @@
   unpaired = filter (kind: (codes.forward.${kind}.on == null) != (codes.forward.${kind}.off == null)) kinds;
 in {
   options.services.asterix.featureCodes = {
+    record = mkOption {
+      # Asterisk keeps 10 keys of a feature's sequence (features.nix)
+      type = types.nullOr (types.strMatching "[0-9*#]{1,10}" // {description = "key sequence of 0-9, * and #, at most 10 keys";});
+      default = null;
+      example = "*1";
+      description = ''
+        Keys a phone presses during a call to record it, and again to stop,
+        on a call that nothing records by itself
+        ({option}`services.asterix.recordings`). Any phone can, and so can
+        the external numbers of a ring group, but not a caller from outside.
+        Asterisk holds back keys that may start the code, so with `*1` a `*`
+        reaches the other side once the next key follows or a second has
+        passed. It is `automixmon` of {file}`features.conf`.
+      '';
+    };
     dnd = code "*76" ''
       Number a phone dials to turn do not disturb on for its extension, and
       again to turn it off. Calls to the extension then go to its `busy`

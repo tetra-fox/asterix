@@ -94,6 +94,17 @@
           set the endpoint's `named_call_group` and `named_pickup_group`.
         '';
       };
+      record = mkOption {
+        type = types.bool;
+        default = false;
+        description = ''
+          Whether to record every call the phone makes or answers, those
+          through a ring group or queue among them
+          ({option}`services.asterix.recordings`). A call to a ring group or
+          queue with such a member plays the notice to the caller even when
+          another member answers.
+        '';
+      };
       noAnswer = mkOption {
         type = types.nullOr pbxLib.destination;
         default = null;
@@ -144,6 +155,19 @@
       (pbxLib.app "Set" ["PBX_FORWARD=\${DB(${pbxLib.forwardKey number kind})}"])
       (pbxLib.app "GotoIf" [''$["''${HASH(pbx-forwarded,${number})}" = "" & ${pbxLib.forwardable "PBX_FORWARD"}]?forward''])
     ];
+
+  dialOptions = let
+    options = pbxLib.recordOptions cfg {
+      called = true;
+      calling = true;
+    };
+  in
+    optional (options != "") options;
+  # a queue member's phone, whose caller the queue's own options cover
+  memberOptions = pbxLib.recordOptions cfg {
+    called = true;
+    calling = false;
+  };
 
   # the extensions a Local channel into pbx-devices rings
   rungThroughLocal = lib.unique (
@@ -237,11 +261,15 @@ in {
                 ++ optional (codes.dnd != null) (
                   pbxLib.app "GotoIf" [''$["''${DEVICE_STATE(${pbxLib.dndDevice number})}" = "INUSE"]?busy'']
                 )
+                ++ pbxLib.recordCall cfg e.record false number
                 ++ [
-                  (pbxLib.app "Dial" [
-                    (pbxLib.devices number)
-                    e.ringTime
-                  ])
+                  (pbxLib.app "Dial" (
+                    [
+                      (pbxLib.devices number)
+                      e.ringTime
+                    ]
+                    ++ dialOptions
+                  ))
                   (pbxLib.app "GotoIf" [''$["''${DIALSTATUS}" = "BUSY"]?busy''])
                 ]
                 # a parked call its phone does not take back comes in here
@@ -279,7 +307,10 @@ in {
           pbx-devices = {
             comment = mkDefault "from services.asterix: every device of an extension, through a Local channel";
             extensions = lib.genAttrs rungThroughLocal (number: [
-              (pbxLib.app "Dial" [(pbxLib.devices number)])
+              (pbxLib.app "Dial" (
+                [(pbxLib.devices number)]
+                ++ lib.optionals (memberOptions != "") ["" memberOptions]
+              ))
               (pbxLib.app "Hangup" [])
             ]);
           };

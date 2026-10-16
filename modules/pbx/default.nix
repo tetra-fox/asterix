@@ -1,9 +1,9 @@
 # services.asterix: extensions, trunks, ring groups, queues, conferences,
 # voice menus, announcements, paging, business hours, feature codes, call
-# parking, routes, a blocklist and phone provisioning, written into the
-# options of the core module (services.asterisk), which stays usable on its
-# own. Every object gets a context of its own, pbx-<kind>-<name>, and phones
-# dial from pbx-internal.
+# parking, routes, a blocklist, call recording and phone provisioning, written
+# into the options of the core module (services.asterisk), which stays usable
+# on its own. Every object gets a context of its own, pbx-<kind>-<name>, and
+# phones dial from pbx-internal.
 {
   config,
   lib,
@@ -61,7 +61,7 @@
     map (extension: "${context}/${extension}") (builtins.filter (extension: builtins.length (lines.${extension} or []) > builtins.length (merged.${context}.extensions.${extension} or [])) (builtins.attrNames extensions)))
   generated);
 
-  codesSet = cfg.featureCodes.dnd != null || builtins.any (kind: builtins.any (code: code != null) (builtins.attrValues kind)) (builtins.attrValues cfg.featureCodes.forward);
+  codesSet = cfg.featureCodes.dnd != null || cfg.featureCodes.record != null || builtins.any (kind: builtins.any (code: code != null) (builtins.attrValues kind)) (builtins.attrValues cfg.featureCodes.forward);
 
   ownSteps = "steps of your own can go in the context's extraConfig, which is written as it is, or in a context of your own that a `context` destination names.";
 in {
@@ -82,6 +82,7 @@ in {
     ./parking.nix
     ./phones
     ./queues.nix
+    ./recordings.nix
     ./ring-groups.nix
     ./routes.nix
     ./trunks.nix
@@ -106,7 +107,7 @@ in {
       ];
     })
     {
-      warnings = lib.optional (!cfg.enable && (builtins.any (name: !(builtins.elem cfg.${name} [{} [] null])) objects || cfg.voicemail.mailboxes != {} || pbxLib.blocksCallers cfg.blocklist || codesSet)) "services.asterix objects are defined, but services.asterix.enable is not set, so they do nothing.";
+      warnings = lib.optional (!cfg.enable && (builtins.any (name: !(builtins.elem cfg.${name} [{} [] null])) objects || cfg.voicemail.mailboxes != {} || pbxLib.blocksCallers cfg.blocklist || codesSet || cfg.recordings.keepDays != null || cfg.recordings.notice != null)) "services.asterix objects are defined, but services.asterix.enable is not set, so they do nothing.";
     }
   ];
 }

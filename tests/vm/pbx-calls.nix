@@ -4,6 +4,9 @@
 # trunk to the same provider, which the line parameter tells apart.
 # Outbound: the provider gets the number without the prefix #, with
 # services.asterix.outbound's caller ID in P-Asserted-Identity and the account in From.
+# Recording: a call out from 203, which records, is recorded from the
+# answer into a file only the asterisk user reads, which the timer of
+# keepDays deletes a day later.
 # Emergency: each number, with and without the prefix, leaves for the
 # provider within a second of the phone's INVITE from every extension, with
 # services.asterix.outbound's caller ID as it has none of its own, while notify rings the
@@ -70,8 +73,10 @@ in
               inherit name;
               password = secret "sip-${extension}";
               voicemail.pin = secret "vm-${extension}";
+              record = extension == "203";
             })
             names;
+          recordings.keepDays = 1;
 
           voicemail.mailboxes."200" = {
             name = "Front desk";
@@ -273,6 +278,26 @@ in
             boss.call("#5559999")
             presents_office(wait_sent(mark, "INVITE sip:5559999@10.2.0.5", "10.2.0.5:")[0])
             hang_up(boss)
+
+        with subtest("a call of a phone that records is recorded once it is answered, and a day later deleted"):
+            monitor = "/var/lib/asterisk/spool/monitor"
+            pbx.succeed(f"rm -f {monitor}/*")
+            boss.call("#5559998")
+            # the provider answers at once, and the recording starts with the answer
+            pbx.wait_until_succeeds(f"ls {monitor} | grep -q -- -203-5559998-", timeout=30)
+            time.sleep(2)
+            hang_up(boss)
+            (name,) = pbx.succeed(f"ls {monitor}").split()
+            assert re.fullmatch(r"\d{8}-\d{6}-203-5559998-\d+\.\d+\.wav", name), name
+            # the directory and the file are the asterisk user's alone to read
+            assert pbx.succeed(f"stat -c '%a %U %G' {monitor}").strip() == "700 asterisk asterisk"
+            mode, owner, group, size = pbx.succeed(f"stat -c '%a %U %G %s' {monitor}/{name}").split()
+            assert (mode, owner, group) == ("640", "asterisk", "asterisk"), (mode, owner, group)
+            # more than the WAV header
+            assert int(size) > 44, size
+            pbx.succeed(f"touch -d '25 hours ago' {monitor}/{name}", f"runuser -u asterisk -- touch {monitor}/recent.wav")
+            pbx.succeed("systemctl start asterisk-recordings-expire.service")
+            assert pbx.succeed(f"ls {monitor}").split() == ["recent.wav"]
 
         def emergency(caller, dialled, number):
             """Places an emergency call, and returns the seconds from the

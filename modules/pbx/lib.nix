@@ -124,15 +124,14 @@ in rec {
         spoken)}
     '');
 
-  # the assertions on the names and prompts of services.asterix.<option>,
-  # given as `objects`: a text prompt's file is named after its object, and
   # flite speaks a text with no ASCII letter or digit as 0.185 s of silence
+  silentPrompt = prompt: prompt ? text && !(builtins.any (c: builtins.match "[A-Za-z0-9]" c != null) (lib.stringToCharacters prompt.text));
+
+  # the assertions on the names and prompts of services.asterix.<option>,
+  # given as `objects`: a text prompt's file is named after its object
   promptAssertions = option: objects: let
     badNames = builtins.filter (name: builtins.match "[A-Za-z0-9_-]+" name == null) (builtins.attrNames objects);
-    silent = builtins.filter (name: let
-      inherit (objects.${name}) prompt;
-    in
-      prompt ? text && !(builtins.any (c: builtins.match "[A-Za-z0-9]" c != null) (lib.stringToCharacters prompt.text))) (builtins.attrNames objects);
+    silent = builtins.filter (name: silentPrompt objects.${name}.prompt) (builtins.attrNames objects);
   in [
     {
       assertion = badNames == [];
@@ -340,6 +339,47 @@ in rec {
 
   # the custom device state of an extension's do not disturb
   dndDevice = extension: "Custom:pbx-dnd-${extension}";
+
+  # whether any `record` of services.asterix is on, so the layer records
+  # calls without the code (recordings.nix)
+  recordsCalls = cfg: builtins.any (option: builtins.any (object: object.record) (builtins.attrValues cfg.${option})) ["extensions" "inbound" "ringGroups" "queues"];
+
+  # whether one of the extensions `members` records its calls; one that is
+  # not an extension is an assertion of the ring group or queue
+  recordingMember = cfg: builtins.any (member: cfg.extensions.${member}.record or false);
+
+  # the step that runs pbx-record's `call` on the caller's channel before it
+  # rings anything, for an object that records every call (`records`) or
+  # rings a phone that records its own (`members`), with `to` naming what
+  # was called in file names
+  recordCall = cfg: records: members: to: let
+    flag = b:
+      if b
+      then "1"
+      else "0";
+  in
+    lib.optional (recordsCalls cfg || cfg.featureCodes.record != null) (app "Gosub" ["pbx-record" "call" "1(${flag records},${flag members},${to})"]);
+
+  # a name as part of a file name, without / and characters a Gosub argument
+  # would misread
+  fileNamePart = name: lib.concatStrings (builtins.filter (c: builtins.match "[A-Za-z0-9_+*#-]" c != null) (lib.stringToCharacters name));
+
+  # Dial's options for recording: U() starts a recording when the called
+  # channel answers (`answered`, which Queue() lacks), and with
+  # services.asterix.featureCodes.record, on a call nothing records, x lets
+  # the called phone (`called`) and X a calling phone (`calling`) record with
+  # the code (features.conf automixmon), as in Queue()
+  recordOptions = cfg: {
+    answered ? true,
+    called,
+    calling,
+  }: let
+    onDemand = ''"''${PBX_RECORD}''${PBX_RECORDING}" = ""'';
+    code = cfg.featureCodes.record != null;
+  in
+    lib.optionalString (answered && recordsCalls cfg) "U(pbx-record)"
+    + lib.optionalString (code && called) "\${IF($[${onDemand}]?x)}"
+    + lib.optionalString (code && calling) "\${IF($[${onDemand} & \"\${PBX_PHONE}\" = \"1\"]?X)}";
 
   # an expression that is true when the number in variable `var` is one a
   # forward may go to: a number of pbx-forward that pbx-forward-refused does

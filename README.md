@@ -91,7 +91,7 @@ in
 
 | Feature                          | What                                                                                                                                                                          |
 | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **A PBX without dialplan**       | extensions, trunks, voicemail, ring groups, queues, conferences, voice menus, paging, business hours and call routes, in `services.asterix`                                   |
+| **A PBX without dialplan**       | extensions, trunks, voicemail, ring groups, queues, conferences, voice menus, paging, business hours, call routes and call recording, in `services.asterix`                   |
 | **Asterisk as Nix options**      | under it, `services.asterisk`: PJSIP, dialplan, voicemail, conferences, queues, music on hold, call features, AMI, ARI and call records. Anything else goes in `settings`     |
 | **A bad config fails the build** | Asterisk boots the new config in the build sandbox, and any error or warning fails it, as does a dialplan that uses a missing application, sound or extension (`checkConfig`) |
 | **Reloads, not restarts**        | deploys reload where they can, so calls stay up                                                                                                                               |
@@ -153,12 +153,13 @@ during a call, every PJSIP password if `res_ari_asterisk.so` is loaded).
 | announcements                               | `services.asterix.announcements` |
 | paging groups                               | `services.asterix.paging`        |
 | opening hours                               | `services.asterix.hours`         |
-| do not disturb and call forwarding codes    | `services.asterix.featureCodes`  |
+| do not disturb, call forwarding and record codes | `services.asterix.featureCodes`  |
 | call parking                                | `services.asterix.parking`       |
 | calls in, by number                         | `services.asterix.inbound`       |
 | callers turned away on calls from trunks    | `services.asterix.blocklist`     |
 | calls out, by prefix                        | `services.asterix.outbound`      |
 | emergency numbers                           | `services.asterix.emergency`     |
+| how long recordings are kept, and the notice before them | `services.asterix.recordings` |
 | phones that fetch their config from the PBX | `services.asterix.phones`        |
 
 ```nix
@@ -208,6 +209,7 @@ in
 | emergency numbers     | no default, since they depend on where the PBX is. `outbound` requires them, or `emergency.numbers = [ ];` for a PBX that makes no emergency calls                                               |
 | feature codes         | none until set, such as FreePBX's `*76` for do not disturb and `*72`/`*73` to forward every call. A phone sets them for its own extension. Forwards go to extensions, or out through `outbound`, never to an emergency number |
 | call parking          | off until set, such as FreePBX's `parking.number = "70";` with slots 71 to 78. A phone parks a call by transferring it to the number, and any phone takes it back by dialling its slot, which also has a busy lamp. A call left parked past `timeout` rings the phone that parked it, then goes to that extension's `noAnswer` |
+| call recording        | `record` on an extension, inbound number, ring group or queue records its calls from the answer, once per call, into `/var/lib/asterisk/spool/monitor`. On other calls, a phone starts and stops one with `featureCodes.record`, such as FreePBX's `*1`. No notice and no expiry until set, since the laws differ |
 
 Voice menus, announcements and paging groups:
 

@@ -75,8 +75,11 @@
           args = ["__PBX_RECORD=answer"];
           label = "answer";
         }
-        (app "Return" [])
       ]
+      # Dial's A() plays it to both sides at once, before U(), and its a
+      # answers the caller as the other side answers, so they hear it there
+      ++ optionals rcfg.noticeToRecorder (map (sound: app "Set" ["__PBX_NOTICE=aA(${sound}:${sound})"]) notice)
+      ++ [(app "Return" [])]
       ++ pbxLib.labelFirst "record" (
         # a caller who heard the notice for a member does not hear it again
         optionals (notice != []) ([(app "GotoIf" [''$["''${PBX_RECORD}" != ""]?recorded''])] ++ playNotice)
@@ -102,7 +105,8 @@
       (app "GotoIf" [''$["''${PBX_RECORDING}" != ""]?done''])
       (app "GotoIf" [''$["''${PBX_RECORD}" = "1" | "''${PBX_RECORD}" = "answer" | "''${PBX_RECORDS}" = "1"]?:done''])
     ]
-    ++ optionals (notice != []) ([(app "GotoIf" [''$["''${PBX_RECORD}" != "answer"]?start''])] ++ playNotice)
+    # with PBX_NOTICE, Dial played it already
+    ++ optionals (notice != []) ([(app "GotoIf" [''$["''${PBX_RECORD}" != "answer" | "''${PBX_NOTICE}" != ""]?start''])] ++ playNotice)
     ++ pbxLib.labelFirst "start" [
       (app "Set" ["__PBX_RECORDING=${now}-\${PBX_FROM}-\${PBX_TO}-\${UNIQUEID}.wav"])
       # b: only while the channel is in a call, not while it is on its own
@@ -125,6 +129,15 @@ in {
           example = 90;
           description = "Days a recording is kept. A timer deletes older ones once a day. Without it, recordings are kept until deleted by hand.";
         };
+        noticeToRecorder = mkOption {
+          type = types.bool;
+          default = false;
+          description = ''
+            On a call that a phone with `record` makes, play the notice to
+            that phone too, at the same time as to whoever answers, so its
+            user hears when the notice ends and the call is recorded.
+          '';
+        };
         notice = mkOption {
           type = types.nullOr pbxLib.prompt;
           default = null;
@@ -136,7 +149,8 @@ in {
             records: an extension, ring group, queue or inbound number with
             `record`, or a ring group or queue with a member that records.
             On a call that a phone with `record` makes, whoever answers hears
-            it instead, before the recording starts. A recording started with
+            it instead, before the recording starts, and the phone too with
+            `noticeToRecorder`. A recording started with
             {option}`services.asterix.featureCodes.record` plays it to both
             sides as it starts.
           '';

@@ -119,125 +119,146 @@
     }
   ];
 
-  result = probe {
-    name = "pbx-recordings";
-    modules = [
-      self.nixosModules.default
-      ({config, ...}: let
-        secret = name: config.lib.asterisk.secret "/run/secrets/${name}";
-        contacts = {
-          "201" = "answer";
-          "202" = "answer";
-          "203" = "press";
-          "204" = "press";
-          "205" = "ring";
-          "206" = "ring";
-        };
-      in {
-        services.asterix = {
-          enable = true;
-          extensions =
-            lib.mapAttrs (number: _: {
-              password = secret "sip-${number}";
-              record = builtins.elem number ["201" "204" "206"];
-            })
-            contacts;
-          ringGroups = {
-            sales = {
-              members = ["205"];
-              ringTime = 1;
-              record = true;
-              noAnswer.extension = "201";
-            };
-            mixed = {
-              number = "601";
-              members = ["206" "202"];
-              ringTime = 5;
-            };
-          };
-          queues.support = {
-            number = "610";
-            members = ["201"];
-          };
-          inbound."5551000" = {
-            trunk = "provider";
-            destination.ringGroup = "sales";
-            record = true;
-          };
-          trunks.provider = {
-            host = "sip.provider.example";
-            username = "5551000";
-            password = secret "trunk";
-          };
-          featureCodes.record = "*1";
-          recordings.notice.sound = "beep";
-        };
-        services.asterisk = {
-          pjsip.endpoints =
-            lib.mapAttrs (_: contact: {
-              aor = {
-                contacts = ["sip:${contact}@127.0.0.1:5060"];
-                qualifyFrequency = 0;
-              };
-            })
-            contacts
-            // {
-              # the phones' side of those calls
-              line = {
-                context = "line";
-                identify.match = ["127.0.0.1"];
-                aor = null;
-              };
-            };
-          dialplan.contexts = {
-            line.extensions = {
-              answer = ["Answer()" "Wait(2)" "Hangup()"];
-              press = ["Answer()" "Wait(1)" "SendDTMF(*1)" "Wait(2)" "Hangup()"];
-              ring = ["Ringing()" "Wait(30)"];
-            };
-            # what 201's endpoint gives the channels of its calls
-            from201.extensions."_X." = [
-              "Set(PBX_RECORDS=1)"
-              "Set(PBX_PHONE=1)"
-              "Set(CALLERID(num)=201)"
-              "Goto(pbx-internal,\${EXTEN},1)"
-            ];
-            # what the channel that records a call carries
-            recording.extensions."_X." = [
-              "Set(__PBX_RECORDING=earlier.wav)"
-              "Goto(pbx-internal,\${EXTEN},1)"
-            ];
-          };
-        };
-      })
-    ];
-    calls = map (sample: sample.call) samples;
-  };
+  # with noticeToRecorder, the phone that records hears the notice too, from
+  # Dial's A() at the same time as whoever answers
+  toRecorder = [
+    {
+      call = {
+        extension = "202";
+        context = "from201";
+      };
+      events = [
+        "caller Dial with the notice"
+        "PJSIP/202 MixMonitor <time>-201-202-<id>.wav,b"
+      ];
+      recordings = 1;
+    }
+  ];
 
-  expected =
-    map (sample: {
-      inherit (sample) events recordings;
-      errors = [];
-    })
-    samples;
+  run = name: noticeToRecorder: samples:
+    probe {
+      inherit name;
+      modules = [
+        self.nixosModules.default
+        ({config, ...}: let
+          secret = name: config.lib.asterisk.secret "/run/secrets/${name}";
+          contacts = {
+            "201" = "answer";
+            "202" = "answer";
+            "203" = "press";
+            "204" = "press";
+            "205" = "ring";
+            "206" = "ring";
+          };
+        in {
+          services.asterix = {
+            enable = true;
+            extensions =
+              lib.mapAttrs (number: _: {
+                password = secret "sip-${number}";
+                record = builtins.elem number ["201" "204" "206"];
+              })
+              contacts;
+            ringGroups = {
+              sales = {
+                members = ["205"];
+                ringTime = 1;
+                record = true;
+                noAnswer.extension = "201";
+              };
+              mixed = {
+                number = "601";
+                members = ["206" "202"];
+                ringTime = 5;
+              };
+            };
+            queues.support = {
+              number = "610";
+              members = ["201"];
+            };
+            inbound."5551000" = {
+              trunk = "provider";
+              destination.ringGroup = "sales";
+              record = true;
+            };
+            trunks.provider = {
+              host = "sip.provider.example";
+              username = "5551000";
+              password = secret "trunk";
+            };
+            featureCodes.record = "*1";
+            recordings = {
+              notice.sound = "beep";
+              inherit noticeToRecorder;
+            };
+          };
+          services.asterisk = {
+            pjsip.endpoints =
+              lib.mapAttrs (_: contact: {
+                aor = {
+                  contacts = ["sip:${contact}@127.0.0.1:5060"];
+                  qualifyFrequency = 0;
+                };
+              })
+              contacts
+              // {
+                # the phones' side of those calls
+                line = {
+                  context = "line";
+                  identify.match = ["127.0.0.1"];
+                  aor = null;
+                };
+              };
+            dialplan.contexts = {
+              line.extensions = {
+                answer = ["Answer()" "Wait(2)" "Hangup()"];
+                press = ["Answer()" "Wait(1)" "SendDTMF(*1)" "Wait(2)" "Hangup()"];
+                ring = ["Ringing()" "Wait(30)"];
+              };
+              # what 201's endpoint gives the channels of its calls
+              from201.extensions."_X." = [
+                "Set(PBX_RECORDS=1)"
+                "Set(PBX_PHONE=1)"
+                "Set(CALLERID(num)=201)"
+                "Goto(pbx-internal,\${EXTEN},1)"
+              ];
+              # what the channel that records a call carries
+              recording.extensions."_X." = [
+                "Set(__PBX_RECORDING=earlier.wav)"
+                "Goto(pbx-internal,\${EXTEN},1)"
+              ];
+            };
+          };
+        })
+      ];
+      calls = map (sample: sample.call) samples;
+    };
+
+  expectedOf = map (sample: {
+    inherit (sample) events recordings;
+    errors = [];
+  });
 in
   pkgs.runCommand "asterisk-pbx-recordings-tests" {
     nativeBuildInputs = [pkgs.jq];
-    expected = builtins.toJSON expected;
-    passAsFile = ["expected"];
   } ''
-    jq -S '[.calls[] | .channel as $channel | {
-      events: [.steps[] | select(.context != "line" and (.application | IN("Playback", "Dial", "Queue", "MixMonitor")))
-        | (if .channel == $channel then "caller" else .channel | sub("-[0-9a-f]{8}(;[12])?$"; "") end) as $who
-        | if .application == "Playback" then "\($who) notice"
-          elif .application == "MixMonitor" then "\($who) MixMonitor \(.data | sub("^[0-9]{8}-[0-9]{6}-"; "<time>-") | sub("-[0-9]+[.][0-9]+[.]wav"; "-<id>.wav"))"
-          else "\($who) \(.application)" end],
-      recordings: [.log[] | select(.message | startswith("Begin MixMonitor Recording"))] | length,
-      errors: [.log[] | select(.level == "ERROR") | .message]
-    }]' ${result}/probe.json > actual
-    if ! diff -u <(jq -S . "$expectedPath") actual; then
-      echo "the calls were recorded otherwise, see ${result}/probe.json" >&2
-      exit 1
-    fi
+    check() {
+      jq -S '[.calls[] | .channel as $channel | {
+        events: [.steps[] | select(.context != "line" and (.application | IN("Playback", "Dial", "Queue", "MixMonitor")))
+          | (if .channel == $channel then "caller" else .channel | sub("-[0-9a-f]{8}(;[12])?$"; "") end) as $who
+          | if .application == "Playback" then "\($who) notice"
+            elif .application == "MixMonitor" then "\($who) MixMonitor \(.data | sub("^[0-9]{8}-[0-9]{6}-"; "<time>-") | sub("-[0-9]+[.][0-9]+[.]wav"; "-<id>.wav"))"
+            elif .application == "Dial" and (.data | test("aA[(]beep:beep[)]")) then "\($who) Dial with the notice"
+            else "\($who) \(.application)" end],
+        recordings: [.log[] | select(.message | startswith("Begin MixMonitor Recording"))] | length,
+        errors: [.log[] | select(.level == "ERROR") | .message]
+      }]' "$1/probe.json" > actual
+      if ! diff -u <(echo "$2" | jq -S .) actual; then
+        echo "the calls were recorded otherwise, see $1/probe.json" >&2
+        exit 1
+      fi
+    }
+    check ${run "pbx-recordings" false samples} ${lib.escapeShellArg (builtins.toJSON (expectedOf samples))}
+    check ${run "pbx-recordings-to-recorder" true toRecorder} ${lib.escapeShellArg (builtins.toJSON (expectedOf toRecorder))}
     touch $out
   ''

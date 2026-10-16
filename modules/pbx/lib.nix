@@ -365,7 +365,8 @@ in rec {
   fileNamePart = name: lib.concatStrings (builtins.filter (c: builtins.match "[A-Za-z0-9_+*#-]" c != null) (lib.stringToCharacters name));
 
   # Dial's options for recording: U() starts a recording when the called
-  # channel answers (`answered`, which Queue() lacks), and with
+  # channel answers (`answered`, which Queue() lacks), after the notice of
+  # PBX_NOTICE (recordings.noticeToRecorder) plays to both sides, and with
   # services.asterix.featureCodes.record, on a call nothing records, x lets
   # the called phone (`called`) and X a calling phone (`calling`) record with
   # the code (features.conf automixmon), as in Queue()
@@ -377,7 +378,7 @@ in rec {
     onDemand = ''"''${PBX_RECORD}''${PBX_RECORDING}" = ""'';
     code = cfg.featureCodes.record != null;
   in
-    lib.optionalString (answered && recordsCalls cfg) "U(pbx-record)"
+    lib.optionalString (answered && recordsCalls cfg) "U(pbx-record)\${PBX_NOTICE}"
     + lib.optionalString (code && called) "\${IF($[${onDemand}]?x)}"
     + lib.optionalString (code && calling) "\${IF($[${onDemand} & \"\${PBX_PHONE}\" = \"1\"]?X)}";
 

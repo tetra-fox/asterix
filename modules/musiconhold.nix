@@ -82,8 +82,8 @@
         default = null;
         example = lib.literalExpression "./music";
         description = ''
-          Directory with sound files (formats Asterisk has codecs for, such as
-          WAV, GSM or ulaw). A Nix path or package is copied to the store; a
+          Directory with sound files in formats Asterisk has codecs for, such
+          as WAV, GSM or ulaw. A Nix path or package is copied to the store. A
           relative string is resolved against Asterisk's data directory.
         '';
       };
@@ -107,13 +107,12 @@
         type = types.nullOr types.str;
         default = null;
         description = ''
-          Command producing signed linear audio in `custom` mode. Asterisk
-          runs the program without searching `PATH`, so give its full path,
-          such as `''${pkgs.mpg123}/bin/mpg123`. Asterisk starts a program that
-          ends again, but while one has ended, Asterisk can crash when it stops
-          or when a deploy that changes music on hold reloads it. A program
-          that keeps running, such as a script that plays a clip in a loop,
-          avoids that.
+          Command producing signed linear audio in `custom` mode, with the
+          program's full path, such as `''${pkgs.mpg123}/bin/mpg123`, since
+          Asterisk does not search `PATH`. Use a program that keeps running,
+          such as a script that plays a clip in a loop. Asterisk restarts one
+          that exits, but while it is down, Asterisk can crash when it stops
+          or reloads music on hold.
         '';
       };
       settings = mkOption {

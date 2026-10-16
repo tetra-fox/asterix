@@ -1,9 +1,6 @@
-# services.asterix: extensions, trunks, ring groups, queues, conferences,
-# voice menus, announcements, paging, business hours, feature codes, call
-# parking, routes, a blocklist, call recording and phone provisioning, written
-# into the options of the core module (services.asterisk), which stays usable
-# on its own. Every object gets a context of its own, pbx-<kind>-<name>, and
-# phones dial from pbx-internal.
+# services.asterix: the PBX layer, written into the options of the core
+# module (services.asterisk), which stays usable on its own. Every object gets
+# a context of its own, pbx-<kind>-<name>, and phones dial from pbx-internal.
 {
   config,
   lib,

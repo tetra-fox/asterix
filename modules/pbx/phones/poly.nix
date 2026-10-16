@@ -1,8 +1,8 @@
 # Provisioning for Poly (formerly Polycom) VVX phones on UC Software and Edge
-# E phones on PVOS: each services.asterix.phones device of one of these models gets a master
-# configuration file `<mac>.cfg` whose CONFIG_FILES names `<mac>-settings.cfg`,
-# which holds the phone's parameters, and each line, a registration, registers
-# as its endpoint.
+# E phones on PVOS: each device of these models gets a master configuration
+# file `<mac>.cfg` whose CONFIG_FILES names `<mac>-settings.cfg`, which holds
+# the phone's parameters, and each line, a registration, registers as its
+# endpoint.
 #
 # Every parameter set here is in Poly's documentation of the models that get
 # it: UC Software 6.4.0 Administrator Guide (3725-42644-012A) for VVX, Poly

@@ -1,4 +1,4 @@
-# Autoload is off and an explicit module list is loaded. The options put the
+# Autoload is off and an explicit module list is loaded. Options put the
 # modules they need in `needed`, which is loaded even without the default
 # list and which noload cannot remove. Asterisk does not load a module's
 # dependencies by itself, so the default list includes them.
@@ -182,13 +182,10 @@ in {
       default = false;
       description = ''
         Load every module Asterisk finds, except the ones in
-        {option}`services.asterisk.modules.noload`. Off by default:
-        only the modules in {option}`services.asterisk.modules.load`
-        are loaded. With autoload, the build-time check
-        ({option}`services.asterisk.checkConfig`) leaves out the problems of
-        the modules that neither `load` nor `preload` names: what they log
-        while they load, such as a missing file, and that they decline. Name
-        a module in `load` to have it checked.
+        {option}`services.asterisk.modules.noload`. The build-time check
+        ({option}`services.asterisk.checkConfig`) then ignores problems of
+        modules that neither `load` nor `preload` names, such as a missing
+        file or a declined load. Name a module in `load` to have it checked.
       '';
     };
 
@@ -196,14 +193,12 @@ in {
       type = types.bool;
       default = true;
       description = ''
-        Add the module's lean default set to
-        {option}`services.asterisk.modules.load`: PJSIP, RTP,
-        SRTP, bridging, the ulaw/alaw/G.722/GSM/Opus codecs, sound file
-        formats, music on hold, the dialplan and its common applications and
-        functions. Remove single modules with
-        {option}`services.asterisk.modules.noload`. Without the set, the
-        options still load the modules they need, such as chan_pjsip.so for
-        PJSIP endpoints, but not the modules those depend on.
+        Add a default set to {option}`services.asterisk.modules.load`: PJSIP,
+        RTP, SRTP, bridging, the ulaw, alaw, G.722, GSM and Opus codecs, sound
+        file formats, music on hold, the dialplan and its common applications
+        and functions. Without the set, options still load the modules they
+        need, such as chan_pjsip.so for PJSIP endpoints, but not the modules
+        those depend on.
       '';
     };
 
@@ -217,7 +212,8 @@ in {
       description = ''
         Modules to load (`load =>`). Typed options add the modules they need.
         Asterisk does not resolve dependencies when autoload is off, so list
-        them too. Names without `.so` get it appended.
+        them too. Names without `.so` get it appended. A module missing from
+        the package fails the build.
       '';
     };
 
@@ -227,10 +223,10 @@ in {
       example = ["res_pjsip_messaging.so"];
       description = ''
         Modules never to load (`noload =>`), taking precedence over
-        {option}`services.asterisk.modules.load`. A module the
-        configuration needs, such as app_voicemail.so with voicemail
-        mailboxes or res_pjsip_acl.so with PJSIP ACLs, cannot be listed.
-        `chan_sip.so` is always excluded.
+        {option}`services.asterisk.modules.load`. Listing a module the
+        configuration needs, such as app_voicemail.so for voicemail mailboxes
+        or res_pjsip_acl.so for PJSIP ACLs, fails evaluation. `chan_sip.so` is
+        always excluded.
       '';
     };
 

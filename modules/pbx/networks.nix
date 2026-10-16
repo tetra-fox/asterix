@@ -35,7 +35,7 @@
         type = types.str;
         default = "0.0.0.0";
         example = "10.0.20.10";
-        description = "Address of the PBX on this network, which its transports bind; `0.0.0.0` or `::` for all addresses.";
+        description = "Address of the PBX on this network, which its transports bind. `0.0.0.0` or `::` binds all addresses.";
       };
       subnets = mkOption {
         type = types.listOf types.str;
@@ -52,11 +52,10 @@
         type = types.nonEmptyListOf (types.enum ["udp" "tcp" "tls"]);
         default = ["udp"];
         description = ''
-          SIP transports on `address`: transport `<network>` for `udp`, which
-          takes TCP on its port too ({option}`services.asterisk.pjsip.transports.<name>.tcp`),
-          `<network>-tcp` for `tcp` without `udp`, and `<network>-tls` for
-          `tls`. Extensions of the network send over the first of udp, tcp
-          and tls it has.
+          SIP transports on `address`: `<network>` for `udp`, which takes TCP
+          on its port too, `<network>-tcp` for `tcp` without `udp`, and
+          `<network>-tls` for `tls`. Extensions of the network send over the
+          first of udp, tcp and tls it has.
         '';
       };
       externalAddress = mkOption {
@@ -64,8 +63,8 @@
         default = null;
         example = "203.0.113.5";
         description = ''
-          Public address of a PBX behind NAT, which its SIP headers and SDP
-          give to peers outside `subnets`.
+          Public address of a PBX behind NAT, given in SIP headers and SDP to
+          peers outside `subnets`.
         '';
       };
       tls = {
@@ -135,8 +134,8 @@ in {
         }
       '';
       description = ''
-        Networks the PBX is reached on. Without any, one network named
-        `default` takes UDP and TCP on port 5060 on every address, from
+        Networks the PBX is reached on. The default, one network named
+        `default`, takes UDP and TCP on port 5060 on every address, from
         anywhere.
       '';
     };

@@ -67,9 +67,9 @@
         type = types.strMatching "${timeOfDay}-${timeOfDay}";
         example = "09:00-17:00";
         description = ''
-          Opening hours of those days, in `timezone`, up to the end of the last
-          minute: `00:00-23:59` is the whole day. A range past midnight, such
-          as `22:00-06:00`, opens on those days and closes the morning after.
+          Opening hours of those days in `timezone`, up to the end of the last
+          minute, so `00:00-23:59` is the whole day. A range past midnight,
+          such as `22:00-06:00`, closes the morning after.
         '';
       };
     };
@@ -81,9 +81,8 @@
         type = types.strMatching "[A-Za-z0-9_+-]+(/[A-Za-z0-9_+-]+)*";
         example = "America/Los_Angeles";
         description = ''
-          Time zone of the opening hours, from the tz database (tzdata), but
-          not one of `right/`, which count leap seconds. Required: NixOS
-          servers usually run in UTC.
+          Time zone of the opening hours, from tzdata. A `right/` zone, which
+          counts leap seconds, fails evaluation.
         '';
       };
       open = mkOption {
@@ -94,7 +93,7 @@
             time = "09:00-17:00";
           }
         ];
-        description = "Opening hours; outside them it is closed.";
+        description = "Opening hours. Outside them it is closed.";
       };
       holidays = mkOption {
         type = types.listOf (types.strMatching "${month} ${monthDay}(-${monthDay})?");
@@ -110,11 +109,9 @@
         default = null;
         example = "*28";
         description = ''
-          Number a phone dials to close now, whatever `open` says, for
-          example when everyone leaves early, and again to go back to `open`.
-          It stays closed until then, across days and restarts. It also works
-          as a busy lamp key, lit while closed this way. The state is kept by
-          Asterisk (astdb), not in the Nix configuration.
+          Number a phone dials to close now, whatever `open` says, and again
+          to go back to `open`. It stays closed until then, across days and
+          restarts. It also works as a busy lamp key, lit while closed.
         '';
       };
     };

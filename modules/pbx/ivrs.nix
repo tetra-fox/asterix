@@ -48,9 +48,11 @@
         type = types.bool;
         default = false;
         description = ''
-          Let callers dial the numbers of {option}`services.asterix.extensions` from the
-          menu. A key that starts an extension number counts on its own once
-          no digit follows within 5 seconds.
+          Whether to let callers dial the numbers of
+          {option}`services.asterix.extensions` from the menu. A key that
+          starts an extension number counts on its own once no digit follows
+          within 5 seconds. A key of `options` that is an extension number
+          fails evaluation.
         '';
       };
       timeout = mkOption {

@@ -13,12 +13,10 @@ core-only.nix run as written in a VM test, and every one builds in
 | [core-only.nix](core-only.nix)                               | minimal.nix with `services.asterisk` alone, and its own dialplan | `nixosModules.asterisk`                   | `sip-101`, `sip-102`                                      |                         |
 
 Passwords come from sops-nix. A changed secret reloads Asterisk, or restarts
-the provisioning server, through sops-nix's `reloadUnits` and `restartUnits`.
-
-- By default sops-nix leaves that to switch-to-configuration, which NixOS 26.05
-  warns goes away in 26.11, so the examples need revisiting before then.
-- `sops.useSystemdActivation = true` does it from a systemd unit instead. It's
-  the default with systemd-sysusers or userborn, but the VM tests don't use it.
+the provisioning server, through `reloadUnits` and `restartUnits`. sops-nix
+runs those from switch-to-configuration, which NixOS 26.05 warns goes away in
+26.11, unless `sops.useSystemdActivation = true`, the default with
+systemd-sysusers or userborn.
 
 ## household-intercom.nix
 
@@ -39,8 +37,6 @@ the provisioning server, through sops-nix's `reloadUnits` and `restartUnits`.
   across them.
 - SIP and RTP are open only on the trusted LAN and the VoIP VLAN, each with its
   own transport, and a phone's password only works from its own network.
-- To adapt it, change `services.asterix.networks`.
-- 911 is an announcement, which plays its prompt twice and hangs up.
 
 ## household-intercom-ht801.nix
 

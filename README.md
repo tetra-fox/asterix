@@ -46,11 +46,11 @@ Intended for anything from a household intercom to a small office PBX with SIP t
 }
 ```
 
-1. **Write `pbx.nix`**: two phones that call each other by dialing 101 and
+2. **Write `pbx.nix`**: two phones that call each other by dialing 101 and
    102, with their passwords in `secrets.yaml`.
 
 ```nix
-# pbx.nix: two phones that call each other by dialing 101 and 102
+# pbx.nix
 { config, lib, ... }:
 let
   inherit (config.lib.asterisk) secret;
@@ -72,7 +72,7 @@ in
 }
 ```
 
-1. **Deploy, then register a phone:**
+3. **Deploy, then register a phone:**
 
    | Setting  | Value                                      |
    | -------- | ------------------------------------------ |
@@ -82,7 +82,7 @@ in
 
    `asterisk -rx "pjsip show endpoints"` shows them.
 
-2. **On a host with a public address, narrow the firewall.** `openFirewall`
+4. **On a host with a public address, narrow the firewall.** `openFirewall`
    opens SIP and RTP on every interface. Describe the phones' network in
    `services.asterix.networks`, with its interface, address and subnets, as
    [the intercom example](examples/household-intercom.nix) does.
@@ -137,8 +137,8 @@ during a call, every PJSIP password if `res_ari_asterisk.so` is loaded).
 
 ## PBX
 
-`services.asterix` is the PBX, in the objects its admin thinks in.
-`nixosModules.default` brings it, with the core under it.
+`services.asterix` is the PBX. `nixosModules.default` brings it, with the
+core under it.
 
 | Object                                                   | Option                           |
 | -------------------------------------------------------- | -------------------------------- |

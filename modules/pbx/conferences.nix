@@ -46,12 +46,12 @@
       };
       musicOnHoldWhenEmpty = mkOption {
         inherit (coreUser.musicOnHoldWhenEmpty) type default;
-        description = "Play music on hold to a caller who is alone in the conference (`music_on_hold_when_empty`).";
+        description = "Whether to play music on hold to a caller alone in the conference (`music_on_hold_when_empty`).";
       };
       announceJoinLeave = mkOption {
         type = types.nullOr types.bool;
         default = null;
-        description = "Ask each caller for their name on joining, and announce it when they join and leave (`announce_join_leave`).";
+        description = "Whether to ask each caller for their name on joining, and announce it when they join and leave (`announce_join_leave`).";
       };
     };
   };
@@ -79,12 +79,11 @@ in {
     description = ''
       Conference rooms, keyed by room name. Each one defines the bridge and
       the user profile `pbx-conference-<name>` of
-      {option}`services.asterisk.confbridge.bridges` and `users`, where
-      settings without an option here can be added. A name has up to
-      ${toString maxName} bytes, so the profile's name fits the 79 bytes
-      confbridge.conf keeps, and ConfBridge tells names apart without regard
-      to case. A name cannot be empty or contain `,` `;` `[` `]` `"` `\`
-      `''${` `$[`, an unclosed `(` or a line break, nor end with white space.
+      {option}`services.asterisk.confbridge.bridges` and `users`, where other
+      settings can go. A name has up to ${toString maxName} bytes and cannot
+      be empty, contain `,` `;` `[` `]` `"` `\` `''${` `$[`, an unclosed `(`
+      or a line break, or end with white space. Names that differ only in
+      case are one conference.
     '';
   };
 

@@ -1,7 +1,6 @@
 # services.asterix.inbound, services.asterix.outbound and
 # services.asterix.emergency: calls between the phones and trunks. Calls from
-# a trunk start in pbx-inbound-<trunk>, the default context of
-# services.asterix.trunks, which holds the trunk's numbers of
+# a trunk start in pbx-inbound-<trunk>, which holds its numbers of
 # services.asterix.inbound.
 {
   config,
@@ -39,8 +38,7 @@
         example = "provider";
         description = ''
           Trunk of {option}`services.asterix.trunks` the number's calls
-          arrive on, or a list of them for a number that arrives through more
-          than one provider or account.
+          arrive on, or a list of them.
         '';
       };
       destination = mkOption {
@@ -73,7 +71,7 @@
       record = mkOption {
         type = types.bool;
         default = false;
-        description = "Whether to record the calls to this number, wherever they go, from when they are answered ({option}`services.asterix.recordings`).";
+        description = "Whether to record calls to this number from when they are answered, wherever they go. See {option}`services.asterix.recordings`.";
       };
     };
   };
@@ -85,14 +83,12 @@
         example = "9";
         description = ''
           Digits dialled before a number outside, removed before the call
-          leaves; the number outside has two digits or more. Can be empty, and
-          then every number of two digits or more that no number of the PBX takes
-          goes out through the trunk, a mistyped extension number included. A
-          number of the PBX that starts with them still reaches the PBX: with `9`, a
-          ring group on 900 takes the calls to 900, so 00 outside cannot be
-          dialled. So does a call pickup code (`pickupexten` of features.conf)
-          that starts with them, which chan_pjsip takes before the dialplan:
-          with `9` and a pickup code of `981`, 81 outside cannot be dialled.
+          leaves. The number outside has two digits or more. When empty, every
+          such number that no number of the PBX takes goes out, mistyped
+          extensions included. A number of the PBX or a call pickup code
+          (`pickupexten` of features.conf) that starts with the prefix wins:
+          with `9`, a ring group on 900 means 00 outside cannot be dialled, and
+          a pickup code of `981` means 81 cannot.
         '';
       };
       trunk = mkOption {
@@ -105,11 +101,10 @@
         example = "5551000";
         description = ''
           Number presented to the called party, on calls out and to the
-          external numbers of ring groups. The trunk's From header keeps
-          naming its account, so asterix sends this number in the
-          P-Asserted-Identity header of these calls; a provider that ignores
-          that header shows the account's number. Without it, the trunk
-          decides.
+          external numbers of ring groups. It is sent in P-Asserted-Identity,
+          since the From header keeps naming the trunk's account. A provider
+          that ignores that header shows the account's number. When null, the
+          trunk decides.
         '';
       };
     };
@@ -123,10 +118,10 @@
         type = types.listOf (types.strMatching "[0-9]+") // {emptyValue = {};};
         example = ["911"];
         description = ''
-          Emergency numbers where the PBX is. Phones can dial them with and
-          without the outbound prefix. With {option}`services.asterix.outbound`, an empty
-          list says that the PBX makes no emergency calls; an emergency number
-          is then taken for a number outside, or reaches nothing.
+          Emergency numbers where the PBX is, dialled with or without the
+          outbound prefix. An empty list says the PBX makes no emergency calls.
+          An emergency number then goes out as a number outside, or reaches
+          nothing.
         '';
       };
       trunk = mkOption {
@@ -140,9 +135,8 @@
         default = null;
         description = ''
           Number presented to the emergency service, usually the one the
-          site's address is registered with, sent in P-Asserted-Identity as
-          {option}`services.asterix.outbound.callerId` is; without it, emergency calls
-          present that one.
+          site's address is registered with. When null, emergency calls present
+          {option}`services.asterix.outbound.callerId`.
         '';
       };
       notify = mkOption {
@@ -150,9 +144,9 @@
         default = [];
         example = ["201"];
         description = ''
-          Extensions called at the same moment, which hear the caller's
-          number, for example the front desk. Some places require this. The
-          caller's own extension is left out, with all of its devices.
+          Extensions called at the same time, which hear the caller's
+          number, for example the front desk. The caller's own extension is
+          left out, with all of its devices.
         '';
       };
     };
@@ -320,22 +314,18 @@ in {
         }
       '';
       description = ''
-        Numbers calls arrive at from trunks, keyed by the user part of the
-        Request-URI the trunk sends (a number only in To does not count), and
-        where their calls go: `destination`, or `hours` with `open` and
-        `closed`. Calls from a trunk start in
-        `pbx-inbound-<trunk>`, which holds these numbers, unless the trunk
-        sets a `context` of its own. Other numbers are rejected.
+        Numbers calls arrive at from trunks, and where their calls go:
+        `destination`, or `hours` with `open` and `closed`. Other numbers are
+        rejected.
 
-        A key is a number of digits, `*` and `#`, with an optional leading
-        `+`; `s`, which takes the calls that name no number: those to the
-        address a trunk registered, unless its `registration.contactUser`
-        gives that a number, and those whose Request-URI has no user part; or
-        a pattern of numbers, such as `_X.` for any number. A number of the
-        trunk goes before its patterns, and of two patterns that match, the
-        more specific one takes the call. chan_pjsip takes a call to the call
-        pickup code (`pickupexten` of features.conf) as a call pickup before
-        the dialplan runs, also when a pattern matches it.
+        A key is the user part of the Request-URI (not the To header). It is a
+        number of digits, `*` and `#` with an optional leading `+`, a pattern
+        such as `_X.` for any number, or `s`. `s` takes the calls that name no
+        number: those to the address a trunk registered, unless its
+        `registration.contactUser` gives that a number, and those whose
+        Request-URI has no user part. A call to the call pickup code
+        (`pickupexten` of features.conf) is taken as a pickup even when a
+        pattern matches it.
       '';
     };
 
@@ -349,13 +339,13 @@ in {
       };
       description = ''
         Calls from phones to numbers outside: the prefix, then the number. A
-        call the trunk does not put through ends with congestion, which phones
-        play as a fast busy, and one the far end answers busy stays busy. A
-        provider that does not answer at all fails a call once its INVITE
-        times out, after 32 s, and at once after the trunk's next qualify
-        (`qualifyFrequency`). It needs {option}`services.asterix.emergency` beside it, with
-        no emergency numbers if the PBX makes no emergency calls: without
-        their own route they would go out as numbers outside, 911 as 11 with
+        call the trunk does not put through ends with congestion, a fast busy,
+        and a busy answer stays busy. A provider that does not answer fails a
+        call when its INVITE times out after 32 s, and at once after the
+        trunk's next qualify (`qualifyFrequency`).
+
+        Requires {option}`services.asterix.emergency`, with no numbers if the
+        PBX makes no emergency calls. Otherwise 911 would go out as 11 with
         the prefix 9.
       '';
     };
@@ -370,11 +360,10 @@ in {
         notify = ["201"];
       };
       description = ''
-        Emergency calls, which {option}`services.asterix.outbound` needs. There are no
-        defaults: the numbers, and who must be told, depend on where the PBX
-        is. A call waits for the trunk as long as it takes, and one the trunk
-        does not put through ends with congestion, as with
-        {option}`services.asterix.outbound`.
+        Emergency calls, required by {option}`services.asterix.outbound`.
+        There are no defaults, since the numbers and who must be told depend
+        on where the PBX is. A call waits for the trunk as long as it takes,
+        and one the trunk does not put through ends with congestion.
       '';
     };
 
@@ -382,12 +371,11 @@ in {
       type = types.listOf types.str;
       default = [];
       description = ''
-        Trunks of {option}`services.asterix.trunks` that connect
-        another PBX, whose callers may dial out through
-        {option}`services.asterix.outbound`. asterix refuses any other trunk whose calls start
+        Trunks of {option}`services.asterix.trunks` that connect another
+        PBX, whose callers may dial out through
+        {option}`services.asterix.outbound`. Any other trunk whose calls start
         in a context that reaches `pbx-outbound`, as `pbx-internal` does,
-        since anyone who can call in through it could dial out, emergency
-        numbers included.
+        fails evaluation, since anyone calling in through it could dial out.
       '';
     };
   };

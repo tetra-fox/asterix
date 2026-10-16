@@ -100,20 +100,17 @@ in {
         ];
       };
       description = ''
-        Log channels (the `[logfiles]` section), mapping a channel to its
-        levels; `security` loads res_security_log.so. A channel with a
+        Log channels (the `[logfiles]` section) and their levels. The
+        `security` level loads res_security_log.so. A channel with a
         formatter such as `[json]` goes in `settings."logger.conf".logfiles`
-        instead. `console` is standard output, which goes to the journal;
-        Asterisk adds `verbose` to it whatever its levels, so the `verbose`
-        option of asterisk.conf alone decides which verbose messages reach
-        the journal. `syslog.<facility>` logs to syslog; any other name is a
-        file in {file}`/var/log/asterisk`. `console` defaults to
-        `notice,warning,error`; set a channel to `[ ]` to remove it.
+        instead. `console` goes to the journal. Asterisk adds `verbose` to it
+        whatever its levels, so asterisk.conf's `verbose` alone decides which
+        verbose messages reach the journal. `syslog.<facility>` logs to
+        syslog, and any other name is a file in {file}`/var/log/asterisk`.
+        `console` defaults to `notice,warning,error`. `[ ]` removes a channel.
 
-        logrotate rotates the files weekly and keeps four old ones,
-        compressed but for the newest, as it does with {file}`queue_log` and
-        the CSV CDRs; the settings are defaults in
-        `services.logrotate.settings.asterisk`.
+        logrotate rotates the files, {file}`queue_log` and the CSV CDRs
+        weekly and keeps four (`services.logrotate.settings.asterisk`).
       '';
     };
 

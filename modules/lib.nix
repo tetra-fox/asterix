@@ -203,9 +203,8 @@ in {
       type = lib.types.attrsOf format.types.value;
       default = {};
       description = ''
-        Additional keys for the generated ${what} section. They take
-        precedence over single values generated from the typed options and
-        extend generated lists.
+        Additional keys for the generated ${what} section. They replace single
+        values generated from the typed options and extend generated lists.
       '';
     };
 

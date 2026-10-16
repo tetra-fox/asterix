@@ -35,12 +35,10 @@
         type = types.nullOr (types.ints.between 0 2146);
         default = null;
         description = ''
-          Members with a higher penalty are only called when every member with
-          a lower one is paused, busy, in wrap-up time or unreachable, not when
-          they do not answer. With the `wrandom` strategy the penalty is a
-          weight instead: the higher it is, the less likely the member is
-          called first. At most 2146, since app_queue overflows on larger
-          penalties and rings those members first.
+          Members with a higher penalty are called only when every member
+          with a lower one is paused, busy, in wrap-up time or unreachable,
+          not when they do not answer. With `wrandom` the penalty is a weight:
+          the higher it is, the less likely the member is called first.
         '';
       };
       name = mkOption {
@@ -71,10 +69,9 @@
         ];
         default = "ringall";
         description = ''
-          How members are chosen. A queue that a deploy switches to `linear`
-          rings its members in its old order, not the listed one, until
-          Asterisk restarts, since a reload keeps the queue's member list as
-          it was.
+          How members are chosen. A queue switched to `linear` rings its
+          members in their old order until Asterisk restarts, since a reload
+          keeps the member list.
         '';
       };
       timeout = mkOption {
@@ -166,8 +163,7 @@ in {
       default = false;
       description = ''
         Keep members added at runtime (AddQueueMember) across restarts in
-        astdb. Off by default, so the configured members are the whole truth.
-        Asterisk reads them back only when it starts, so a queue that one
+        astdb. Asterisk reads them back only when it starts, so a queue that one
         deploy removes and a later one restores comes back without them until
         the next restart, and loses them for good if Asterisk starts while the
         queue is gone.
@@ -187,9 +183,8 @@ in {
         }
       '';
       description = ''
-        Call queues, used as `Queue(support)` in the dialplan. Asterisk keeps
-        79 bytes of a queue's name, and takes `general`, in any case, for its
-        settings.
+        Call queues, used as `Queue(support)` in the dialplan. Names are at
+        most 79 bytes, and `general` is reserved, in any case.
       '';
     };
   };

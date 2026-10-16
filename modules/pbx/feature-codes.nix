@@ -1,10 +1,8 @@
 # services.asterix.featureCodes: do not disturb and call forwarding, which a
 # phone sets for its own extension by dialling a code, in pbx-features, and
-# the code that records a call, which recordings.nix applies.
-# Asterisk keeps the state in astdb, by extension: do not disturb as a custom
-# device state, each forward's number under pbx-forward. Calls to the
-# extension read it in pbx-extension-<number>, and numbering.nix routes the
-# codes and holds the numbers a forward may go to.
+# the code that records a call, which recordings.nix applies. The state is in
+# astdb, by extension: do not disturb as a custom device state, each
+# forward's number under pbx-forward. numbering.nix routes the codes.
 {
   config,
   lib,
@@ -41,15 +39,14 @@
 
   forwardOptions = calls: on: off: {
     on = code on ''
-      Number a phone dials to forward ${calls}, followed by the number to
-      forward them to, such as `${on}202`, or alone to be asked for the
-      number, which ends with #. The number is an extension, or with
-      {option}`services.asterix.outbound` a number outside, dialled as
-      phones dial it, with the prefix. Any other number of the PBX, an
-      emergency number among them, is refused. A call forwarded outside
-      presents {option}`services.asterix.outbound.callerId`, as other calls
-      out do. A call leaves an extension by a forward only once, so
-      forwards that lead back to it ring it instead. Needs `off`.
+      Number a phone dials to forward ${calls}, followed by the target,
+      such as `${on}202`, or alone to be asked for it, ending with #. The
+      target is an extension, or with {option}`services.asterix.outbound` a
+      number outside with the prefix. Other numbers of the PBX, emergency
+      numbers among them, are refused. A call forwarded outside presents
+      {option}`services.asterix.outbound.callerId`. A call leaves an extension by a
+      forward only once, so forwards that lead back to it ring it instead.
+      Needs `off`.
     '';
     off = code off "Number a phone dials to stop the forward that `on` set.";
   };
@@ -127,22 +124,22 @@ in {
       example = "*1";
       description = ''
         Keys a phone presses during a call to record it, and again to stop,
-        on a call that nothing records by itself
-        ({option}`services.asterix.recordings`). Any phone can, and so can
-        the external numbers of a ring group, but not a caller from outside.
-        Asterisk holds back keys that may start the code, so with `*1` a `*`
-        reaches the other side once the next key follows or a second has
-        passed. It is `automixmon` of {file}`features.conf`.
+        on a call not already recorded by
+        {option}`services.asterix.recordings`. Phones and the external
+        numbers of a ring group can use it, callers from outside cannot. Keys
+        that may start the code are held back, so with `*1` a `*` reaches the
+        other side once the next key follows or a second has passed. It is
+        `automixmon` of {file}`features.conf`.
       '';
     };
     dnd = code "*76" ''
       Number a phone dials to turn do not disturb on for its extension, and
       again to turn it off. Calls to the extension then go to its `busy`
-      destination, or its busy forward, without ringing it, unless every
-      call is forwarded. Calls through a ring group, queue or page still
-      ring it, as do emergency notifications. It also works as a
-      busy lamp key on the phone, lit while do not disturb is on. Asterisk
-      keeps the state (astdb), not the Nix configuration.
+      destination or busy forward without ringing it, unless every call is
+      forwarded. Calls through a ring group, queue or page still ring it, as
+      do emergency notifications. It also works as a busy lamp key, lit
+      while do not disturb is on. The state is kept in astdb, not in the Nix
+      configuration.
     '';
     forward = {
       always = forwardOptions "every call to its extension, which then does not ring" "*72" "*73";

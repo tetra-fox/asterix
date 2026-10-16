@@ -570,8 +570,8 @@ in rec {
             default = defaultOrder config.name;
             defaultText = lib.literalMD "0 for `general`, 1 for `globals`, 1000 otherwise";
             description = ''
-              Sections are rendered sorted by this value, then templates
-              before other sections, then by attribute name.
+              Sections are sorted by this value, then templates first, then
+              by attribute name.
             '';
           };
           template = mkOption {

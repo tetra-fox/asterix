@@ -32,7 +32,7 @@
       maxMembers = mkOption {
         type = types.nullOr types.ints.positive;
         default = null;
-        description = "Maximum number of participants (`max_members`); an admin joins a full conference anyway.";
+        description = "Maximum number of participants (`max_members`). An admin joins a full conference anyway.";
       };
       recordConference = optionalBool "Record the conference (`record_conference`).";
       language = mkOption {
@@ -52,11 +52,11 @@
         type = types.nullOr format.types.secretOrString;
         default = null;
         description = ''
-          PIN required to join, normally a secret reference. A plain string is
-          stored in the world-readable Nix store and triggers a warning.
+          PIN required to join, normally a secret reference. A plain string
+          lands in the world-readable Nix store and triggers a warning.
         '';
       };
-      waitMarked = optionalBool "Wait, muted, until a marked user joins (`wait_marked`); with music only if `musicOnHoldWhenEmpty` is set.";
+      waitMarked = optionalBool "Wait, muted, until a marked user joins (`wait_marked`). Music plays only with `musicOnHoldWhenEmpty`.";
       endMarked = optionalBool "Leave when the last marked user leaves (`end_marked`).";
       startMuted = optionalBool "Join muted (`startmuted`).";
       quiet = optionalBool "Do not play join/leave sounds for this user.";

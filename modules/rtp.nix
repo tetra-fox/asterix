@@ -30,8 +30,8 @@ in {
         default = 20000;
         description = ''
           Last UDP port for RTP. Each call leg takes an even port for RTP and
-          the one above it for RTCP, so an even `to` uses `to + 1` as well,
-          which `openFirewall` opens.
+          the next for RTCP, so an even `to` also uses `to + 1`, which
+          `openFirewall` opens.
         '';
       };
     };
@@ -47,13 +47,12 @@ in {
       default = null;
       description = ''
         Drop RTP from sources other than the one Asterisk learns in the first
-        5 seconds of a call's media (`strictrtp`; `seqno` learns from sequence
-        numbers alone). Asterisk's default is `yes`. A phone whose address or
-        port changes after that, as behind a NAT that rebinds, is not heard
-        for the rest of the call, and Asterisk logs it only at debug level,
-        so set `false` where phones sit behind NATs that rebind during calls.
-        With `false`, Asterisk takes RTP from any source, and for endpoints
-        with `behindNat` sends its own to where it comes from.
+        5 seconds of a call's media (`strictrtp`). `seqno` learns from
+        sequence numbers alone. Asterisk's default is `yes`. A phone whose
+        address or port changes later, as behind a NAT that rebinds, is not
+        heard for the rest of the call, and Asterisk logs it only at debug
+        level. With `false`, Asterisk takes RTP from any source, and for
+        endpoints with `behindNat` sends its own to where it comes from.
       '';
     };
 
@@ -61,10 +60,10 @@ in {
       type = types.nullOr types.bool;
       default = null;
       description = ''
-        Gather ICE candidates for the RTP of every call leg (`icesupport`);
+        Gather ICE candidates for the RTP of every call leg (`icesupport`).
         Asterisk's default is `yes`. Only endpoints with `ice_support` in
-        their settings offer them, and then they include every address of
-        the host, private ones too (`ice_deny` in `settings` leaves some out).
+        their settings offer them, and they include every address of the
+        host, private ones too (`ice_deny` in `settings` leaves some out).
       '';
     };
 
@@ -76,8 +75,8 @@ in {
         STUN server Asterisk asks for its public address, which ICE offers as
         a candidate. With `ice`, Asterisk asks it for every call leg, endpoints
         without ICE too, and the call waits up to 9 seconds for each answer.
-        It asks in RFC 3489 form, which servers that only follow RFC 5389
-        ignore, such as coturn without `rfc3489-compatibility`.
+        It asks in RFC 3489 form, which RFC 5389-only servers ignore, such as
+        coturn without `rfc3489-compatibility`.
       '';
     };
 

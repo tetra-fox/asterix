@@ -42,12 +42,12 @@
       duplex = mkOption {
         type = types.bool;
         default = false;
-        description = "Let the paged phones talk back; by default only the caller is heard.";
+        description = "Whether to let the paged phones talk back. Otherwise only the caller is heard.";
       };
       skipBusy = mkOption {
         type = types.bool;
         default = true;
-        description = "Leave out phones that are in a call.";
+        description = "Whether to leave out phones that are in a call.";
       };
       headers = mkOption {
         type = types.listOf (types.strMatching "[A-Za-z-]+: [^\n]+");
@@ -57,7 +57,7 @@
         ];
         description = ''
           SIP headers added to each page, as `Name: value`. The defaults
-          are the auto-answer requests most desk phones understand; the
+          are the auto-answer requests most desk phones understand. The
           phone must also allow auto-answer.
         '';
       };
@@ -130,8 +130,7 @@ in {
       white space.
 
       Asterisk 22 can crash when a member's phone ends its leg of a page at
-      the moment the person paging hangs up, as two of its threads hang up
-      that leg at once (main/dial.c, monitor_dial and ast_dial_join).
+      the moment the person paging hangs up.
     '';
   };
 

@@ -1,7 +1,7 @@
-# Provisioning for Snom desk phones: each services.asterix.phones device of one of these
-# models gets a `snom<model>-<MAC>.htm`, the settings file a Snom requests
-# from a setting server URL without a file name, in which each line, an
-# identity, registers as its endpoint.
+# Provisioning for Snom desk phones: each device of these models gets a
+# `snom<model>-<MAC>.htm`, the settings file a Snom requests from a setting
+# server URL without a file name, in which each line, an identity, registers
+# as its endpoint.
 #
 # Every setting is in Snom's D-Series settings reference, the file name in its
 # Auto Provisioning page and the line counts in its datasheets
@@ -194,7 +194,7 @@ in {
       type = types.nullOr types.str;
       default = null;
       example = "GER+1";
-      description = "Time zone of the Snom phones (`timezone`), one of the values listed in Snom's settings reference; `null` keeps their default.";
+      description = "Time zone of the Snom phones (`timezone`), one of the values listed in Snom's settings reference. When null, they keep their default.";
     };
 
     settings = mkOption {

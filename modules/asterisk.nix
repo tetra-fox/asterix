@@ -802,7 +802,7 @@
         keyOrder = mkOption {
           type = types.listOf types.str;
           default = defaults.keyOrder;
-          description = "Keys rendered first, in this order; the rest follow alphabetically.";
+          description = "Keys rendered first, in this order. The rest follow alphabetically.";
         };
         compactExtensions = mkOption {
           type = types.bool;
@@ -828,14 +828,14 @@ in {
       default = {};
       description = ''
         Freeform configuration for any Asterisk configuration file, keyed by
-        file name and then by a unique section id. Each section has the
-        options `name` (the Asterisk section name, defaulting to the id, so
-        several sections can share a name), `order`, `template` and
-        `inherits`; every other attribute is a key. Lists render as repeated
-        keys, booleans as `yes`/`no`, and any value can be a secret reference
+        file name and then by section id. A section takes the options `name`
+        (the Asterisk section name, defaulting to the id, so several sections
+        can share a name), `order`, `template` and `inherits`. Every other
+        attribute is a key. Lists render as repeated keys, booleans as
+        `yes`/`no`, and any value can be a secret reference
         (`config.lib.asterisk.secret config.sops.secrets.foo.path`). A value
         cannot contain a line break, nor start or end with whitespace or a
-        control character, which Asterisk drops when it reads the file.
+        control character.
 
         The typed options (`pjsip`, `dialplan`, ...) write into this option,
         so everything they generate can be extended or overridden here.
@@ -877,17 +877,17 @@ in {
       default = {};
       description = ''
         Raw text appended to a configuration file, keyed by file name. It is
-        not escaped, but secret references interpolated into it are
-        substituted like in `settings`. Start it with a section header,
-        otherwise it continues the last generated section. A PJSIP transport
-        that binds a specific address belongs in `pjsip.transports` or
-        `settings` instead: the service waits only for the addresses of
-        transports it reads there (see
-        {option}`services.asterisk.pjsip.transports.<name>.address`), and
-        such a transport here fails the build check, which has only those
-        addresses. With `reloadOnChange`, a change to a transport here is
-        applied with a reload, which leaves the running transport as it was
-        until Asterisk restarts.
+        not escaped, but interpolated secret references are substituted as in
+        `settings`. Start it with a section header, otherwise it continues the
+        last generated section.
+
+        Put a PJSIP transport that binds a specific address in
+        `pjsip.transports` or `settings` instead. The service only waits for
+        addresses it finds there (see
+        {option}`services.asterisk.pjsip.transports.<name>.address`), and the
+        build check fails on such a transport here. A change to a transport
+        here is applied with a reload, which leaves the running transport
+        unchanged until Asterisk restarts.
       '';
       example = literalExpression ''
         {
@@ -903,12 +903,10 @@ in {
       type = types.attrsOf (types.listOf includeType);
       default = {};
       description = ''
-        `#include` (or, with `optional = true`, `#tryinclude`) directives
-        placed at the top of a configuration file, keyed by file name. A PJSIP
-        transport that binds a specific address belongs in `pjsip.transports`
-        or `settings` instead: the service waits only for the addresses of
-        transports it reads there (see
-        {option}`services.asterisk.pjsip.transports.<name>.address`).
+        `#include` directives (`#tryinclude` with `optional = true`) at the
+        top of a configuration file, keyed by file name. As with
+        {option}`services.asterisk.extraConfig`, a PJSIP transport that binds
+        a specific address belongs in `pjsip.transports` or `settings`.
       '';
       example = literalExpression ''
         { "pjsip.conf" = [ { file = "/var/lib/asterisk/pjsip-local.conf"; optional = true; } ]; }
@@ -919,7 +917,7 @@ in {
       type = types.attrsOf syntaxType;
       default = {};
       description = ''
-        Per-file rendering conventions: which keys use `=>`, the key order and
+        Per-file rendering conventions: which keys use `=>`, key order and
         whether dialplan lines are compacted to `same =>`. Defaults follow
         Asterisk's sample configuration files.
       '';
@@ -930,9 +928,9 @@ in {
       default = {};
       description = ''
         Files passed to the service as systemd credentials (`LoadCredential=`),
-        keyed by credential name. Asterisk can read them from
-        `${paths.credentials}/<name>` even if the source file is only readable
-        by root, which makes this the right place for TLS private keys.
+        keyed by credential name. Asterisk reads them from
+        `${paths.credentials}/<name>` even when the source file is readable
+        only by root, so TLS private keys belong here.
       '';
       example = {
         "tls-key" = "/var/lib/acme/pbx.example.org/key.pem";
@@ -943,9 +941,9 @@ in {
       type = types.bool;
       default = true;
       description = ''
-        Apply configuration changes on `nixos-rebuild switch` with a reload
-        (targeted `module reload` commands, falling back to `core reload`)
-        instead of a restart. Changes to the package,
+        Apply configuration changes on `nixos-rebuild switch` with targeted
+        `module reload` commands, falling back to `core reload`, instead of a
+        restart. Changes to the package,
         {file}`asterisk.conf`, {file}`modules.conf`, PJSIP transports, the
         `busy_timeout` of {file}`cdr_sqlite3_custom.conf` or the set of
         secrets always restart the service.
@@ -958,51 +956,30 @@ in {
       defaultText = literalExpression "pkgs.stdenv.buildPlatform.canExecute pkgs.stdenv.hostPlatform";
       description = ''
         Start Asterisk with the generated configuration when the system is
-        built, and fail the build if Asterisk logs an error or a warning
-        while loading it or cannot start the program of a custom music
-        class, or if the dialplan uses an application, function or switch
-        that no loaded module provides, or ConfBridge() without
-        bridge_softmix, plays a sound Asterisk cannot find,
-        sends calls to a context, extension, priority or label that does
-        not exist, or includes a context that does not exist once every
-        dialplan module has loaded. Secrets are replaced by zeros, credentials by a
-        throwaway certificate and IPv4 listen addresses by loopback ones, so
-        a sandboxed build needs no privileges, and Asterisk gets a fixed
-        entity ID unless asterisk.conf sets one, as the build has no network
-        card to take one from. Listening on IPv6 addresses or ports below
-        1024, or building without the sandbox, needs unprivileged user
+        built, and fail the build if Asterisk logs an error or a warning while
+        loading it, cannot start the program of a custom music class, or if
+        the dialplan:
+
+        - uses an application, function or switch no loaded module provides,
+          or ConfBridge() without bridge_softmix
+        - plays a sound missing from the default language or from a language
+          an endpoint sets
+        - sends calls to, or includes, a context, extension, priority or label
+          that does not exist
+
+        Secrets are replaced by zeros, credentials by a throwaway certificate
+        and IPv4 listen addresses by loopback ones. IPv6 listen addresses,
+        ports below 1024 or a build without the sandbox need unprivileged user
         namespaces on the build machine, which some systems (Ubuntu 24.04)
         forbid.
 
-        Files outside the Nix store that the configuration names do not
-        exist where the check runs. Asterisk reads asterisk.conf and
-        stasis.conf before its logger starts, so the check does not see a
-        mistake in them; one in stasis.conf makes Asterisk use the defaults
-        of the whole file. With
-        {option}`services.asterisk.modules.autoload`, the check leaves out
-        the problems of modules only autoload loads.
+        The check does not see files outside the Nix store, mistakes in
+        asterisk.conf and stasis.conf, problems of modules only
+        {option}`services.asterisk.modules.autoload` loads, or a sound or
+        call target named by a variable.
 
-        A sound has to exist in every language calls use: the default
-        language and those of the PJSIP endpoints in `settings`, where the
-        typed options write them. The check fails on a sound no language has,
-        on one a language lacks, which Asterisk then plays in English, and on
-        a language without any sounds. It sees the sounds that Playback(),
-        Background(), ControlPlayback(), BackgroundDetect() and Read() name in
-        the dialplan, and those of the bridge profiles ConfBridge() uses, but
-        not a sound named by a variable or an absolute path, the prompts of
-        other applications, or a language the dialplan sets during a call.
-
-        Calls are sent by Goto(), GotoIf(), GotoIfTime(), Gosub() and
-        GosubIf(), whose targets the check looks up through patterns and
-        includes as a call does; a missing extension counts only where no
-        `i` or `e` extension of its context takes the call instead. It leaves
-        out a target named by a variable, a priority counted from the current
-        one such as +1, and an extension of a context that a switch or an
-        include with a time can provide.
-
-        Without the check, what Asterisk rejects only shows in its log. A
-        reload that cannot create a PJSIP object still succeeds and keeps the
-        object's previous version until the next start.
+        Without the check, a PJSIP reload that cannot create an object still
+        succeeds and keeps the object's previous version until the next start.
       '';
     };
 
@@ -1010,11 +987,10 @@ in {
       type = types.bool;
       default = false;
       description = ''
-        Run Asterisk with realtime scheduling (SCHED_RR, priority 10).
-        Asterisk only raises its own priority when started as root, so the
-        unit starts it with `CPUSchedulingPolicy=rr` instead of passing `-p`.
-        Asterisk notices and runs its `astcanary` watchdog, which lowers the
-        priority again if Asterisk starves the rest of the system.
+        Run Asterisk with realtime scheduling (SCHED_RR, priority 10), set by
+        the unit, since Asterisk ignores `-p` unless it starts as root. Its
+        `astcanary` watchdog lowers the priority again if Asterisk starves the
+        rest of the system.
       '';
     };
 
@@ -1023,13 +999,10 @@ in {
       default = [];
       example = ["-vvv"];
       description = ''
-        Extra command line arguments for the Asterisk daemon, which the
-        build-time check ({option}`services.asterisk.checkConfig`) starts
-        Asterisk with too. Asterisk reads only options and their values. The
-        service runs Asterisk as the asterisk user and group, which `-U` and
-        `-G` cannot change: its system call filter keeps Asterisk from
-        changing its user, and Asterisk takes a group only when it starts as
-        root.
+        Extra command line arguments for the Asterisk daemon, also used by
+        {option}`services.asterisk.checkConfig`. Only options and their values
+        are allowed. `-F`, `-U` and `-G` are rejected: the service runs
+        Asterisk in the foreground as the asterisk user and group.
       '';
     };
 
@@ -1038,11 +1011,10 @@ in {
       default = [];
       example = literalExpression "[ (pkgs.callPackage ./asterisk-sounds-de.nix { }) ]";
       description = ''
-        Directories merged into Asterisk's data directory (`astdatadir`), for
-        example sound packages laid out as `sounds/<language>/...` or music on
-        hold as `moh/...`. The package already ships the English core sounds
-        (GSM) and the default music on hold; nixpkgs has no further Asterisk
-        sound packages.
+        Directories merged into Asterisk's data directory (`astdatadir`), such
+        as sounds laid out as `sounds/<language>/...` or music on hold as
+        `moh/...`. The package ships the English core sounds (GSM) and the
+        default music on hold. nixpkgs has no further Asterisk sound packages.
       '';
     };
 
@@ -1051,13 +1023,10 @@ in {
       default = false;
       description = ''
         Open the ports Asterisk is configured to use: PJSIP transports (UDP
-        for `udp`, TCP for `tcp`/`tls` and for the TCP listener of a `udp`
-        one, see {option}`services.asterisk.pjsip.transports.<name>.tcp`),
-        the RTP port range and any ports
-        typed modules add (for example AMI or HTTP when their own
-        `openFirewall` is set). Transports come from `settings`, where the
-        typed options write them; those written in `extraConfig` or in
-        included files are not opened.
+        for `udp`, TCP for `tcp`, `tls` and the TCP listener of a `udp` one,
+        see {option}`services.asterisk.pjsip.transports.<name>.tcp`), the RTP
+        port range, and AMI or HTTP when their own `openFirewall` is set.
+        Transports in `extraConfig` or included files are not opened.
       '';
     };
 
@@ -1128,8 +1097,8 @@ in {
       default = {};
       internal = true;
       description = ''
-        The most bytes a secret can have where Asterisk uses it, by its
-        placeholder, from the modules that know the file's format; a secret
+        The most bytes a secret can have where Asterisk uses it, by
+        placeholder, from the modules that know the file's format. A secret
         used in several places gets the least of them. The service does not
         start or reload when a secret is longer.
       '';

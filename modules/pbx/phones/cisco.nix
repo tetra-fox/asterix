@@ -1,6 +1,6 @@
 # Provisioning for Cisco phones and adapters with third-party call control
-# firmware: each services.asterix.phones device of one of these models gets a `<mac>.xml`
-# (Cisco's XML flat profile) in which each line registers as its endpoint.
+# firmware: each device of these models gets a `<mac>.xml` (Cisco's XML flat
+# profile) in which each line registers as its endpoint.
 #
 # Every element set here is in Cisco's guides for the models that use it:
 # Cisco IP Desk Phone and Cisco IP Conference Phone with Multiplatform

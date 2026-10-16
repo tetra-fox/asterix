@@ -39,7 +39,7 @@
         type = types.str;
         default = name;
         defaultText = lib.literalMD "the mailbox number";
-        description = "Owner's name, used by the directory and in e-mails. No comma, which ends it in voicemail.conf.";
+        description = "Owner's name, for the directory and e-mails. No comma: voicemail.conf ends the name there.";
       };
       pin = mkOption {
         type = secretOrString;
@@ -71,11 +71,11 @@ in {
         }
       '';
       description = ''
-        Mailboxes of no extension, such as a team's, keyed by their number.
-        They are `<number>@default`, like the mailbox of an extension, so a
-        `voicemail` destination reaches them by number. A number holds
-        letters, digits and `_*#+-`, starts with neither `*` nor `#`, and is
-        not that of an extension with `voicemail`.
+        Mailboxes of no extension, such as a team's, keyed by number. Like
+        an extension's, each is `<number>@default`, so a `voicemail`
+        destination reaches it by number. A number holds letters, digits and
+        `_*#+-`, does not start with `*` or `#`, and is not that of an
+        extension with `voicemail`.
       '';
     };
     maxMessages = sameAs coreOptions.maxMessages;

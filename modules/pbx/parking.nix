@@ -1,8 +1,7 @@
-# services.asterix.parking: call parking in res_parking's default lot, whose
-# park number, slots and slot hints res_parking adds to pbx-parking, which
-# pbx-internal includes. A parked call nobody takes in time goes back to the
-# phone that parked it in pbx-parking-timeout, then on to the no-answer
-# destination of its extension.
+# services.asterix.parking: call parking in res_parking's default lot, which
+# adds the park number, slots and slot hints to pbx-parking, included by
+# pbx-internal. A parked call nobody takes in time goes back to the phone that
+# parked it through pbx-parking-timeout.
 {
   config,
   lib,
@@ -44,18 +43,17 @@ in {
         slots = mkOption {
           type = types.ints.positive;
           default = 8;
-          description = "Number of calls that can be parked at once, each in a slot of its own.";
+          description = "Number of calls that can be parked at once.";
         };
         timeout = mkOption {
           type = types.ints.positive;
           default = 45;
           description = ''
-            Seconds a call stays parked. Then it rings the phone that parked
-            it for that extension's `ringTime`, also while do not disturb is
-            on, and if nobody answers goes on as the extension's unanswered
-            calls do, to its no-answer forward or its `noAnswer` destination.
-            A call parked by anything other than an extension, such as a tie
-            line, ends instead.
+            Seconds a call stays parked. It then rings the phone that parked
+            it for that extension's `ringTime`, even with do not disturb on,
+            and if nobody answers goes to the extension's no-answer forward or
+            `noAnswer` destination. A call parked by anything other than an
+            extension, such as a tie line, ends instead.
           '';
         };
       };
@@ -63,9 +61,8 @@ in {
     default = null;
     example = {number = "700";};
     description = ''
-      Call parking, off until set. Each slot has a busy lamp, lit while a
-      call is parked in it, which phones get by subscribing to the slot's
-      number.
+      Call parking. Each slot has a busy lamp, lit while a call is parked in
+      it, which phones get by subscribing to the slot's number.
     '';
   };
 

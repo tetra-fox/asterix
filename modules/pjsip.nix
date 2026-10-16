@@ -82,7 +82,7 @@
       };
       username = mkOption {
         type = types.str;
-        description = "User name used for digest authentication.";
+        description = "User name for digest authentication.";
       };
       password = mkOption {
         type = secretOrString;
@@ -95,7 +95,7 @@
       realm = mkOption {
         type = types.nullOr types.str;
         default = null;
-        description = "Authentication realm; Asterisk's default is `asterisk`.";
+        description = "Authentication realm. Asterisk's default is `asterisk`.";
       };
       settings = settingsOption "auth";
     };
@@ -123,15 +123,14 @@
         maxContacts = mkOption {
           type = types.ints.unsigned;
           default = 1;
-          description = "Maximum number of registered contacts (0 accepts no registrations).";
+          description = "Maximum number of registered contacts. 0 accepts no registrations.";
         };
         removeExisting = mkOption {
           type = types.bool;
           default = true;
           description = ''
-            When a registration would exceed maxContacts, make room by removing
-            the other contacts that expire soonest, instead of refusing it with
-            403.
+            When a registration would exceed `maxContacts`, remove the contacts
+            that expire soonest instead of refusing it with 403.
           '';
         };
         qualifyFrequency = mkOption {
@@ -170,15 +169,13 @@
             ];
             description = ''
               Source addresses, networks or host names identifying this
-              endpoint. Asterisk resolves host names, through their SRV
-              records where they have them but not NAPTR, when it loads
-              pjsip.conf, so a changed address counts only after
+              endpoint. Asterisk resolves host names (SRV, not NAPTR) when it
+              loads pjsip.conf, so a changed address counts only after
               `asterisk -rx 'module reload res_pjsip.so'` or a restart. A host
-              name that does not resolve then keeps Asterisk from creating the
-              whole identify section, its addresses and networks too, until
-              the next reload or restart. A trunk's `host` is not in this
-              list: `matchProviderHost` matches it in an identify section of
-              its own, so the addresses here count whether it resolves or not.
+              name that does not resolve drops the whole identify section,
+              addresses included, until the next reload or restart. A trunk's
+              `host` has an identify section of its own, see
+              `matchProviderHost`.
             '';
           }
           # a trunk's host has an identify section of its own
@@ -203,10 +200,10 @@
       type = types.nullOr types.str;
       default = null;
       description = ''
-        Transport for outgoing requests; by default Asterisk picks a matching
-        one. For an endpoint, naming a transport with an external address
-        also puts that address in the From header of requests to it (see the
-        transport's `externalSignalingAddress`).
+        Transport for outgoing requests. By default Asterisk picks a matching
+        one. For an endpoint, naming a transport with an
+        `externalSignalingAddress` also puts that address in the From header
+        of requests to it.
       '';
     };
     allow = mkOption {
@@ -227,23 +224,21 @@
         Allowed codecs in order of preference (`disallow = all` is rendered
         first). Asterisk translates ulaw, alaw, g722, gsm and opus with the
         default modules, and adpcm, g726, ilbc, lpc10 and speex once their
-        codec module is in {option}`services.asterisk.modules.load`. It
-        passes the others through without translating them, such as g729,
-        g723, g719, siren7, siren14, silk and the video codecs: an endpoint
-        that allows only those can only call endpoints that allow the same
-        codec, and evaluation warns about it.
+        codec module is in {option}`services.asterisk.modules.load`. Others,
+        such as g729, silk and the video codecs, pass through untranslated, so
+        an endpoint that allows only those can only call endpoints that allow
+        the same codec, and evaluation warns about it.
       '';
     };
     directMedia = mkOption {
       type = types.bool;
       default = false;
       description = ''
-        Let RTP flow directly between endpoints, when both in a call have it
-        on. Off by default, so Asterisk relays media, which works across VLANs
-        and NAT. Asterisk sends each phone the address the other gave and
-        does not check that it is reachable: between networks without a route,
-        or with a phone behind NAT, the call has no audio and nothing is
-        logged. Calls with media encryption are always relayed.
+        Let RTP flow directly between the endpoints of a call when both have
+        it on. Asterisk sends each phone the address the other gave without
+        checking that it is reachable, so between networks without a route, or
+        with a phone behind NAT, the call has no audio and nothing is logged.
+        Calls with media encryption are always relayed.
       '';
     };
     rtpTimeout = mkOption {
@@ -251,24 +246,21 @@
       default = 0;
       example = 60;
       description = ''
-        Seconds without a packet on the RTP or RTCP port of the device's
-        answered call, while it is not on hold, after which Asterisk hangs
-        up the call (`rtp_timeout`); 0 never does. This ends the call of a
-        phone that lost power, which sends no BYE, and also that of a
-        device that sends nothing while its user is silent. Packets from any
-        address count, those strict RTP drops too, so a call whose RTP
-        strict RTP drops does not end. Asterisk counts the seconds by the
-        system clock, so a step of the clock forward by more than this hangs
-        up every such call in progress. Calls with direct media are not
-        timed.
+        Seconds without RTP or RTCP on an answered call that is not on hold,
+        after which Asterisk hangs up (`rtp_timeout`). 0 disables it. This
+        ends the call of a phone that lost power and sends no BYE, but also
+        that of a device that sends nothing while its user is silent. Packets
+        from any address count, including ones strict RTP drops. Asterisk
+        counts by the system clock, so a forward clock step larger than this
+        hangs up every timed call. Calls with direct media are not timed.
       '';
     };
     rtpTimeoutHold = mkOption {
       type = rtpTimeoutType;
       default = 0;
       description = ''
-        `rtpTimeout` for a call on hold (`rtp_timeout_hold`), in which a
-        device may send no RTP; 0 never hangs up.
+        `rtpTimeout` for a call on hold (`rtp_timeout_hold`), during which a
+        device may send no RTP. 0 disables it.
       '';
     };
     callerId = mkOption {
@@ -276,10 +268,10 @@
       default = null;
       example = ''"Kitchen" <101>'';
       description = ''
-        Caller ID presented for calls from this endpoint, as Asterisk reads
-        one: `"name" <number>`, a number alone or a name alone. In the name,
-        a backslash takes the character after it as it is, so `\\` is one
-        backslash.
+        Caller ID for calls from this endpoint: `"name" <number>`, a number
+        alone or a name alone. In the name, a backslash escapes the character
+        after it, so `\\` is one backslash. Evaluation fails when the name or
+        the number is longer than 79 bytes, which Asterisk would cut.
       '';
     };
     dtmfMode = mkOption {
@@ -294,10 +286,10 @@
       );
       default = null;
       description = ''
-        DTMF mode; Asterisk's default is `rfc4733`. Asterisk hears keys sent
-        as tones (`inband`, and `auto` for a device that offers no RFC 4733)
-        only in ulaw and alaw calls, so with `inband` the default `allow`
-        leaves out g722, in whose calls the keys are lost.
+        DTMF mode. Asterisk's default is `rfc4733`. Asterisk hears keys sent
+        as tones (`inband`, and `auto` for a device without RFC 4733) only in
+        ulaw and alaw calls, so with `inband` the default `allow` leaves out
+        g722.
       '';
     };
     behindNat = mkOption {
@@ -305,11 +297,8 @@
       default = false;
       description = ''
         Enable `rtp_symmetric`, `force_rport` and `rewrite_contact` for devices
-        behind NAT. With the PBX behind NAT as well, the From header of
-        requests to an endpoint names the PBX's private address unless its
-        `transport` names the transport with the external address (see the
-        transport's `externalSignalingAddress`); a trunk's names
-        `fromDomain`.
+        behind NAT. With the PBX behind NAT as well, see `transport` for the
+        From header.
       '';
     };
     outboundAuth = mkOption {
@@ -333,24 +322,23 @@
             type = types.nullOr (inboundAuthType name);
             default = null;
             description = ''
-              Credentials the device must present (an auth section named like
-              the endpoint). The user name defaults to the endpoint name.
-              Without them, Asterisk challenges none of the endpoint's
-              requests: it takes them from anyone, or with `identify` and
-              without `open` from the identify's addresses alone (see
-              `identify`).
+              Credentials the device must present, in an auth section named
+              like the endpoint. The user name defaults to the endpoint name.
+              Without them Asterisk challenges no request, and takes requests
+              from anyone, or only from the addresses of `identify` when that
+              is set and `open` is not.
             '';
           };
           open = mkOption {
             type = types.bool;
             default = false;
             description = ''
-              Let anyone who reaches the SIP port register as this endpoint
-              and call from its context, without a password or a known
-              address; with `identify`, it still takes requests that name it
-              from any address. An endpoint without `auth` does not evaluate
-              unless this is set when it has no identify, or when it has an
-              identify the module writes no ACL for (see `identify`).
+              Let anyone who reaches the SIP port register as this endpoint and
+              call from its context, without a password or a known address.
+              With `identify`, requests that name it are still taken from any
+              address. An endpoint without `auth` fails evaluation without
+              this, unless it has an `identify` that keeps other addresses out
+              (see `identify`).
             '';
           };
           identify = mkOption {
@@ -360,15 +348,15 @@
             });
             default = null;
             description = ''
-              Identify requests from these addresses as this endpoint (an
-              identify section). Asterisk also takes a request whose From
-              names the endpoint as its, from any address, unless the endpoint
-              has neither `auth` nor `open`: then it takes requests from these
-              addresses alone, through its own ACL (`deny` and `permit`). An
-              ACL cannot hold a host name, so such an endpoint does not
-              evaluate with one here, nor with an identify section of
-              `settings."pjsip.conf"`, which gets no ACL, unless its settings
-              set `deny` and `permit` or `identify_by = ip`.
+              Identify requests from these addresses as this endpoint.
+              Asterisk also takes a request whose From names the endpoint,
+              from any address, unless the endpoint has neither `auth` nor
+              `open`. Then the module gives it an ACL (`deny` and `permit`)
+              from `match`, so only these addresses get in. An ACL cannot hold
+              a host name, so such an endpoint fails evaluation with a host
+              name here, or with an identify section from
+              `settings."pjsip.conf"`, unless its settings set `deny` and
+              `permit` or `identify_by = ip`.
             '';
           };
           aor = mkOption {
@@ -376,8 +364,8 @@
             default = {};
             defaultText = lib.literalExpression "{ }";
             description = ''
-              Address of record (where to reach the endpoint): registrations or
-              static contacts. Set to `null` for endpoints that are never called.
+              Address of record, where the endpoint is reached: registrations
+              or static contacts. `null` for endpoints that are never called.
             '';
           };
           mailboxes = mkOption {
@@ -385,17 +373,13 @@
             default = [];
             example = ["101@default"];
             description = ''
-              Voicemail boxes whose message-waiting state is sent to the device,
-              in NOTIFYs it did not ask for. Asterisk refuses a device's own
-              subscription to message-summary with 404, so the device has to take
-              these NOTIFYs. Each is `box@context`, such as `101@default`, as
-              voicemail.conf spells it, since Asterisk sends a mailbox's MWI only
-              in that form and compares it exactly, or an alias from the section
-              voicemail.conf's `aliasescontext` names. While voicemail is off,
-              evaluation warns about a mailbox whose context neither
-              voicemail.conf nor an endpoint's `incoming_mwi_mailbox` names,
-              unless a module that can send its MWI, such as app_minivm.so, is
-              loaded.
+              Voicemail boxes whose message-waiting state is sent to the device
+              in unsolicited NOTIFYs. Asterisk answers a device's own
+              message-summary subscription with 404. Each is `box@context` as
+              voicemail.conf spells it, since Asterisk compares MWI names
+              exactly, or an alias from voicemail.conf's `aliasescontext`.
+              While voicemail is off, evaluation warns about a mailbox nothing
+              sends MWI for.
             '';
           };
         };
@@ -420,16 +404,14 @@
             type = types.nullOr types.port;
             default = null;
             description = ''
-              Provider SIP port. Without it, Asterisk looks up the host's
-              NAPTR and SRV records, which can name another host and port, and
-              falls back to the transport's standard port. It follows the
-              records of the transports it has, and SRV records for TLS first,
-              then TCP, then UDP, so a provider that publishes TCP records is
-              reached over TCP once a transport takes TCP, as the TCP listener
-              of a `udp` transport does
-              ({option}`services.asterisk.pjsip.transports.<name>.tcp`). With
-              `transport` set, it follows the records of that transport's
-              protocol alone.
+              Provider SIP port. Without it, Asterisk looks up the host's NAPTR
+              and SRV records, which can name another host and port, and falls
+              back to the transport's standard port. It tries SRV records for
+              TLS, then TCP, then UDP, among the protocols it has transports
+              for, so a provider that publishes TCP records is reached over TCP
+              once a transport takes TCP, as a `udp` transport's TCP listener
+              does ({option}`services.asterisk.pjsip.transports.<name>.tcp`).
+              With `transport` set, only that protocol's records count.
             '';
           };
           username = mkOption {
@@ -447,9 +429,9 @@
             });
             default = null;
             description = ''
-              Identify requests from these addresses as this trunk (an
-              identify section). The trunk's `host` has an identify section of
-              its own, see `matchProviderHost`.
+              Identify requests from these addresses as this trunk. The
+              trunk's `host` has an identify section of its own, see
+              `matchProviderHost`.
             '';
           };
           fromDomain = mkOption {
@@ -474,31 +456,26 @@
               default = 60;
               description = ''
                 Seconds between registration attempts after a temporary
-                failure: no answer, a host name that does not resolve, 408,
-                500, 502, 503, 504 or 6xx. The trunk keeps trying for as long
-                as that lasts. After an answer with Retry-After, whatever its
-                status, the next attempt comes that many seconds later
-                instead. On any other refusal, such as 403, a 3xx, or 401 and
-                407 to the credentials it sent, Asterisk gives up at once and
-                the journal says `Fatal response`; it tries again once
-                res_pjsip reloads, as a deploy that changes pjsip.conf (a new
-                password, say) or `asterisk -rx 'module reload res_pjsip.so'`
-                does, or Asterisk restarts.
+                failure (no answer, a host name that does not resolve, 408,
+                500, 502, 503, 504 or 6xx), retried without limit. An answer
+                with Retry-After sets the delay of the next attempt instead. On
+                any other refusal, such as 403, a 3xx, or 401 and 407 to the
+                credentials sent, Asterisk gives up and logs `Fatal response`
+                until res_pjsip reloads or Asterisk restarts.
               '';
             };
             contactUser = mkOption {
               type = types.nullOr types.str;
               default = null;
-              description = "User part of the registered Contact, i.e. the extension inbound calls arrive at.";
+              description = "User part of the registered Contact, the extension inbound calls arrive at.";
             };
             line = mkOption {
               type = types.bool;
               default = true;
               description = ''
                 Add a `line` parameter to the registered Contact and identify
-                inbound requests that carry it as this trunk (`line` and
-                `endpoint` of the registration), whatever address they come
-                from. Requests without it are still identified by `identify`.
+                inbound requests that carry it as this trunk, from any address.
+                Requests without it are identified by `identify`.
               '';
             };
             settings = settingsOption "registration";
@@ -512,12 +489,12 @@
             type = types.bool;
             default = true;
             description = ''
-              Identify inbound requests coming from `host` as this trunk, in
-              an identify section of its own named `<name>-host`, which
-              `settings."pjsip.conf"."host-identify:<name>"` extends. Asterisk
-              resolves a host name when it loads pjsip.conf; one that does not
-              resolve then leaves out this section until the next reload or
-              restart, while the addresses of `identify.match` still count.
+              Identify inbound requests from `host` as this trunk, in an
+              identify section `<name>-host`
+              (`settings."pjsip.conf"."host-identify:<name>"`). A host name
+              that does not resolve when Asterisk loads pjsip.conf drops this
+              section until the next reload or restart, while `identify.match`
+              still counts.
             '';
           };
           aorSettings = settingsOption "aor";
@@ -539,21 +516,17 @@
           default = "udp";
           description = ''
             Transport protocol. `ws` and `wss` run over Asterisk's HTTP server
-            (http.conf) and ignore the address and port here. Over WebSocket,
+            (http.conf) and ignore `address` and `port`. Over WebSocket,
             Asterisk's SDP carries the IPv4 address of the host's default
-            route, to IPv6 phones too, and never an external address, so calls
-            fail unless the phones reach that address, and so always for
-            phones outside a PBX behind NAT; for IPv4 phones, an endpoint's
-            `media_address` in `settings` names an address they reach instead.
-            The Contact of Asterisk's own requests names the host name and
-            port 5060, so a phone Asterisk calls cannot send its BYE or
-            re-INVITE, and the 200 OK to an IPv6 phone's registration gives
-            its contact cut at the first colon.
+            route and never an external address, so calls fail unless the
+            phones reach that address (an endpoint's `media_address` in
+            `settings` can name another for IPv4 phones). A phone Asterisk
+            calls cannot send its BYE or re-INVITE, and IPv6 phones get their
+            contact cut at the first colon.
 
             Over `tcp` and `tls`, Asterisk takes about 5,000 connections in
-            all and keeps an idle one for 600 seconds, so one host that opens
-            that many locks out the phones that connect after it until
-            connections close: they get 503, and nothing is logged.
+            all and keeps an idle one for 600 seconds, so one host can lock out
+            every later phone. They get 503, and nothing is logged.
           '';
         };
         address = mkOption {
@@ -561,17 +534,16 @@
           default = "0.0.0.0";
           example = "10.0.2.1";
           description = ''
-            Local address to bind; `0.0.0.0` or `::` for all addresses. The
-            service waits up to 90 s at start for a specific address to be
-            configured and through duplicate address detection, then fails
-            with a message naming the address, and systemd starts it again
-            5 s later. With systemd-networkd, an interface that loses its
-            carrier loses its addresses, so Asterisk restarted while the link
-            is down waits for the link. Setting
+            Local address to bind, `0.0.0.0` or `::` for all addresses. At
+            start the service waits up to 90 s for a specific address to be
+            configured and pass duplicate address detection, then fails naming
+            the address, and systemd retries 5 s later. With systemd-networkd,
+            an interface that loses its carrier loses its addresses, so
+            Asterisk restarted while the link is down waits for the link.
             `networkConfig.IgnoreCarrierLoss = true` in the interface's
             `systemd.network.networks` entry (`"40-<interface>"` for one from
             `networking.interfaces`) keeps them, as does
-            `ConfigureWithoutCarrier = true`, which turns it on.
+            `ConfigureWithoutCarrier = true`.
           '';
         };
         port = mkOption {
@@ -589,49 +561,41 @@
           defaultText = lib.literalExpression ''protocol == "udp"'';
           description = ''
             Take SIP over TCP on this `udp` transport's address and port too,
-            through a `tcp` transport named `<name>-tcp` that has this one's
-            external addresses, local networks, `allowReload` and `settings`.
-            Phones built on pjsip, and others that follow RFC 3261 18.1.1, send
-            a request of 1300 bytes or more over TCP to the address and port
-            they reach over UDP, often an INVITE with its credentials; without
-            a TCP listener there the call fails after 32 seconds, and Asterisk
-            logs nothing. Asterisk takes such requests from phones whose
-            endpoint names this transport as well, and sends its own requests
-            to a UDP contact over UDP, whatever their size.
+            through a `tcp` transport `<name>-tcp` with this one's external
+            addresses, `localNet`, `allowReload` and `settings`. Phones that
+            follow RFC 3261 18.1.1, such as those built on pjsip, send requests
+            of 1300 bytes or more over TCP to the address and port they use
+            over UDP, often an INVITE with credentials. Without a TCP listener
+            there the call fails after 32 seconds and Asterisk logs nothing.
 
-            {option}`services.asterisk.openFirewall` also opens its TCP port,
-            and its connections count towards the ones Asterisk takes over
-            `tcp` and `tls`, which `protocol` says one host can fill. A trunk
-            without `port` may then reach its provider over TCP
-            ({option}`services.asterisk.pjsip.trunks.<name>.port`).
-
-            Turn it off for a transport that takes UDP alone, or to leave its
-            address and port to a `tcp` or `tls` transport of your own.
+            {option}`services.asterisk.openFirewall` also opens the TCP port.
+            A trunk without `port` may then reach its provider over TCP
+            ({option}`services.asterisk.pjsip.trunks.<name>.port`). Turn it off
+            to leave the address and port to a `tcp` or `tls` transport of your
+            own.
           '';
         };
         externalMediaAddress = mkOption {
           type = types.nullOr types.str;
           default = null;
           description = ''
-            Public address put in SDP for peers outside `localNet` (NAT),
-            where `externalSignalingAddress` says Asterisk applies it.
+            Public address in SDP for peers outside `localNet` (NAT), applied
+            where `externalSignalingAddress` describes.
           '';
         };
         externalSignalingAddress = mkOption {
           type = types.nullOr types.str;
           default = null;
           description = ''
-            Public address used in SIP headers for peers outside `localNet`
-            (NAT). Asterisk applies it, `externalSignalingPort` and
-            `externalMediaAddress` to what it sends over udp, and over tcp
-            and tls on IPv4. Over tcp and tls on IPv6 it applies them only to
-            endpoints whose `transport` names this transport; to the others a
-            PBX behind NAT sends its private address in SIP headers and SDP.
-            Asterisk never applies it to the From header, so an endpoint, not
-            a trunk, whose `transport` names this transport gets it as
-            `from_domain`, for peers in `localNet` too; From of requests to
-            other endpoints names the PBX's own address.
-            On a ws or wss transport the three fail evaluation, as Asterisk
+            Public address in SIP headers for peers outside `localNet` (NAT).
+            Asterisk applies it, `externalSignalingPort` and
+            `externalMediaAddress` over udp, and over tcp and tls on IPv4. Over
+            tcp and tls on IPv6 it applies them only to endpoints whose
+            `transport` names this transport, and the others get the PBX's
+            private address. Asterisk never applies it to From, so the module
+            sets it as `from_domain` of an endpoint, not a trunk, whose
+            `transport` names this transport, for peers in `localNet` too. On a
+            ws or wss transport the three fail evaluation, since Asterisk
             applies them to nothing it sends over WebSocket.
           '';
         };
@@ -639,8 +603,8 @@
           type = types.nullOr types.port;
           default = null;
           description = ''
-            Public port used in SIP headers for peers outside `localNet`,
-            where `externalSignalingAddress` says Asterisk applies it.
+            Public port in SIP headers for peers outside `localNet`, applied
+            where `externalSignalingAddress` describes.
           '';
         };
         localNet = mkOption {
@@ -654,10 +618,10 @@
             type = types.nullOr types.str;
             default = null;
             description = ''
-              Certificate chain (PEM). Loaded as a systemd credential, so it may
-              be readable by root only. From systemd 260 on, a renewed
-              certificate is applied by `systemctl reload asterisk`, which with
-              security.acme is `reloadServices = [ "asterisk.service" ]`.
+              Certificate chain (PEM), loaded as a systemd credential, so it
+              may be readable by root only. From systemd 260 on,
+              `systemctl reload asterisk` applies a renewed certificate, which
+              with security.acme is `reloadServices = [ "asterisk.service" ]`.
             '';
           };
           keyFile = mkOption {
@@ -669,11 +633,10 @@
             type = types.nullOr types.str;
             default = null;
             description = ''
-              CA certificates used to verify peers, loaded as a systemd
-              credential. By default TLS transports use the system's CA bundle
+              CA certificates to verify peers, loaded as a systemd credential.
+              Without it TLS transports use the system's CA bundle
               ({option}`security.pki.caBundle`), so `verifyServer` works with
-              publicly signed certificates; `verifyClient` needs a list of its
-              own.
+              publicly signed certificates.
             '';
           };
           method = mkOption {
@@ -689,21 +652,20 @@
             default = "sslv23";
             example = "tlsv1_3";
             description = ''
-              TLS protocol version (pjsip `method`). `sslv23` negotiates the
-              highest version both sides support, TLS 1.2 or 1.3 with current
-              OpenSSL, which refuses older versions; any other value allows
-              that version only. Asterisk's own default (used with `null`) is
-              TLS 1.0.
+              TLS protocol version (`method`). `sslv23` negotiates the highest
+              version both sides support, TLS 1.2 or 1.3 with current OpenSSL,
+              which refuses older ones. Any other value allows that version
+              only. `null` leaves Asterisk's default, TLS 1.0.
             '';
           };
           verifyClient = mkOption {
             type = types.bool;
             default = false;
             description = ''
-              Admit only clients that present a certificate the CA list
-              verifies (`verify_client` and `require_client_cert`). Needs
-              `caListFile`, since the system's CA bundle would admit any client
-              whose certificate a public CA signed.
+              Admit only clients that present a certificate `caListFile`
+              verifies (`verify_client` and `require_client_cert`). Evaluation
+              fails without `caListFile`, since the system's CA bundle would
+              admit any certificate a public CA signed.
             '';
           };
           verifyServer = mkOption {
@@ -716,8 +678,8 @@
           type = types.bool;
           default = false;
           description = ''
-            Let `module reload res_pjsip.so` recreate this transport. Changing a
-            transport restarts Asterisk anyway when deployed through NixOS.
+            Let `module reload res_pjsip.so` recreate this transport. A deploy
+            that changes a transport restarts Asterisk regardless.
           '';
         };
         settings = settingsOption "transport";
@@ -734,27 +696,27 @@
           "0.0.0.0/0.0.0.0"
           "::/0"
         ];
-        description = "Networks to deny. Rendered before `permit`; the last matching rule wins.";
+        description = "Networks to deny.";
       };
       permit = mkOption {
         type = types.listOf types.str;
         default = [];
         example = ["10.0.1.0/24"];
-        description = "Networks to permit, overriding earlier `deny` rules.";
+        description = "Networks to permit. They are rendered after `deny`, and the last matching rule wins.";
       };
       contactDeny = mkOption {
         type = types.listOf types.str;
         default = [];
         description = ''
-          Networks the addresses in a request's Contact header must not be in.
-          Asterisk checks every request that has one, calls from a trunk as
-          well as registrations, and answers 403.
+          Networks a request's Contact addresses must not be in. Asterisk
+          checks every request with a Contact, trunk calls as well as
+          registrations, and answers 403.
         '';
       };
       contactPermit = mkOption {
         type = types.listOf types.str;
         default = [];
-        description = "Networks the addresses in a request's Contact header may be in, overriding `contactDeny`.";
+        description = "Networks a request's Contact addresses may be in, overriding `contactDeny`.";
       };
       settings = settingsOption "acl";
     };
@@ -1493,12 +1455,12 @@ in {
         endpoint_identifier_order = "ip,username";
       };
       description = ''
-        Keys of the `[global]` section (`type = global`). The module sets
+        Keys of the `[global]` section. The module sets
         `max_initial_qualify_time = 5`, so phones and trunks are qualified
         within 5 seconds of a start, and `taskprocessor_overload_trigger =
-        pjsip_only`, so a backlog of call records or AMI or ARI events does
-        not stop PJSIP from taking new requests, only a backlog of its own;
-        any definition replaces them.
+        pjsip_only`, so only a backlog of PJSIP's own, not one of call records
+        or AMI or ARI events, stops it taking new requests. Any definition
+        replaces them.
       '';
     };
 
@@ -1508,7 +1470,7 @@ in {
       example = {
         timer_t1 = 500;
       };
-      description = "Keys of the `[system]` section (`type = system`).";
+      description = "Keys of the `[system]` section.";
     };
 
     transports = mkOption {
@@ -1525,11 +1487,10 @@ in {
         }
       '';
       description = ''
-        PJSIP transports. Changing a transport restarts Asterisk, since
-        transports are not reloadable. The firewall ports are derived from
-        these (see {option}`services.asterisk.openFirewall`). A `udp`
-        transport takes TCP on its address and port too, as
-        {option}`services.asterisk.pjsip.transports.<name>.tcp` describes.
+        PJSIP transports. Changing one restarts Asterisk, since transports are
+        not reloadable. {option}`services.asterisk.openFirewall` opens their
+        ports. A `udp` transport takes TCP too, see
+        {option}`services.asterisk.pjsip.transports.<name>.tcp`.
       '';
     };
 
@@ -1545,10 +1506,9 @@ in {
         }
       '';
       description = ''
-        Global ACLs (`type = acl`) applied to every incoming SIP request.
-        `permit` rules are rendered after `deny` rules and the last matching
-        rule wins, so "deny everything, permit these networks" works as
-        expected.
+        Global ACLs applied to every incoming SIP request. `permit` rules are
+        rendered after `deny` rules and the last matching rule wins, so "deny
+        everything, permit these networks" works.
       '';
     };
 
@@ -1565,10 +1525,9 @@ in {
         }
       '';
       description = ''
-        SIP devices. Each endpoint gets an auth section (when `auth` is set),
-        an aor section (unless `aor = null`) and optionally an identify
-        section, all named like the endpoint. Phones register with the
-        endpoint name as user name.
+        SIP devices. Each gets an endpoint section and, when set, an auth, aor
+        and identify section, all named like the endpoint. Phones register
+        with the endpoint name as user name.
       '';
     };
 
@@ -1588,12 +1547,10 @@ in {
       '';
       description = ''
         SIP provider accounts: an endpoint with outbound authentication, an
-        aor pointing at the provider, identify sections for the provider's
-        host and for the addresses of `identify` and, unless
-        `register = false`, an outbound registration.
-        A request counts as the trunk's when it comes from an address of its
-        identify or carries its registration's `line`; the user in its From
-        header plays no part, as anyone can send any.
+        aor pointing at the provider, identify sections for `host` and
+        `identify`, and an outbound registration unless `register = false`. A
+        request counts as the trunk's when it comes from an identified address
+        or carries its registration's `line`, never by the user in From.
       '';
     };
   };

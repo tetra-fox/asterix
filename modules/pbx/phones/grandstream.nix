@@ -1,7 +1,7 @@
-# Provisioning for Grandstream analog adapters and phones: each services.asterix.phones
-# device of one of these models gets a `cfg<mac>.xml` (Grandstream's
-# gs_provision format) in which each line, an adapter's phone port or a
-# phone's SIP account, registers as its endpoint.
+# Provisioning for Grandstream analog adapters and phones: each device of
+# these models gets a `cfg<mac>.xml` (Grandstream's gs_provision format) in
+# which each line, an adapter's phone port or a phone's SIP account, registers
+# as its endpoint.
 #
 # Every P-value set here is in Grandstream's configuration templates for the
 # models that use it, for every hardware version (config-template.zip from
@@ -292,7 +292,7 @@ in {
       type = types.nullOr types.str;
       default = null;
       example = "CET-1CEST-2,M3.5.0/02:00:00,M10.5.0/03:00:00";
-      description = "Time zone of the Grandstream devices (P64), one of the values listed in their templates; `null` keeps their default. The Android phones (GXV33xx, GXV34xx, WP820, WP856) take zone names such as `Europe/Berlin` instead and get theirs only from `settings`.";
+      description = "Time zone of the Grandstream devices (P64), one of the values listed in their templates. When null, they keep their default. The Android phones (GXV33xx, GXV34xx, WP820, WP856) take zone names such as `Europe/Berlin` instead, and get theirs only from `settings`.";
     };
 
     settings = mkOption {

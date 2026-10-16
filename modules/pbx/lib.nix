@@ -12,7 +12,7 @@
       mailbox = mkOption {
         type = types.str;
         example = "200@sales";
-        description = "Mailbox of voicemail.conf, from an extension's `voicemail`, {option}`services.asterix.voicemail.mailboxes`, {option}`services.asterisk.voicemail.mailboxes`, `settings`, `extraConfig` or an included file: `box` or `box@context`. VoiceMail() finds the context in any case, or takes the box from any context with voicemail.conf's `searchcontexts`, but files the message under the box as written here, so the box is spelled as in voicemail.conf, and it reaches no mailbox through an alias.";
+        description = "Mailbox of voicemail.conf as `box` or `box@context`, such as an extension's or one of {option}`services.asterix.voicemail.mailboxes`. VoiceMail() files the message under the box as written here, so spell it as in voicemail.conf, not as an alias.";
       };
       greeting = mkOption {
         type = types.enum [
@@ -96,9 +96,9 @@ in rec {
       type = types.str;
       example = "For sales, press 1. For support, press 2.";
       description = ''
-        Text spoken by flite (voice slt) when the system is built. The
-        English voice skips characters outside ASCII, so a text needs an
-        ASCII letter or digit, or it plays as silence.
+        English text spoken by flite when the system is built. Characters
+        outside ASCII are skipped, and a text with no ASCII letter or digit
+        fails evaluation.
       '';
     };
   };
@@ -198,9 +198,9 @@ in rec {
     hangup = mkOption {
       type = types.enum [true];
       description = ''
-        End the call. A caller who was not answered gets the reason the last
-        phone or trunk it rang gave, such as busy, or that nobody answered
-        (480 Temporarily Unavailable in SIP) where none gave one.
+        End the call. An unanswered caller gets the reason the last phone or
+        trunk it rang gave, such as busy, or else 480 Temporarily
+        Unavailable.
       '';
     };
   };

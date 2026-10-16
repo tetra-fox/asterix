@@ -28,7 +28,7 @@ services.asterix = {
 };
 ```
 
-1. **Point each device at the PBX once**, in DHCP option 66 or as the
+3. **Point each device at the PBX once**, in DHCP option 66 or as the
    provisioning server in its web interface (add `:port` if it isn't 80):
 
    | Vendor                | DHCP                              | First boot                                                 |
@@ -41,7 +41,7 @@ services.asterix = {
    | Snom                  | 66 = `http://10.0.20.10`, no 67   | asks Snom's redirection service first                      |
    | Yealink               | 66 = `http://10.0.20.10`          |                                                            |
 
-2. **Deploy and watch** `journalctl -u asterisk-provisioning`, which logs every
+4. **Deploy and watch** `journalctl -u asterisk-provisioning`, which logs every
    request. A device registers once it has its file.
 
 [`examples/household-intercom-ht801.nix`](examples/household-intercom-ht801.nix)
@@ -450,10 +450,9 @@ HT812, HT814 and HT818: every port registers with profile 1, which gets P271
 ## Grandstream phones
 
 Desk, Wi-Fi, hotel and video phones, whose lines are their SIP accounts. They
-get the adapters' P212, P237, P238, P1409, P2, P30 and P64, except that the
-GXP16xx and GXP17xx have no P1409, and the Android phones (WP820, WP856,
-GXV33xx, GXV34xx) take a zone name like `Europe/Berlin` in P64, from
-`settings` only.
+get the adapters' P212, P237, P238, P1409, P2, P30 and P64. The GXP16xx and
+GXP17xx have no P1409. The Android phones (WP820, WP856, GXV33xx, GXV34xx)
+take a zone name like `Europe/Berlin` in P64, set through `settings`.
 
 | Account | Active                 | SIP server             | SIP user ID            | Authentication ID      | Password               |
 | ------- | ---------------------- | ---------------------- | ---------------------- | ---------------------- | ---------------------- |

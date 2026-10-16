@@ -97,7 +97,7 @@ in {
         default = "127.0.0.1";
         description = ''
           Address the HTTP server listens on. The service waits for a
-          specific address as for a SIP transport's, see
+          specific address, see
           {option}`services.asterisk.pjsip.transports.<name>.address`.
         '';
       };
@@ -116,7 +116,7 @@ in {
           defaultText = lib.literalExpression "config.services.asterisk.http.address";
           description = ''
             Address the HTTPS listener binds to. The service waits for a
-            specific address as for a SIP transport's, see
+            specific address, see
             {option}`services.asterisk.pjsip.transports.<name>.address`.
           '';
         };
@@ -168,16 +168,12 @@ in {
         default = false;
         example = true;
         description = ''
-          Whether to enable the Asterisk REST Interface (ARI); requires
-          `http.enable`. It loads the resources for applications, bridges,
-          channels, device states, endpoints, events, playbacks, recordings
-          and sounds, but not `/ari/asterisk` (res_ari_asterisk.so), with
-          `info`, `ping`, `modules` (loads and unloads modules), `logging`
-          (log channels), `variable` (global variables) and `config/dynamic`,
-          which shows and changes PJSIP objects and shows every PJSIP
-          password, to read-only users too. An application that needs them
-          adds `res_ari_asterisk.so` to
-          {option}`services.asterisk.modules.load`.
+          Whether to enable the Asterisk REST Interface (ARI). Requires
+          {option}`services.asterisk.http.enable`. Every resource is loaded
+          except `/ari/asterisk` (res_ari_asterisk.so), whose
+          `config/dynamic` shows every PJSIP password, to read-only users
+          too. An application that needs `/ari/asterisk` adds
+          `res_ari_asterisk.so` to {option}`services.asterisk.modules.load`.
         '';
       };
 
@@ -197,10 +193,9 @@ in {
                 type = types.bool;
                 default = false;
                 description = ''
-                  Only allow GET requests. These still read voicemail PINs,
-                  with `VM_INFO(<mailbox>,password)` as a variable of any
-                  channel, and with res_ari_asterisk.so loaded every PJSIP
-                  password, at `/ari/asterisk/config/dynamic/res_pjsip/auth/<name>`.
+                  Only allow GET requests. These can still read voicemail
+                  PINs through `VM_INFO(<mailbox>,password)`, and with
+                  res_ari_asterisk.so loaded every PJSIP password.
                 '';
               };
             };

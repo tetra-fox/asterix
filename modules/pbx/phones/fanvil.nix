@@ -1,6 +1,6 @@
 # Provisioning for Fanvil phones, door phones and paging gateways: each
-# services.asterix.phones device of one of these models gets a `<mac>.cfg` in Fanvil's
-# sysConf XML, in which each line, a SIP account, registers as its endpoint.
+# device of these models gets a `<mac>.cfg` in Fanvil's sysConf XML, in which
+# each line, a SIP account, registers as its endpoint.
 #
 # Every key set here is in the key map (vNcDotNameMap.txt) of the firmware
 # images at download.fanvil.com that the models run: X4U, X5U, X6U, X7, X7C

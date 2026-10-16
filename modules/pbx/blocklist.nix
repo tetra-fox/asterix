@@ -1,7 +1,7 @@
 # services.asterix.blocklist: callers turned away on calls from trunks, in
-# pbx-blocklist. Each route of services.asterix.inbound calls its `s` first
-# (routes.nix), which returns `blocked` for a caller on the list, and the
-# call then goes to the extension `blocked`.
+# pbx-blocklist. Each route of services.asterix.inbound calls its `s` first,
+# which returns `blocked` for a caller on the list, and the call then goes to
+# the extension `blocked`.
 {
   config,
   lib,
@@ -30,26 +30,18 @@ in {
       default = [];
       example = ["+15551234567" "15551234567" "5551234567" "_1800XXXXXXX"];
       description = ''
-        Callers turned away on calls from trunks, before the number of
-        {option}`services.asterix.inbound` they called sends the call on,
-        unless that number sets `blocklist = false`. Calls between extensions
-        are not checked, and neither are calls from a trunk with a `context`
-        of its own.
+        Callers turned away on calls from trunks, unless the number of
+        {option}`services.asterix.inbound` they called sets
+        `blocklist = false`. Calls between extensions are not checked, and
+        neither are calls from a trunk with a `context` of its own.
 
-        A caller is known by the number the trunk gives as theirs: the user
-        part of From, or of P-Asserted-Identity or Remote-Party-ID on a trunk
-        that trusts them (`trust_id_inbound`). A number matches only as
-        written, so +15551234567, 15551234567 and 5551234567 are three
-        numbers, and a provider that sends one of these forms is matched by
-        that form alone. List each form the provider sends.
+        A caller is known by the user part of From, or of P-Asserted-Identity
+        or Remote-Party-ID on a trunk that trusts them (`trust_id_inbound`).
+        A number matches only as written, so +15551234567, 15551234567 and
+        5551234567 are three numbers. List each form the provider sends.
 
-        An entry is a number of digits, `*` and `#`, with an optional
-        leading `+`, or a pattern of such numbers that starts with `_`,
-        matched as Asterisk matches a number dialled: `X` is any digit, `Z`
-        a digit from 1 to 9, `N` one from 2 to 9, `[1-4]` one of a set, and
-        at the end `.` stands for one or more characters, `!` for none or
-        more. So `_1800XXXXXXX` is every number of eleven digits that starts
-        with 1800.
+        An entry is a number of digits, `*` and `#` with an optional leading
+        `+`, or a dialplan pattern such as `_1800XXXXXXX`.
       '';
     };
 
@@ -60,12 +52,10 @@ in {
         Whether to turn away callers who withhold their number, on the same
         calls as `numbers`: those whose number is empty, or is `anonymous`,
         `restricted` or `unavailable` in any case, and those whose
-        presentation is not allowed. A trunk gives the user part of From as
-        the number, which is `anonymous` for a provider that follows RFC
-        3323. Asterisk reads a Privacy header only on a trunk that trusts
-        P-Asserted-Identity (`trust_id_inbound`), where `Privacy: id`
-        withholds the number that header gives. A provider that sends a
-        number of its own for a withheld one needs that number in `numbers`.
+        presentation is not allowed. `Privacy: id` counts only on a trunk
+        that trusts P-Asserted-Identity (`trust_id_inbound`). A provider that
+        sends a number of its own for a withheld one needs that number in
+        `numbers`.
       '';
     };
 

@@ -102,12 +102,11 @@ in {
         automixmon = "*3";
       };
       description = ''
-        Built-in features and their key sequences of at most 10 keys
-        (`[featuremap]`). They are only available on calls dialled with the
-        matching Dial() options (`t`/`T` for transfers, `k`/`K` for parkcall,
-        `x`/`X` for automixmon, ...). The modules that provide them are
-        loaded: res_parking.so for `parkcall`, bridge_builtin_features.so for
-        `disconnect` and `automixmon`, which also needs app_mixmonitor.so.
+        Built-in features and their key sequences, at most 10 keys
+        (`[featuremap]`). A feature works only on calls dialled with the
+        matching Dial() option (`t`/`T` for transfers, `k`/`K` for parkcall,
+        `x`/`X` for automixmon, ...). The modules a feature needs are loaded
+        with it.
       '';
     };
 

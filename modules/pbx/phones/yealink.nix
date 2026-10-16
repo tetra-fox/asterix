@@ -1,8 +1,8 @@
-# Provisioning for Yealink SIP phones on firmware V84 and later: each
-# services.asterix.phones device of one of these models gets a `<mac>.cfg`, Yealink's
-# MAC-oriented configuration file, in which each line is an account that
-# registers as its endpoint. Without boot files on the server, the phone asks
-# for its model's common file and then this one.
+# Provisioning for Yealink SIP phones on firmware V84 and later: each device
+# of these models gets a `<mac>.cfg`, Yealink's MAC-oriented configuration
+# file, in which each line is an account that registers as its endpoint.
+# Without boot files on the server, the phone asks for its model's common file
+# and then this one.
 #
 # Every key set here is in Yealink's administrator guides for the models that
 # use it (SIP-T2/T3/T4/T5/CP920 IP Phones Administrator Guide V86.60, which the

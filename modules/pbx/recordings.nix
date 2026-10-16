@@ -127,7 +127,7 @@ in {
           type = types.nullOr types.ints.positive;
           default = null;
           example = 90;
-          description = "Days a recording is kept. A timer deletes older ones once a day. Without it, recordings are kept until deleted by hand.";
+          description = "Days a recording is kept. Older ones are deleted once a day. Null keeps them until deleted by hand.";
         };
         noticeToRecorder = mkOption {
           type = types.bool;
@@ -143,46 +143,32 @@ in {
           default = null;
           example = {text = "This call may be recorded.";};
           description = ''
-            What is played before a call is recorded. There is none by
-            default, as the laws on recording calls differ. The caller hears
-            it before anything rings, answered first, when what they called
-            records: an extension, ring group, queue or inbound number with
-            `record`, or a ring group or queue with a member that records.
-            On a call that a phone with `record` makes, whoever answers hears
-            it instead, before the recording starts, and the phone too with
-            `noticeToRecorder`. A recording started with
-            {option}`services.asterix.featureCodes.record` plays it to both
-            sides as it starts.
+            What is played before a call is recorded. When what the caller
+            called records, the caller is answered and hears it before
+            anything rings. On a call that a phone with `record` makes,
+            whoever answers hears it before the recording starts. A recording
+            started with {option}`services.asterix.featureCodes.record` plays
+            it to both sides.
           '';
         };
       };
     };
     default = {};
     description = ''
-      Call recording, which `record` of
+      Call recording, turned on by `record` of
       {option}`services.asterix.extensions`,
       {option}`services.asterix.inbound`,
       {option}`services.asterix.ringGroups` and
-      {option}`services.asterix.queues` turns on, and
-      {option}`services.asterix.featureCodes.record` during a call.
+      {option}`services.asterix.queues`, or during a call by
+      {option}`services.asterix.featureCodes.record`.
 
-      A call is recorded from when it is answered, by a phone, a number
-      outside or a queue member, into one WAV file of both sides in
-      {file}`/var/lib/asterisk/spool/monitor`, which only root and the
-      asterisk user can read. A file is named
-      `<date>-<time>-<from>-<to>-<id>.wav`: the date and time it was
-      answered, the caller's number with only digits, `*`, `#` and `+` kept,
-      the extension, ring group, queue or number called, and the unique ID
-      of the channel that answered. One started with the code is named
-      `<date>-<time>-<from>-<to>-<seconds>-<id>.wav`, with the date and time
-      the call started ringing, the Unix time the code was pressed and the
-      unique ID of the caller's channel.
-
-      Each call is recorded once, however many objects along its way
-      record, into one file on the side that answered. When the caller
-      transfers it, it stays in that file. When the side that answered
-      transfers it, that file ends, and where the call goes it is recorded
-      again if it would be. Voicemail, conferences, pages and emergency
+      A call is recorded once, from when it is answered, into one WAV file
+      of both sides in {file}`/var/lib/asterisk/spool/monitor`, readable
+      only by root and the asterisk user, named
+      `<date>-<time>-<from>-<to>-<id>.wav`. One started with the code has
+      the Unix time it was pressed before `<id>`. When the side that answered
+      transfers the call, its file ends, and the call is recorded again where
+      it goes if that records. Voicemail, conferences, pages and emergency
       calls are not recorded.
     '';
   };

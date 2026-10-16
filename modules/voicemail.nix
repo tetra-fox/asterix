@@ -1,7 +1,7 @@
 # Mailboxes render as `mailbox => -PIN,full name,email,pager email,options`
 # lines in their context section, with the PIN as a secret placeholder.
 # Mailboxes are declarative: the `-` makes Asterisk refuse a PIN change from
-# the phone, which it would use until the next reload but cannot save.
+# the phone, which it could not save.
 {
   config,
   lib,
@@ -48,28 +48,24 @@
           type = types.str;
           default = ref.context;
           defaultText = lib.literalMD "the part of the attribute name after `@`, or `default`";
-          description = "Voicemail context the mailbox belongs to. Asterisk reads `general`, `zonemessages` and the context `aliasescontext` names, in any case, as no voicemail context.";
+          description = "Voicemail context the mailbox belongs to. `general`, `zonemessages` and the context `aliasescontext` names are reserved, in any case.";
         };
         pin = mkOption {
           type = format.types.secretOrString;
           example = lib.literalExpression "config.lib.asterisk.secret config.sops.secrets.vm-101.path";
           description = ''
-            Mailbox PIN, normally a secret reference. A plain string is stored in
-            the world-readable Nix store and triggers a warning. It cannot
-            contain a comma, which ends the PIN in the mailbox line. Callers
-            cannot change it from the phone: it is rendered with Asterisk's `-`
-            prefix for unchangeable PINs, so it cannot start with `-` itself,
-            which no phone could type. Nor can it start with `*`, which
-            VoiceMailMain takes for a jump to extension `a`, or contain `#`,
-            which ends the PIN a caller types. Asterisk keeps 79 bytes of the
-            `-` and the PIN, so the PIN can have 78.
+            Mailbox PIN, normally a secret reference, at most 78 bytes. A
+            plain string lands in the world-readable Nix store and triggers a
+            warning. Callers cannot change it from the phone. It cannot contain
+            `,` or `#`, or start with `-` or `*`, which no phone can type into
+            VoiceMailMain.
           '';
         };
         fullName = mkOption {
           type = types.str;
           default = ref.box;
           defaultText = lib.literalMD "the mailbox number";
-          description = "Owner's name, used by the directory and in e-mails. Asterisk keeps 79 bytes of it.";
+          description = "Owner's name, used by the directory and in e-mails, at most 79 bytes.";
         };
         email = mkOption {
           type = types.nullOr types.str;
@@ -79,7 +75,7 @@
         pagerEmail = mkOption {
           type = types.nullOr types.str;
           default = null;
-          description = "Address receiving a short notification (pager e-mail). Asterisk keeps 79 bytes of it.";
+          description = "Address receiving a short notification (pager e-mail), at most 79 bytes.";
         };
         options = mkOption {
           # volgain takes a fraction
@@ -449,9 +445,9 @@ in {
         "wav"
       ];
       description = ''
-        Formats messages are stored in; the first is used for e-mail
-        attachments (`wav49` is a small GSM WAV that most clients play).
-        Asterisk takes at most 10.
+        Formats messages are stored in, at most 10. The first is used for
+        e-mail attachments (`wav49` is a small GSM WAV that most clients
+        play).
       '';
     };
 
@@ -474,28 +470,27 @@ in {
         example = lib.literalExpression ''"''${pkgs.msmtp}/bin/msmtp --read-envelope-from -t"'';
         description = ''
           Command that sends notification e-mails, reading the message on
-          standard input (`mailcmd`). Mailboxes with an e-mail address need
-          it: without it Asterisk runs {file}`/usr/sbin/sendmail`, which NixOS
-          does not have. It runs inside Asterisk's sandbox (NoNewPrivileges),
-          so setuid or setgid sendmail wrappers such as
-          {file}`/run/wrappers/bin/sendmail` do not work; use an SMTP client
-          such as msmtp. Its password can be a credential
-          ({option}`services.asterisk.credentials`), which the command reads
-          from {file}`$CREDENTIALS_DIRECTORY/<name>`. Asterisk keeps 159
-          characters of it; a longer command has to go into a script.
+          standard input (`mailcmd`), at most 159 characters. Mailboxes with
+          an e-mail address need it, since Asterisk's default
+          {file}`/usr/sbin/sendmail` does not exist on NixOS. It runs with
+          NoNewPrivileges, so setuid or setgid wrappers such as
+          {file}`/run/wrappers/bin/sendmail` do not work. Use an SMTP client
+          such as msmtp, whose password can be a credential
+          ({option}`services.asterisk.credentials`) read from
+          {file}`$CREDENTIALS_DIRECTORY/<name>`.
         '';
       };
       fromAddress = mkOption {
         type = types.nullOr types.str;
         default = null;
         example = "pbx@example.org";
-        description = "Sender address of notification e-mails (`serveremail`). Asterisk keeps 79 bytes of it.";
+        description = "Sender address of notification e-mails (`serveremail`), at most 79 bytes.";
       };
       fromName = mkOption {
         type = types.nullOr types.str;
         default = null;
         example = "Voicemail";
-        description = "Sender name of notification e-mails (`fromstring`). Asterisk keeps 99 bytes of it.";
+        description = "Sender name of notification e-mails (`fromstring`), at most 99 bytes.";
       };
       attach = mkOption {
         type = types.bool;

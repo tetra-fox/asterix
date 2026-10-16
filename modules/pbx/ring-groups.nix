@@ -52,10 +52,10 @@
         default = [];
         example = ["5551234"];
         description = ''
-          Numbers outside, called through `trunk`: digits, `*` and `#`, with
-          an optional leading `+`. Whoever answers hears "press 1 to accept
-          this call, or 2 to reject it", so a mobile phone's voicemail cannot
-          take the call. `ringTime` includes the time to answer and press 1.
+          Numbers outside, called through `trunk`. Whoever answers hears
+          "press 1 to accept this call, or 2 to reject it", so a mobile
+          phone's voicemail cannot take the call. `ringTime` includes the
+          time to answer and press 1.
         '';
       };
       trunk = mkOption {

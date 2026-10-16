@@ -1,7 +1,6 @@
 # Each context is rendered into `settings."extensions.conf".<context>`, so
-# extensions can be added there too. Every extension is written as one
-# contiguous block: optional hint, then `exten => ext,1,...` followed by
-# `same => n,...` lines.
+# extensions can be added there too. Each extension is one block: an optional
+# hint, then `exten => ext,1,...` and `same => n,...` lines.
 #
 # Escaping: Asterisk variables look like Nix antiquotations. Write
 # `"\${EXTEN}"` in double-quoted strings, `''${EXTEN}` in indented strings, or
@@ -63,8 +62,7 @@
             example = "voicemail";
             description = ''
               Priority label, usable as a Goto() target. It may not be empty,
-              contain `,` or `)`, start with `+` or `-`, or be a whole number,
-              which Goto() takes for a priority.
+              contain `,` or `)`, start with `+` or `-`, or be a whole number.
             '';
           };
         };
@@ -81,9 +79,8 @@
         default = [];
         description = ''
           Contexts included in this one (`include =>`), searched in order
-          after its own extensions and switches. A context listed twice, as
-          when two modules include it, is included once, where it comes
-          first.
+          after its own extensions and switches. A context listed twice is
+          included once, at its first position.
         '';
       };
       switches = mkOption {
@@ -92,9 +89,9 @@
         example = ["Realtime/default@extensions"];
         description = ''
           Alternative switches (`switch =>`), asked in order after the
-          context's own extensions and before its includes. One listed twice
-          is written once. The module of a Realtime, Lua, DUNDi, Loopback or
-          IAX2 switch is loaded with it.
+          context's own extensions and before its includes. Duplicates are
+          written once. The module of a Realtime, Lua, DUNDi, Loopback or IAX2
+          switch is loaded with it.
         '';
       };
       ignorePatterns = mkOption {
@@ -128,12 +125,11 @@
         };
         description = ''
           Device state hints (`exten => 101,hint,PJSIP/101`) for BLF and
-          presence: devices joined by `&`, each a channel driver and a
-          resource (`PJSIP/101`) or a state provider and a name
-          (`Custom:dnd101`, `Queue:support_avail`), then optionally a comma
-          and `CustomPresence:<name>`. A hint may only have a `(` after a
-          variable, as in `PJSIP/''${GLOBAL(PHONE)}`, since Asterisk cuts it
-          there otherwise.
+          presence: devices joined by `&`, each `<driver>/<resource>`
+          (`PJSIP/101`) or `<provider>:<name>` (`Custom:dnd101`,
+          `Queue:support_avail`), optionally followed by
+          `,CustomPresence:<name>`. A `(` is allowed only after a variable, as
+          in `PJSIP/''${GLOBAL(PHONE)}`.
         '';
       };
       extraConfig = mkOption {
@@ -142,7 +138,8 @@
         example = "exten => 999,1,Playback(tt-monkeys)";
         description = ''
           Raw dialplan lines for this context, written verbatim in a second
-          `[context]` block at the end of the file (Asterisk merges both).
+          `[context]` block at the end of the file, which Asterisk merges with
+          the first.
         '';
       };
       comment = mkOption {
@@ -429,8 +426,8 @@ in {
       };
       description = ''
         Keys of the `[general]` section. The module sets `static`,
-        `writeprotect` (Asterisk must not rewrite the generated dialplan) and
-        `clearglobalvars` (removed globals disappear on reload) to `yes`.
+        `writeprotect` and `clearglobalvars` (removed globals disappear on
+        reload) to `yes`.
       '';
     };
 
@@ -445,9 +442,8 @@ in {
       '';
       description = ''
         Global variables (`[globals]`), readable as `''${NAME}` in the
-        dialplan. Asterisk fills in `''${...}` and `$[...]` in a value once,
-        when it loads the dialplan, with the globals written before it, in
-        the order of their names.
+        dialplan. `''${...}` and `$[...]` in a value are expanded once, when
+        the dialplan loads, from the globals before it in name order.
       '';
     };
 
@@ -467,10 +463,10 @@ in {
         }
       '';
       description = ''
-        Dialplan contexts. Asterisk fills in `''${...}` in extension names,
-        hints, includes, ignore patterns and switches once, when it loads the
-        dialplan, with the global variables, and in steps each time a call
-        runs them.
+        Dialplan contexts. `''${...}` in extension names, hints, includes,
+        ignore patterns and switches is expanded once from the global
+        variables when the dialplan loads, and in steps each time a call runs
+        them.
       '';
     };
 
@@ -481,8 +477,8 @@ in {
         Every context of the dialplan at runtime: the contexts of
         {file}`extensions.conf`, section headers in its raw text and the
         contexts of res_parking's parking lots. Null when included files or
-        an AEL or Lua dialplan, with pbx_ael or pbx_lua loaded, make that
-        unknowable. Other modules use it to check references to contexts.
+        a loaded AEL or Lua dialplan make that unknowable. Other modules use
+        it to check references to contexts.
       '';
     };
   };

@@ -1,12 +1,9 @@
 # Provisioning files for phones and adapters, served over HTTP by
-# pkgs/provisioning-server from a systemd socket.
-#
-# `devices` are phones and adapters of the models that vendor modules (see
-# grandstream.nix) add to `models`; each vendor module writes the files of its
-# devices into `files`, as users may by hand. Their text may contain secret
-# references, which are substituted at service start into a tmpfs like
-# Asterisk's own configuration, so the store only holds placeholders. Secrets
-# given as systemd credentials (`credential "name"`) must also be loaded into
+# pkgs/provisioning-server from a systemd socket. Vendor modules add their
+# models to `models` and write the files of their `devices` into `files`, as
+# users may by hand. Secret references in the text are substituted at service
+# start into a tmpfs, so the store only holds placeholders. Secrets given as
+# systemd credentials (`credential "name"`) must also be loaded into
 # asterisk-provisioning.service.
 {
   config,
@@ -58,7 +55,7 @@
           type = types.strMatching "([0-9a-fA-F]{2}[:-]?){5}[0-9a-fA-F]{2}";
           apply = mac: lib.toLower (lib.replaceStrings [":" "-"] ["" ""] mac);
           example = "c0:74:ad:12:34:56";
-          description = "MAC address of the device: twelve hexadecimal digits, in pairs separated by `:` or `-`, or not separated.";
+          description = "MAC address of the device, twelve hexadecimal digits, in pairs separated by `:` or `-` or not separated.";
         };
         lines = mkOption {
           type = types.listOf (types.nullOr types.str);
@@ -87,7 +84,7 @@
           example = {
             P1362 = "de";
           };
-          description = "Settings in the vendor's own format, replacing what the modules set; PROVISIONING.md names each vendor's.";
+          description = "Settings in the vendor's own format, replacing what the modules set. PROVISIONING.md names each vendor's format.";
         };
       };
     }
@@ -152,8 +149,8 @@
         type = types.bool;
         default = false;
         description = ''
-          Serve the file over TFTP too, on UDP port 69, for devices that fetch
-          their first file that way.
+          Whether to also serve the file over TFTP, on UDP port 69, for
+          devices that fetch their first file that way.
         '';
       };
     };
@@ -282,9 +279,9 @@ in {
       defaultText = lib.literalMD "the address of `network`";
       example = "10.0.20.10";
       description = ''
-        Address the provisioning files are served on, on the phones' network
-        only: the files usually contain SIP passwords. It may be configured
-        after the socket is set up (`FreeBind=`).
+        Address the provisioning files are served on. Keep it on the phones'
+        network, since the files usually contain SIP passwords. The address
+        need not exist yet when the socket starts (`FreeBind=`).
       '';
     };
 
@@ -300,8 +297,8 @@ in {
       defaultText = lib.literalMD "the subnets of `network`";
       example = ["10.0.20.0/24"];
       description = ''
-        Networks allowed to connect. systemd drops connections from anywhere
-        else (`IPAddressAllow=` on the socket) before the server sees them.
+        Networks allowed to connect. systemd drops other connections
+        (`IPAddressAllow=` on the socket).
       '';
     };
 
@@ -336,14 +333,14 @@ in {
     sipPort = mkOption {
       type = types.port;
       default = 5060;
-      description = "Port of {option}`services.asterix.phones.sipServer`. Devices that take the server and its port as one value get the port only when it is not 5060, SIP's default.";
+      description = "Port of {option}`services.asterix.phones.sipServer`. Devices that take the server and port as one value get the port only when it is not 5060.";
     };
 
     ntpServer = mkOption {
       type = types.nullOr types.str;
       default = null;
       example = "10.0.20.10";
-      description = "NTP server of the devices; `null` keeps their default.";
+      description = "NTP server of the devices. When null, they keep their default.";
     };
 
     adminPassword = mkOption {
@@ -387,7 +384,7 @@ in {
       readOnly = true;
       type = types.attrsOf types.raw;
       default = filterAttrs (_: device: !tooManyLines device && unregistered device == [] && !sharesMac device) cfg.devices;
-      description = "Devices whose files the vendor modules write: the others fail an assertion, and their lines may name endpoints that do not exist or their files those of another device.";
+      description = "Devices that pass the device assertions, whose files the vendor modules write.";
     };
   };
 

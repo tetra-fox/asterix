@@ -41,10 +41,10 @@
           "202"
         ];
         description = ''
-          Extensions of {option}`services.asterix.extensions` that take the queue's calls,
-          each on every device registered as the extension, with the state of
-          its endpoint, which counts all of them. They join the members of
-          {option}`services.asterisk.queues.queues.<name>.members`.
+          Extensions of {option}`services.asterix.extensions` that take the
+          queue's calls, on every device registered as the extension. Members
+          of {option}`services.asterisk.queues.queues.<name>.members` take
+          calls too.
         '';
       };
       strategy = mkOption {
@@ -65,22 +65,22 @@
       maxWait = mkOption {
         type = types.nullOr types.ints.positive;
         default = null;
-        description = "Seconds a caller waits before the call goes to `noAnswer`. Without it, callers wait until someone answers, unless the queue turns them away.";
+        description = "Seconds a caller waits before the call goes to `noAnswer`. Null waits until someone answers.";
       };
       noAnswer = mkOption {
         type = pbxLib.destination;
         default = {hangup = true;};
         example = {voicemail = "200";};
-        description = "Where the call goes after `maxWait`, and at once when the queue turns the caller away: when it is full (`maxLength`) or has no member to take calls (`joinempty` and `leavewhenempty` of its `settings`), both of {option}`services.asterisk.queues.queues.<name>`.";
+        description = "Where the call goes after `maxWait`, or at once when the queue turns the caller away because it is full (`maxLength`) or has no member to take calls (`joinempty` and `leavewhenempty` in `settings`), both of {option}`services.asterisk.queues.queues.<name>`.";
       };
       record = mkOption {
         type = types.bool;
         default = false;
         description = ''
-          Whether to record the queue's calls from when a member answers, not
-          the wait before ({option}`services.asterix.recordings`). It covers
-          the members of `members`, not those added by hand in
-          {option}`services.asterisk.queues.queues.<name>.members`.
+          Whether to record the queue's calls from when a member of `members`
+          answers ({option}`services.asterix.recordings`). Members added in
+          {option}`services.asterisk.queues.queues.<name>.members` are not
+          recorded.
         '';
       };
     };
@@ -108,12 +108,11 @@ in {
       }
     '';
     description = ''
-      Call queues, with a number, extensions as members, how they ring and
-      where an unanswered call goes. Each one defines
-      {option}`services.asterisk.queues.queues.<name>`, where settings
-      without an option here can be added. A name has 1 to 79
-      bytes and cannot contain `,` `;` `[` `]` `"` `\` `''${` `$[`, an
-      unclosed `(` or a line break, nor start or end with white space.
+      Call queues. Each defines
+      {option}`services.asterisk.queues.queues.<name>`, where other queue
+      settings go. A name has 1 to 79 bytes and cannot contain `,` `;` `[`
+      `]` `"` `\` `''${` `$[`, an unclosed `(` or a line break, nor start or
+      end with white space.
     '';
   };
 

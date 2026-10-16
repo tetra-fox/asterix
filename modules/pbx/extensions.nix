@@ -32,10 +32,9 @@
         default = name;
         defaultText = lib.literalMD "the extension number";
         description = ''
-          Name shown as caller ID, and the mailbox owner's name. At most 79
-          bytes, which Asterisk keeps of a caller ID name; a letter outside
-          ASCII takes two to four. With `voicemail`, no comma, which ends the
-          owner's name in voicemail.conf.
+          Caller ID name, and the mailbox owner's name. At most 79 bytes,
+          where a letter outside ASCII takes two to four. With `voicemail`,
+          no comma: voicemail.conf ends the owner's name there.
         '';
       };
       password = mkOption {
@@ -58,7 +57,7 @@
           };
         });
         default = null;
-        description = "Mailbox `<number>@default` for the extension, so the number is a mailbox number too, which cannot start with `*` or `#` (see {option}`services.asterisk.voicemail.mailboxes`).";
+        description = "Mailbox `<number>@default` for the extension. A mailbox number cannot start with `*` or `#` (see {option}`services.asterisk.voicemail.mailboxes`).";
       };
       network = mkOption {
         type = types.nullOr types.str;
@@ -88,21 +87,19 @@
         default = [];
         example = ["front"];
         description = ''
-          Call pickup groups. A phone takes a call ringing at an extension
-          that shares a group with it by dialling the pickup code, `*8`
-          unless `pickupexten` of {file}`features.conf` says otherwise. They
-          set the endpoint's `named_call_group` and `named_pickup_group`.
+          Call pickup groups. Dialling the pickup code (`pickupexten` of
+          {file}`features.conf`, `*8` by default) answers a call ringing at
+          an extension that shares a group.
         '';
       };
       record = mkOption {
         type = types.bool;
         default = false;
         description = ''
-          Whether to record every call the phone makes or answers, those
-          through a ring group or queue among them
-          ({option}`services.asterix.recordings`). A call to a ring group or
-          queue with such a member plays the notice to the caller even when
-          another member answers.
+          Whether to record every call the phone makes or answers, also
+          through a ring group or queue ({option}`services.asterix.recordings`).
+          A caller to a ring group or queue with such a member hears the
+          notice even when another member answers.
         '';
       };
       noAnswer = mkOption {
@@ -110,9 +107,9 @@
         default = null;
         defaultText = lib.literalMD "the mailbox with the unavailable greeting, or hangup without a mailbox";
         description = ''
-          Where a call goes when nobody answers within `ringTime`, also when
-          the phone rings while in another call (call waiting), or when the
-          phone is not registered.
+          Where a call goes when nobody answers within `ringTime`, also
+          during another call with call waiting, or when the phone is not
+          registered.
         '';
       };
       busy = mkOption {
@@ -120,10 +117,9 @@
         default = null;
         defaultText = lib.literalMD "the mailbox with the busy greeting, or hangup without a mailbox";
         description = ''
-          Where a call goes when the phone answers busy, as a phone in a call
-          does without call waiting, or when every device of the extension
-          does, and while do not disturb is on
-          ({option}`services.asterix.featureCodes.dnd`).
+          Where a call goes when every device of the extension answers busy,
+          as a phone in a call does without call waiting, and while do not
+          disturb is on ({option}`services.asterix.featureCodes.dnd`).
         '';
       };
     };
@@ -192,12 +188,10 @@ in {
         Phones, keyed by the number that reaches them. Each is a PJSIP
         endpoint named like its number, which dials from `pbx-internal`, with
         a hint for busy lamps and, with `voicemail`, a mailbox. Calls ring
-        every device registered as the extension, as many as `maxContacts`
-        allows. Asterisk hangs up a call of the extension
-        after 60 seconds without RTP from its phone, outside hold
+        every device registered as the extension. A call hangs up after 60
+        seconds without RTP from the phone outside hold
         ({option}`services.asterisk.pjsip.endpoints.<name>.rtpTimeout`), so
-        the call of a phone that loses power, which sends no BYE, ends
-        instead of running on.
+        a phone that loses power does not leave its call running.
       '';
     };
 

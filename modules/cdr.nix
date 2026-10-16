@@ -145,20 +145,18 @@
       default = false;
       example = true;
       description = ''
-        Whether to write ${what} records to an SQLite database. Before
-        Asterisk starts and before each reload, the table is created as the
-        module would create it and the columns it lacks are added; none is
-        ever removed, so the records of an older configuration still fit.
-        Nothing rotates or prunes the database. The CDR and CEL modules write
-        it in turns, and drop a record that waits for the other longer than
-        `busy_timeout`, 10 s unless set.${notes}
+        Whether to write ${what} records to an SQLite database. Before each
+        start and reload, the table is created and missing columns are added,
+        never removed. Nothing rotates or prunes the database. The CDR and CEL
+        modules share it, and drop a record that waits longer than
+        `busy_timeout` (10 s unless set) for the other's lock.${notes}
       '';
     };
     table = mkOption {
       type = types.str;
       default = defaultTable;
       description = ''
-        Table name, of up to 79 bytes. The database is
+        Table name, at most 79 bytes. The database is
         {file}`/var/log/asterisk/master.db`, in WAL mode, so a copy of it while
         Asterisk runs needs {file}`master.db-wal` too, or sqlite3's `.backup`.
       '';
@@ -192,9 +190,8 @@ in {
           description = ''
             Whether to write CDRs as CSV to
             {file}`/var/log/asterisk/cdr-csv/Master.csv`. logrotate rotates
-            the CSV files of that directory weekly and keeps four old ones,
-            as it does the file log channels (see
-            {option}`services.asterisk.logger.channels`), unless
+            these files weekly and keeps four, as for
+            {option}`services.asterisk.logger.channels`, unless
             `services.logrotate.settings.asterisk` says otherwise.
           '';
         };
@@ -237,7 +234,7 @@ in {
         description = "Events to log.";
       };
 
-      sqlite = sqliteOptions "CEL" "cel" "\n\nTo reload cel_sqlite3_custom.so by hand, use `module refresh cel_sqlite3_custom.so`: Asterisk's own reload of it, which `core reload` also runs, can stop its records until the next restart.";
+      sqlite = sqliteOptions "CEL" "cel" "\n\nTo reload cel_sqlite3_custom.so by hand, use `module refresh cel_sqlite3_custom.so`. A plain reload, which `core reload` also runs, can stop its records until the next restart.";
     };
   };
 

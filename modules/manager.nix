@@ -1,7 +1,6 @@
-# AMI is off by default. When enabled it listens on the loopback address; users are
-# restricted to the loopback network unless `permit` says otherwise, receive
-# no events and may run no actions unless `read` and `write` list them, and
-# the firewall is only opened when `openFirewall` is set.
+# AMI is off by default. Enabled, it listens on loopback, and users connect
+# only from loopback unless `permit` says otherwise and get no events or
+# actions unless `read` and `write` list them.
 {
   config,
   lib,
@@ -97,9 +96,9 @@
       secret = mkOption {
         type = format.types.secretOrString;
         description = ''
-          Password, normally a secret reference. A Login sends it in a line
-          that AMI reads into 1024 bytes, `Secret: ` and the line end
-          included, so it can have 1014 bytes.
+          Password, normally a secret reference, at most 1014 bytes. AMI
+          reads a Login line into 1024 bytes, `Secret: ` and the line end
+          included.
         '';
       };
       read = mkOption {
@@ -110,9 +109,9 @@
           "call"
         ];
         description = ''
-          Event classes the user receives (`read`); none by default. `all`
-          includes `dtmf`, every key pressed in any call, voicemail and
-          conference PINs among them.
+          Event classes the user receives (`read`). `all` includes `dtmf`,
+          every key pressed in any call, voicemail and conference PINs among
+          them.
         '';
       };
       write = mkOption {
@@ -124,17 +123,14 @@
           "originate"
         ];
         description = ''
-          Action classes the user may run (`write`); none by default.
-          `system` and `command` let the user read every secret Asterisk
-          holds (PJSIPShowAuths, `Command` with any CLI command) and start
-          programs as Asterisk; `call` and `reporting` let it read voicemail
-          PINs (`Getvar` of `VM_INFO(<mailbox>,password)`). The actions on
-          configuration files (GetConfig, GetConfigJSON, ListCategories,
-          UpdateConfig, CreateConfig) refuse every file: without
-          `live_dangerously` in asterisk.conf, Asterisk takes only files whose
-          real path is inside its configuration directory, and
-          {file}`/run/asterisk/config` is a link to a new directory from each
-          start and reload.
+          Action classes the user may run (`write`). `system` and `command`
+          let the user read every secret Asterisk holds and start programs as
+          Asterisk. `call` and `reporting` let it read voicemail PINs through
+          `Getvar` of `VM_INFO(<mailbox>,password)`. Without
+          `live_dangerously` in asterisk.conf, the configuration file actions
+          (GetConfig, GetConfigJSON, ListCategories, UpdateConfig,
+          CreateConfig) refuse every file, since {file}`/run/asterisk/config`
+          is a link to another directory.
         '';
       };
       permit = mkOption {
@@ -143,7 +139,7 @@
           "127.0.0.1/255.255.255.255"
           "::1/128"
         ];
-        description = "Networks the user may connect from; everything else is denied.";
+        description = "Networks the user may connect from. Everything else is denied.";
       };
       settings = mkOption {
         type = types.attrsOf format.types.value;
@@ -163,8 +159,7 @@ in {
       type = types.str;
       default = "127.0.0.1";
       description = ''
-        Address AMI listens on. The service waits for a specific address as
-        for a SIP transport's, see
+        Address AMI listens on. The service waits for a specific address, see
         {option}`services.asterisk.pjsip.transports.<name>.address`.
       '';
     };
@@ -174,7 +169,7 @@ in {
       # one (main/manager.c:9797-9802)
       type = types.ints.between 1024 65535;
       default = 5038;
-      description = "TCP port AMI listens on; Asterisk takes none below 1024.";
+      description = "TCP port AMI listens on.";
     };
 
     openFirewall = mkOption {
@@ -182,8 +177,8 @@ in {
       default = false;
       description = ''
         Open the AMI port (on {option}`services.asterisk.firewallInterfaces`
-        when {option}`services.asterisk.openFirewall` is set). AMI
-        is unencrypted; prefer a tunnel.
+        when {option}`services.asterisk.openFirewall` is set). AMI is
+        unencrypted, so prefer a tunnel.
       '';
     };
 
@@ -199,7 +194,7 @@ in {
           };
         }
       '';
-      description = "AMI users. Asterisk takes `general`, in any case, for its settings.";
+      description = "AMI users. `general` is reserved, in any case.";
     };
 
     settings = mkOption {

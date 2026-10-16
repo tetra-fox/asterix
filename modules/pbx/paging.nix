@@ -128,6 +128,10 @@ in {
       Paging groups, keyed by group name. A name cannot contain `,` `;` `[`
       `]` `"` `\` `''${` `$[` `(` `)` `^` `&` or a line break, nor end with
       white space.
+
+      Asterisk 22 can crash when a member's phone ends its leg of a page at
+      the moment the person paging hangs up, as two of its threads hang up
+      that leg at once (main/dial.c, monitor_dial and ast_dial_join).
     '';
   };
 

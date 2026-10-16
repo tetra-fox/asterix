@@ -109,7 +109,20 @@
             steps = [(gotoAt "pbx-emergency" number)];
           }) ([number] ++ prefixed number)
       )
-      cfg.emergency.numbers);
+      cfg.emergency.numbers)
+    # res_parking adds these to pbx-parking, so they have no steps here
+    ++ optionals (cfg.parking != null) (
+      [
+        {
+          inherit (cfg.parking) number;
+          owner = "services.asterix.parking.number";
+        }
+      ]
+      ++ map (slot: {
+        number = slot;
+        owner = "services.asterix.parking.slots (${slot})";
+      }) (pbxLib.parkingSlots cfg.parking)
+    );
 
   clashes = filterAttrs (_: owners: length owners > 1) (builtins.groupBy (n: n.number) numbers);
   malformed = filter (n: builtins.match "[0-9*#]+" n.number == null) numbers;
@@ -144,7 +157,7 @@
     }
   );
 
-  generated = listToAttrs (map (n: nameValuePair n.number n.steps) numbers) // forwardPatterns;
+  generated = listToAttrs (map (n: nameValuePair n.number n.steps) (filter (n: n ? steps) numbers)) // forwardPatterns;
 in {
   config = mkIf cfg.enable {
     services.asterisk.dialplan.contexts.pbx-forward = mkIf (forwardOn != {}) {
@@ -166,7 +179,9 @@ in {
 
     services.asterisk.dialplan.contexts.pbx-internal = {
       comment = mkDefault "from services.asterix: what the phones of services.asterix.extensions dial";
-      includes = optional (cfg.outbound != null) "pbx-outbound";
+      # pbx-parking before the patterns of pbx-outbound, which could match
+      # its numbers
+      includes = optional (cfg.parking != null) "pbx-parking" ++ optional (cfg.outbound != null) "pbx-outbound";
       extensions = generated;
       hints = lib.mapAttrs (_: mkDefault) (
         lib.mapAttrs (number: _: "PJSIP/${number}") cfg.extensions

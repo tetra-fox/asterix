@@ -183,6 +183,20 @@
       ];
     };
 
+    # the slots 599 to 601 follow the park number, and 600 is the ring group's
+    parkingSlotClashes = {
+      module.services.asterix.parking = {
+        number = "598";
+        slots = 3;
+      };
+      assertions = [
+        ''
+          services.asterix: numbers with more than one owner:
+            600: services.asterix.ringGroups.front, services.asterix.parking.slots (600)
+        ''
+      ];
+    };
+
     # a phone could set the forward, but not stop it
     forwardWithoutOff = {
       module.services.asterix.featureCodes.forward.noAnswer.on = "*52";

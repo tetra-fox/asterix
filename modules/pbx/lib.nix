@@ -332,6 +332,12 @@ in rec {
   # extension
   forwardKey = extension: kind: "pbx-forward/${extension}/${kind}";
 
+  # the slot numbers of services.asterix.parking, which follow its number
+  parkingSlots = parking: let
+    first = lib.toInt parking.number + 1;
+  in
+    map toString (lib.range first (first + parking.slots - 1));
+
   # the custom device state of an extension's do not disturb
   dndDevice = extension: "Custom:pbx-dnd-${extension}";
 

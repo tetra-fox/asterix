@@ -244,11 +244,15 @@ in {
                   ])
                   (pbxLib.app "GotoIf" [''$["''${DIALSTATUS}" = "BUSY"]?busy''])
                 ]
-                ++ forwardIf number "noAnswer"
-                ++ pbxLib.steps (
-                  if e.noAnswer != null
-                  then e.noAnswer
-                  else fallback number e "unavailable"
+                # a parked call its phone does not take back comes in here
+                # (parking.nix)
+                ++ pbxLib.labelFirst "noanswer" (
+                  forwardIf number "noAnswer"
+                  ++ pbxLib.steps (
+                    if e.noAnswer != null
+                    then e.noAnswer
+                    else fallback number e "unavailable"
+                  )
                 )
                 ++ pbxLib.labelFirst "busy" (
                   forwardIf number "busy"

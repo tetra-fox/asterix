@@ -81,6 +81,7 @@ in
     pbx-names = import ./pbx/names.nix {inherit pkgs self;};
     pbx-menus = import ./pbx/menus.nix {inherit pkgs self;};
     pbx-paging = import ./pbx/paging.nix {inherit pkgs self;};
+    pbx-parking = import ./pbx/parking.nix {inherit pkgs self;};
 
     # opening hours against their oracle at a seeded sample of instants in
     # every zone of tests/campaign/hours.nix

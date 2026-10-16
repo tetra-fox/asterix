@@ -3,18 +3,11 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
-    # only used by the examples and their tests; the module works with any
-    # secret manager that puts files on disk
-    sops-nix = {
-      url = "github:Mic92/sops-nix";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
   };
 
   outputs = {
     self,
     nixpkgs,
-    sops-nix,
   }: let
     inherit (nixpkgs) lib;
     systems = [
@@ -32,10 +25,10 @@
       asterisk = ./modules;
     };
 
-    checks = forAllSystems (pkgs: import ./tests {inherit pkgs self sops-nix;});
+    checks = forAllSystems (pkgs: import ./tests {inherit pkgs self;});
 
     legacyPackages = forAllSystems (pkgs: {
-      packageChecks = import ./tests/packages.nix {inherit pkgs self sops-nix;};
+      packageChecks = import ./tests/packages.nix {inherit pkgs self;};
 
       # the checks CI builds, a job for each group. the vm tests only run locally
       ci = let

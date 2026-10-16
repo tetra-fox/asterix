@@ -23,7 +23,6 @@ Intended for anything from a household intercom to a small office PBX with SIP t
     asterix = {
       url = "github:tetra-fox/asterix";
       inputs.nixpkgs.follows = "nixpkgs";
-      inputs.sops-nix.follows = "sops-nix";
     };
 
     # not required, agenix works, or plaintext if you're a menace
@@ -111,6 +110,16 @@ The file can stay root-only, and any secret manager works. With
 sops.secrets.sip-101.reloadUnits = [ "asterisk.service" ]; # reload on change, no restart
 
 services.asterix.extensions."101".password = config.lib.asterisk.secret config.sops.secrets.sip-101.path;
+```
+
+agenix has no `reloadUnits`. Reload on the encrypted file instead, which
+changes when the secret does:
+
+```nix
+age.secrets.sip-101.file = ./secrets/sip-101.age;
+systemd.services.asterisk.reloadTriggers = [ ./secrets/sip-101.age ];
+
+services.asterix.extensions."101".password = config.lib.asterisk.secret config.age.secrets.sip-101.path;
 ```
 
 | Case                                                           | What happens                                                                                                                                                                                                                                 |

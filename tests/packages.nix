@@ -4,10 +4,9 @@
 {
   pkgs,
   self,
-  sops-nix,
 }:
 pkgs.lib.genAttrs ["asterisk_20" "asterisk_22" "asterisk_23"] (package:
     import ./. {
       pkgs = pkgs.extend (_: prev: {asterisk = prev.${package};});
-      inherit self sops-nix;
+      inherit self;
     })

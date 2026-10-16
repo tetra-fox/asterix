@@ -3,11 +3,10 @@
 {
   pkgs,
   self,
-  sops-nix,
 }: let
   inherit (pkgs) lib;
 
-  sopsSecrets = import ./sops.nix {inherit pkgs sops-nix;};
+  sopsSecrets = import ./sops.nix {inherit pkgs;};
 
   # Build-time failure with a readable report instead of an evaluation error,
   # so `nix flake check` still evaluates every other check.
@@ -47,7 +46,7 @@
 
   # the configuration and checks of the two largest examples with another
   # Asterisk package (packages.nix)
-  packageChecks = import ./packages.nix {inherit pkgs self sops-nix;};
+  packageChecks = import ./packages.nix {inherit pkgs self;};
   examplesWith = package:
     pkgs.linkFarm "asterisk-examples-config-${package}" (
       lib.genAttrs ["household-intercom-ht801" "small-office"] (name: packageChecks.${package}."examples-config-${name}")

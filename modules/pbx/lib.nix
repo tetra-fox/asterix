@@ -367,9 +367,10 @@ in rec {
   # Dial's options for recording: U() starts a recording when the called
   # channel answers (`answered`, which Queue() lacks), after the notice of
   # PBX_NOTICE (recordings.noticeToRecorder) plays to both sides, and with
-  # services.asterix.featureCodes.record, on a call nothing records, x lets
-  # the called phone (`called`) and X a calling phone (`calling`) record with
-  # the code (features.conf automixmon), as in Queue()
+  # services.asterix.featureCodes.record, on a call nothing records nor may
+  # record (PBX_RECORD), x lets the called phone (`called`) and X a calling
+  # phone (`calling`) record with the code (features.conf automixmon), as in
+  # Queue()
   recordOptions = cfg: {
     answered ? true,
     called,

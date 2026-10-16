@@ -81,6 +81,15 @@
       recordings = 0;
     }
     {
+      # and the member that answers presses the code: it records
+      call = call "602";
+      events = [
+        "caller notice"
+        "caller Dial"
+      ];
+      recordings = 1;
+    }
+    {
       # the phone that answers presses the code on a call nothing records
       call = call "203";
       events = ["caller Dial"];
@@ -169,6 +178,11 @@
               mixed = {
                 number = "601";
                 members = ["206" "202"];
+                ringTime = 5;
+              };
+              pressing = {
+                number = "602";
+                members = ["206" "203"];
                 ringTime = 5;
               };
             };

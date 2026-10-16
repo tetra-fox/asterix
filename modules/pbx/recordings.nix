@@ -38,7 +38,9 @@
 
   # PBX_RECORD is empty until something decides: `1` records the call,
   # `answer` also plays the notice to whoever answers, and `member` records
-  # it only when a phone that records its own calls answers
+  # it only when a phone that records its own calls answers. With `member`
+  # Dial gives no x or X, since automixmon stops the peer's recordings,
+  # and `answered` gives the code to a channel that answers unrecorded.
   decided = ''"''${PBX_RECORDING}" != "" | "''${PBX_RECORD}" = "1" | "''${PBX_RECORD}" = "answer"'';
   call =
     [
@@ -103,7 +105,11 @@
   answered =
     [
       (app "GotoIf" [''$["''${PBX_RECORDING}" != ""]?done''])
-      (app "GotoIf" [''$["''${PBX_RECORD}" = "1" | "''${PBX_RECORD}" = "answer" | "''${PBX_RECORDS}" = "1"]?:done''])
+      (app "GotoIf" [''$["''${PBX_RECORD}" = "1" | "''${PBX_RECORD}" = "answer" | "''${PBX_RECORDS}" = "1"]?:${
+          if code != null
+          then "unrecorded"
+          else "done"
+        }''])
     ]
     # with PBX_NOTICE, Dial played it already
     ++ optionals (notice != []) ([(app "GotoIf" [''$["''${PBX_RECORD}" != "answer" | "''${PBX_NOTICE}" != ""]?start''])] ++ playNotice)
@@ -118,7 +124,14 @@
         args = [];
         label = "done";
       }
-    ];
+    ]
+    # the code, for the channel that answers, to which Dial adds its own
+    # features (ast_bridge_features_ds_append)
+    ++ optionals (code != null) (pbxLib.labelFirst "unrecorded" [
+      (app "GotoIf" [''$["''${PBX_RECORD}" != "member"]?done''])
+      (app "Set" ["CHANNEL(dtmf_features)=\${CHANNEL(dtmf_features)}X"])
+      (app "Return" [])
+    ]);
 in {
   options.services.asterix.recordings = mkOption {
     type = types.submodule {

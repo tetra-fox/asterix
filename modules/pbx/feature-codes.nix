@@ -126,7 +126,9 @@ in {
         Keys a phone presses during a call to record it, and again to stop,
         on a call not already recorded by
         {option}`services.asterix.recordings`. Phones and the external
-        numbers of a ring group can use it, callers from outside cannot. Keys
+        numbers of a ring group can use it, callers from outside cannot. On
+        a call to a ring group or queue with a member that records, only
+        the side that answers can, if it does not record. Keys
         that may start the code are held back, so with `*1` a `*` reaches the
         other side once the next key follows or a second has passed. It is
         `automixmon` of {file}`features.conf`.

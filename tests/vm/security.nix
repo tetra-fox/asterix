@@ -100,6 +100,7 @@ in
           emergency = {
             numbers = ["911"];
             trunk = "provider";
+            callerId = "5551000";
           };
           voicemailMenu = "*97";
           inbound."5551000" = {

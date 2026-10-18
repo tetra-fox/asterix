@@ -174,6 +174,68 @@ in {
     # used one with its own auth user name and one past the end of the list;
     # fanvil.settings replace the module's values and a device's settings
     # replace both
+    # a 7962G: the file names the MAC in capitals, a line left out keeps the
+    # buttons of the others, an extension that only starts another number
+    # waits before dialling and * is escaped, and the phone's endpoints answer
+    # on the port its Via names
+    testCisco79xxFiles = let
+      config = evalConfig [
+        ({config, ...}: {
+          imports = [self.nixosModules.default];
+          services.asterix = {
+            enable = true;
+            extensions = {
+              "2".password = config.lib.asterisk.secret "/run/secrets/2";
+              "201".password = config.lib.asterisk.secret "/run/secrets/201";
+              "202".password = config.lib.asterisk.secret "/run/secrets/202";
+            };
+            voicemailMenu = "*97";
+            phones = {
+              listenAddress = "10.0.20.10";
+              allowedNetworks = ["10.0.20.0/24"];
+              devices.desk = {
+                model = "cisco-7962g";
+                mac = "00:62:ec:00:02:05";
+                lines = ["201" null "202"];
+              };
+            };
+          };
+        })
+      ];
+      files = config.services.asterix.phones.files;
+    in {
+      expr = {
+        names = builtins.attrNames (lib.filterAttrs (_: file: file.tftp) files);
+        buttons = builtins.filter (line: line != null) (map (line: builtins.match ".*<line button=\"([0-9]+)\">.*<name>([0-9]+)</name>.*" line) (lib.splitString "</line>" files."SEP0062EC000205.cnf.xml".text));
+        dialTemplate = files."dialplan.xml".text;
+        endpoints = lib.genAttrs ["201" "202" "2"] (name: config.services.asterisk.pjsip.endpoints.${name}.settings);
+      };
+      expected = {
+        names = ["SEP0062EC000205.cnf.xml" "XMLDefault.cnf.xml" "dialplan.xml"];
+        buttons = [["1" "201"] ["3" "202"]];
+        dialTemplate = ''
+          <DIALTEMPLATE>
+            <TEMPLATE MATCH="\*97" Timeout="0"/>
+            <TEMPLATE MATCH="2" Timeout="3"/>
+            <TEMPLATE MATCH="201" Timeout="0"/>
+            <TEMPLATE MATCH="202" Timeout="0"/>
+            <TEMPLATE MATCH="*" Timeout="3"/>
+          </DIALTEMPLATE>
+        '';
+        endpoints = {
+          "201" = {
+            force_rport = false;
+            rewrite_contact = false;
+          };
+          "202" = {
+            force_rport = false;
+            rewrite_contact = false;
+          };
+          "2" = {};
+        };
+      };
+    };
+
     testFanvilFile = {
       expr = lib.mapAttrs (_: file: {inherit (file) text escape allowedAddress;}) (files {
         services.asterisk.pjsip.endpoints."202".auth.username = "kitchen";

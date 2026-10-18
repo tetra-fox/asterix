@@ -108,14 +108,16 @@
   server = pkgs.callPackage ../../../pkgs/provisioning-server/package.nix {};
 
   # one line per file: `NAME`, then the ADDRESS that alone may fetch it, if one
-  # does, and `tftp` if it is served over TFTP too
+  # does, and `tftp` if it is served over TFTP too. The renderer adds the files
+  # of `directories` at service start
   manifest = pkgs.writeText "asterisk-provisioning-manifest" (
     concatStrings (mapAttrsToList (name: file: "${name}${optionalString (file.allowedAddress != null) " ${file.allowedAddress}"}${optionalString file.tftp " tftp"}\n") cfg.files)
   );
+  runtimeManifest = "${runtimeDir}/.manifest";
 
   # the port devices send TFTP requests to, which the server answers from
   tftpPort = 69;
-  serveTftp = builtins.any (file: file.tftp) (attrValues cfg.files);
+  serveTftp = cfg.directories != [] || builtins.any (file: file.tftp) (attrValues cfg.files);
 
   fileType = types.submodule {
     options = {
@@ -232,6 +234,24 @@
       for template in ${templates}/*; do
         cp -L --no-preserve=mode,ownership "$template" ${runtimeDir}/
       done
+      cp ${manifest} ${runtimeManifest}
+
+      directories=(${lib.escapeShellArgs (map (directory: "${directory}") cfg.directories)})
+      for directory in "''${directories[@]}"; do
+        for file in "$directory"/*; do
+          name=''${file##*/}
+          if [[ ! $name =~ ^[A-Za-z0-9_+-][A-Za-z0-9_.+-]*$ ]]; then
+            echo "asterisk-provisioning: $file: file names may only contain letters, digits and _.+-" >&2
+            exit 1
+          fi
+          if [ -e "${runtimeDir}/$name" ]; then
+            echo "asterisk-provisioning: $file has the name of another served file" >&2
+            exit 1
+          fi
+          cp -L --no-preserve=mode,ownership "$file" ${runtimeDir}/
+          echo "$name tftp" >> ${runtimeManifest}
+        done
+      done
 
       cd ${runtimeDir}
       ${lib.concatMapStrings (escape:
@@ -251,6 +271,7 @@
 in {
   imports = [
     ./cisco.nix
+    ./cisco-79xx.nix
     ./fanvil.nix
     ./grandstream.nix
     ./poly.nix
@@ -379,6 +400,22 @@ in {
       description = "Models that `devices.<name>.model` takes, added by the vendor modules.";
     };
 
+    directories = mkOption {
+      internal = true;
+      visible = false;
+      type = types.listOf types.path;
+      default = [];
+      description = "Directories whose files are served as they are, over HTTP and TFTP, to anyone in `allowedNetworks`, such as firmware. Their names are read at service start.";
+    };
+
+    httpPorts = mkOption {
+      internal = true;
+      visible = false;
+      type = types.listOf types.port;
+      default = [];
+      description = "Ports HTTP is served on besides `port`, which vendor modules add for devices that fetch from a fixed port.";
+    };
+
     validDevices = mkOption {
       internal = true;
       readOnly = true;
@@ -449,7 +486,7 @@ in {
     systemd.sockets.asterisk-provisioning = {
       description = "Phone provisioning";
       wantedBy = ["sockets.target"];
-      listenStreams = [(format.hostPort cfg.listenAddress cfg.port)];
+      listenStreams = map (format.hostPort cfg.listenAddress) (lib.unique ([cfg.port] ++ cfg.httpPorts));
       socketConfig = {
         FreeBind = true;
         IPAddressDeny = "any";
@@ -484,7 +521,7 @@ in {
         Type = "exec";
         Sockets = sockets;
         ExecStartPre = "${renderer}/bin/asterisk-provisioning-render";
-        ExecStart = "${lib.getExe server} ${runtimeDir} ${manifest}";
+        ExecStart = "${lib.getExe server} ${runtimeDir} ${runtimeManifest}";
         Restart = "on-failure";
         DynamicUser = true;
         LoadCredential = map (ref: "${secrets.credentialName ref}:${ref._secret}") (
@@ -528,7 +565,7 @@ in {
     };
 
     networking.firewall = mkIf config.services.asterix.openFirewall (moduleLib.firewallOn (lib.optional (net.interface != null) net.interface) {
-      allowedTCPPorts = [cfg.port];
+      allowedTCPPorts = lib.unique ([cfg.port] ++ cfg.httpPorts);
       allowedUDPPorts = lib.optional serveTftp tftpPort;
     });
   };

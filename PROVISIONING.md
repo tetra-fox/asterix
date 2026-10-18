@@ -35,6 +35,7 @@ services.asterix = {
    | --------------------- | --------------------------------- | ---------------------------------------------------------- |
    | Cisco                 | 66 = `10.0.20.10`                 | fetches its model's file over TFTP, then its own over HTTP |
    | Cisco ATA 191 and 192 | 160 = `http://10.0.20.10/$MA.xml` | tries HTTPS on option 66, which the PBX doesn't serve      |
+   | Cisco 7942G and 7962G | 150 = `10.0.20.10`                | a reset phone can't be pointed anywhere else, see below    |
    | Fanvil                | 66 = `http://10.0.20.10`          | asks Fanvil's redirection service first                    |
    | Grandstream           | 66 = `http://10.0.20.10`          |                                                            |
    | Poly                  | 66 = `http://10.0.20.10`          | needs the `http://`, since the phones default to FTP       |
@@ -51,23 +52,25 @@ is a complete config.
 
 All under `services.asterix.phones`.
 
-| Option                                  | Default                 | What                                                                    |
-| --------------------------------------- | ----------------------- | ----------------------------------------------------------------------- |
-| `network`                               | the only network        | the network of `services.asterix.networks` the devices are on           |
-| `listenAddress`                         | the network's address   | where files are served                                                  |
-| `port`                                  | `80`                    | HTTP port                                                               |
-| `allowedNetworks`                       | the network's subnets   | the only networks that can connect                                      |
-| `sipServer`, `sipPort`                  | `listenAddress`, `5060` | where lines register: the host alone, and its port                      |
-| `ntpServer`                             | device's own            | NTP server                                                              |
-| `adminPassword`                         | device's own            | web interface password, normally a secret reference                     |
-| `devices.<name>.model`                  | required                | `<vendor>-<model>`, from [Supported devices](#supported-devices)        |
-| `devices.<name>.mac`                    | required                | any spelling: `c0:74:ad:00:01:01`, `C0-74-AD-00-01-01`, `c074ad000101`  |
-| `devices.<name>.lines`                  | `[ <name> ]`            | the endpoint each line registers as, from line 1. `null` leaves one off |
-| `devices.<name>.allowedAddress`         | anyone                  | the only address that may fetch the device's file                       |
-| `devices.<name>.settings`               | `{}`                    | raw settings in the vendor's keys, over everything else                 |
-| `<vendor>.settings`                     | `{}`                    | raw settings for all of a vendor's devices                              |
-| `grandstream.timeZone`, `snom.timeZone` | device's own            | time zone, in the vendor's format                                       |
-| `files.<name>`                          |                         | hand-written files, see [Other devices](#other-devices)                 |
+| Option                                  | Default                 | What                                                                       |
+| --------------------------------------- | ----------------------- | -------------------------------------------------------------------------- |
+| `network`                               | the only network        | the network of `services.asterix.networks` the devices are on              |
+| `listenAddress`                         | the network's address   | where files are served                                                     |
+| `port`                                  | `80`                    | HTTP port                                                                  |
+| `allowedNetworks`                       | the network's subnets   | the only networks that can connect                                         |
+| `sipServer`, `sipPort`                  | `listenAddress`, `5060` | where lines register: the host alone, and its port                         |
+| `ntpServer`                             | device's own            | NTP server                                                                 |
+| `adminPassword`                         | device's own            | web interface password, normally a secret reference                        |
+| `devices.<name>.model`                  | required                | `<vendor>-<model>`, from [Supported devices](#supported-devices)           |
+| `devices.<name>.mac`                    | required                | any spelling: `c0:74:ad:00:01:01`, `C0-74-AD-00-01-01`, `c074ad000101`     |
+| `devices.<name>.lines`                  | `[ <name> ]`            | the endpoint each line registers as, from line 1. `null` leaves one off    |
+| `devices.<name>.allowedAddress`         | anyone                  | the only address that may fetch the device's file                          |
+| `devices.<name>.settings`               | `{}`                    | raw settings in the vendor's keys, over everything else                    |
+| `<vendor>.settings`                     | `{}`                    | raw settings for all of a vendor's devices                                 |
+| `grandstream.timeZone`, `snom.timeZone` | device's own            | time zone, in the vendor's format                                          |
+| `cisco.timeZone`                        | device's own            | time zone of the 7942G and 7962G, such as `Pacific Standard/Daylight Time` |
+| `cisco.firmware`                        | none                    | SIP firmware for the 7942G and 7962G, see [below](#cisco-7942g-and-7962g)  |
+| `files.<name>`                          |                         | hand-written files, see [Other devices](#other-devices)                    |
 
 ## Good to know
 
@@ -85,23 +88,25 @@ All under `services.asterix.phones`.
   setting name a real address.
 - `services.asterix.openFirewall` opens the HTTP port, and UDP 69 when TFTP is
   in use, on the network's interface, or on every interface if it has none.
+  With a 7942G or 7962G it also opens TCP 6970.
 - After a password changes, restart `asterisk-provisioning.service` (sops-nix:
   `restartUnits`) and reboot the device.
 
 ## Supported devices
 
-| Vendor      | Devices                                                         | File                                 | Details                                       |
-| ----------- | --------------------------------------------------------------- | ------------------------------------ | --------------------------------------------- |
-| Cisco       | 6800, 7800, 8800 and ATA 191/192 on multiplatform firmware, SPA | `<mac>.xml`                          | [Cisco](#cisco)                               |
-| Fanvil      | X, H and i series, PA2S, PA3                                    | `<mac>.cfg`                          | [Fanvil](#fanvil)                             |
-| Grandstream | HT801, HT802, HT812, HT813, HT814, HT818                        | `cfg<mac>.xml`                       | [Grandstream adapters](#grandstream-adapters) |
-| Grandstream | GXP, GRP, WP, GHP and GXV phones                                | `cfg<mac>.xml`                       | [Grandstream phones](#grandstream-phones)     |
-| Poly        | VVX, Edge E                                                     | `<mac>.cfg` and `<mac>-settings.cfg` | [Poly](#poly)                                 |
-| Snom        | D series                                                        | `snom<model>-<MAC>.htm`              | [Snom](#snom)                                 |
-| Yealink     | T3x, T4x, T5x, CP920, CP925, CP965                              | `<mac>.cfg`                          | [Yealink](#yealink)                           |
+| Vendor      | Devices                                                         | File                                 | Details                                         |
+| ----------- | --------------------------------------------------------------- | ------------------------------------ | ----------------------------------------------- |
+| Cisco       | 6800, 7800, 8800 and ATA 191/192 on multiplatform firmware, SPA | `<mac>.xml`                          | [Cisco](#cisco)                                 |
+| Cisco       | 7942G, 7962G on SIP firmware                                    | `SEP<MAC>.cnf.xml`                   | [Cisco 7942G and 7962G](#cisco-7942g-and-7962g) |
+| Fanvil      | X, H and i series, PA2S, PA3                                    | `<mac>.cfg`                          | [Fanvil](#fanvil)                               |
+| Grandstream | HT801, HT802, HT812, HT813, HT814, HT818                        | `cfg<mac>.xml`                       | [Grandstream adapters](#grandstream-adapters)   |
+| Grandstream | GXP, GRP, WP, GHP and GXV phones                                | `cfg<mac>.xml`                       | [Grandstream phones](#grandstream-phones)       |
+| Poly        | VVX, Edge E                                                     | `<mac>.cfg` and `<mac>-settings.cfg` | [Poly](#poly)                                   |
+| Snom        | D series                                                        | `snom<model>-<MAC>.htm`              | [Snom](#snom)                                   |
+| Yealink     | T3x, T4x, T5x, CP920, CP925, CP965                              | `<mac>.cfg`                          | [Yealink](#yealink)                             |
 
 <details>
-<summary>Cisco: 30 models</summary>
+<summary>Cisco: 32 models</summary>
 
 | `model`         | Type             | Lines |
 | --------------- | ---------------- | ----- |
@@ -122,6 +127,8 @@ All under `services.asterix.phones`.
 | `cisco-8851`    | desk phone       | 10    |
 | `cisco-8861`    | desk phone       | 10    |
 | `cisco-8865`    | desk phone       | 10    |
+| `cisco-7942g`   | desk phone       | 2     |
+| `cisco-7962g`   | desk phone       | 6     |
 | `cisco-ata191`  | analog adapter   | 2     |
 | `cisco-ata192`  | analog adapter   | 2     |
 | `cisco-spa112`  | analog adapter   | 2     |
@@ -375,6 +382,51 @@ don't work. On the adapters, line n is port n.
 - A multiplatform phone or ATA 191/192 that gets no provisioning server from
   DHCP asks Cisco's activation servers. No setting turns that off.
 
+## Cisco 7942G and 7962G
+
+The phones of Cisco's own call manager, on SIP firmware. Each gets
+`SEP<MAC>.cnf.xml`, plus `XMLDefault.cnf.xml` and `dialplan.xml` for all of
+them, over TFTP and over HTTP on port 6970, which the phones try first.
+
+```nix
+services.asterix.phones = {
+  cisco = {
+    timeZone = "Pacific Standard/Daylight Time";
+    firmware = {
+      load = "SIP42.9-4-2SR3-1S";
+      directory = ./cisco-sip42; # the files of Cisco's firmware zip
+    };
+  };
+  devices."201" = { model = "cisco-7962g"; mac = "00:62:ec:00:02:05"; };
+};
+```
+
+1. **Set DHCP option 150** on the phones' network to the PBX's address. A
+   factory reset phone fetches its load file from there, before its menu can
+   name another server.
+2. **Reset the phone** if it was used before: hold `#` while it powers up until
+   the line buttons flash, then dial `123456789*0#`. This also clears the
+   settings and trust list of its old call manager.
+3. **Watch** `journalctl -u asterisk-provisioning`. A phone on SCCP or another
+   load fetches the five `.sbn` images twice, once for the load its reset
+   chose and once for the one its file names, then registers.
+
+- asterix doesn't ship the firmware. `firmware.directory` takes the
+  files of `cmterm-7942_7962-sip.9-4-2SR3-1.zip`: the load's `.loads` file,
+  `term42.default.loads`, `term62.default.loads` and the images they name,
+  which the build checks. Without `firmware`, the phones must already run SIP.
+- The phone sends SIP from a port of its own but asks for replies on the one
+  it listens on, so the endpoints of its lines get `force_rport` and
+  `rewrite_contact` off. Evaluation fails for a line whose endpoint keeps
+  `force_rport` on or has `behindNat`.
+- Every number the phones dial from `pbx-internal` dials at its last digit,
+  unless it starts another number. Those, and any other number, dial after
+  3 s, or at once with the Dial key.
+- These phones have no web password, so `adminPassword` doesn't apply, and
+  they take no `settings`.
+- The line password stays at 12 characters or fewer in guides for these
+  phones, which report a configuration the phone can't read above that.
+
 ## Fanvil
 
 Fanvil's sysConf format, firmware 2.4 to 2.14. P, G and W variants take the
@@ -583,7 +635,7 @@ counts against the vendors' datasheets.
 
 | Vendor      | Documents                                                                                                                                                                                                                                                                                                                                                                                                                |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Cisco       | Multiplatform desk and conference phone admin guides (12.0(7)SR3), ATA 191/192 provisioning guide (11.3(1)), SPA100 provisioning guide (1.3), SPA300/SPA500 admin guide (OL-19749-09), SPA8000 admin guide (OL-17901-01)                                                                                                                                                                                                 |
+| Cisco       | Multiplatform desk and conference phone admin guides (12.0(7)SR3), ATA 191/192 provisioning guide (11.3(1)), SPA100 provisioning guide (1.3), SPA300/SPA500 admin guide (OL-19749-09), SPA8000 admin guide (OL-17901-01). 7942G and 7962G: the files a 7962G on SIP 9.4(2)SR3 took, after github.com/lparakhin/-Cisco-7962G-SIP                                                                                          |
 | Fanvil      | the key maps and help texts inside the firmware images at download.fanvil.com (2.4 to 2.14). Fanvil's public guides don't list the keys                                                                                                                                                                                                                                                                                  |
 | Grandstream | `config-template.zip` from grandstream.com/support/tools: ht80x 1.0.65.3, ht80x_v2 1.0.15.3, ht81x 1.0.65.3, ht81x_v2 1.0.15.3, ht813 1.0.19.6, ht818 1.0.65.1, gxp16xx 1.0.7.81, gxp17xx 1.0.1.133, gxp2130_40_60_70_35 1.0.11.106, grp260x 1.0.7.71, grp26xx 1.0.15.19, wp810_822_825 1.0.11.83, wp8x6 1.0.3.39, wp820 1.0.7.90, wp856 1.0.3.16, ghp6xx 1.0.1.101, ghp63x 1.0.1.50, gxv33xx 1.0.3.57, gxv34x0 1.0.5.40 |
 | Poly        | UC Software 6.4.0 administrator guide, Edge E parameter reference (PVOS 8.2.1)                                                                                                                                                                                                                                                                                                                                           |

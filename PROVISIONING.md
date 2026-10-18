@@ -430,8 +430,6 @@ services.asterix.phones = {
   entries, and evaluation warns above that.
 - These phones have no web password, so `adminPassword` doesn't apply, and
   they take no `settings`.
-- The line password stays at 12 characters or fewer in guides for these
-  phones, which report a configuration the phone can't read above that.
 
 ## Fanvil
 

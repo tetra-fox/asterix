@@ -40,6 +40,25 @@ in
           })
           (address "lan" "10.0.10.10")
           (address "voip" "10.0.20.10")
+          # a 7962G on 202 with firmware whose one image the load files name
+          {
+            services.asterix.phones = {
+              cisco.firmware = {
+                load = "TEST";
+                directory = pkgs.runCommand "fake-7962g-firmware" {} ''
+                  mkdir $out
+                  echo img.sbn > $out/TEST.loads
+                  echo img.sbn > $out/term62.default.loads
+                  echo firmware > $out/img.sbn
+                '';
+              };
+              devices.desk = {
+                model = "cisco-7962g";
+                mac = "00:62:ec:00:02:05";
+                lines = ["202"];
+              };
+            };
+          }
         ];
         virtualisation.interfaces = {
           lan.vlan = 1;
@@ -132,6 +151,14 @@ in
                 "<P34>ata-101-pw</P34>",
                 "<P2>a&amp;b&lt;c&gt;&quot;d&apos;e]]&gt;</P2>",
             ]:
+                assert expected in xml, f"{expected} missing from {xml}"
+
+        with subtest("a firmware folder is served as it is over http on 80 and 6970 and over tftp, and the 7962G's file names its load"):
+            for url in ["http://10.0.20.10/img.sbn", "http://10.0.20.10:6970/img.sbn", "tftp://10.0.20.10/img.sbn"]:
+                body = adapters.succeed(f"curl -sf --interface 10.0.20.21 {url}").strip()
+                assert body == "firmware", f"{url}: {body!r}"
+            xml = adapters.succeed("curl -sf --interface 10.0.20.21 http://10.0.20.10:6970/SEP0062EC000205.cnf.xml")
+            for expected in ["<loadInformation>TEST</loadInformation>", "<authPassword>soft-202-pw</authPassword>"]:
                 assert expected in xml, f"{expected} missing from {xml}"
 
         with subtest("each adapter's file is only readable by the provisioning user, and the secrets are only in that runtime copy"):

@@ -176,8 +176,9 @@ in {
     # replace both
     # a 7962G: the file names the MAC in capitals, a line left out keeps the
     # buttons of the others, an extension that only starts another number
-    # waits before dialling and * is escaped, and the phone's endpoints answer
-    # on the port its Via names
+    # waits before dialling and * is escaped, the phone's endpoints answer on
+    # the port its Via names, and the directory lists the extensions by name
+    # whatever its case
     testCisco79xxFiles = let
       config = evalConfig [
         ({config, ...}: {
@@ -186,8 +187,14 @@ in {
             enable = true;
             extensions = {
               "2".password = config.lib.asterisk.secret "/run/secrets/2";
-              "201".password = config.lib.asterisk.secret "/run/secrets/201";
-              "202".password = config.lib.asterisk.secret "/run/secrets/202";
+              "201" = {
+                name = "bob";
+                password = config.lib.asterisk.secret "/run/secrets/201";
+              };
+              "202" = {
+                name = "Alice";
+                password = config.lib.asterisk.secret "/run/secrets/202";
+              };
             };
             voicemailMenu = "*97";
             phones = {
@@ -209,6 +216,8 @@ in {
         buttons = builtins.filter (line: line != null) (map (line: builtins.match ".*<line button=\"([0-9]+)\">.*<name>([0-9]+)</name>.*" line) (lib.splitString "</line>" files."SEP0062EC000205.cnf.xml".text));
         dialTemplate = files."dialplan.xml".text;
         endpoints = lib.genAttrs ["201" "202" "2"] (name: config.services.asterisk.pjsip.endpoints.${name}.settings);
+        directoryUrl = builtins.match ".*<directoryURL>([^<]*)</directoryURL>.*" files."SEP0062EC000205.cnf.xml".text;
+        directory = files."directory.xml".text;
       };
       expected = {
         names = ["SEP0062EC000205.cnf.xml" "XMLDefault.cnf.xml" "dialplan.xml"];
@@ -233,6 +242,25 @@ in {
           };
           "2" = {};
         };
+        directoryUrl = ["http://10.0.20.10/directory.xml"];
+        directory = ''
+          <CiscoIPPhoneDirectory>
+            <Title>Extensions</Title>
+            <Prompt>Select an entry</Prompt>
+            <DirectoryEntry>
+              <Name>2</Name>
+              <Telephone>2</Telephone>
+            </DirectoryEntry>
+            <DirectoryEntry>
+              <Name>Alice</Name>
+              <Telephone>202</Telephone>
+            </DirectoryEntry>
+            <DirectoryEntry>
+              <Name>bob</Name>
+              <Telephone>201</Telephone>
+            </DirectoryEntry>
+          </CiscoIPPhoneDirectory>
+        '';
       };
     };
 

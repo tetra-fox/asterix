@@ -2,7 +2,9 @@
 # a `SEP<MAC>.cnf.xml` (the configuration Cisco's call manager writes) in which
 # each line registers as its endpoint, served over TFTP and over HTTP on port
 # 6970, which the 9.x loads try first. With `cisco.firmware`, a factory or SCCP
-# phone that DHCP option 150 sends here also loads that SIP firmware.
+# phone that DHCP option 150 sends here also loads that SIP firmware. The
+# directories button lists the extensions, from `directory.xml` in Cisco's
+# phone service format.
 #
 # The elements are those a 7962G on SIP 9.4(2)SR3 took from a hand-written
 # file, after the examples of github.com/lparakhin/-Cisco-7962G-SIP. Cisco
@@ -21,6 +23,7 @@
     concatMapStrings
     filterAttrs
     mapAttrs'
+    mapAttrsToList
     mkDefault
     mkIf
     mkMerge
@@ -34,7 +37,30 @@
   pcfg = config.services.asterix.phones;
   acfg = config.services.asterisk;
   extensions = config.services.asterix.extensions;
+  inherit ((import ../../../lib {inherit lib;}).format) hostPort;
   pbxLib = import ../lib.nix {inherit lib;};
+
+  directoryUrl = "http://${hostPort pcfg.listenAddress (
+    if pcfg.port == 80
+    then null
+    else pcfg.port
+  )}/directory.xml";
+
+  # the extensions by name, then number
+  entries = lib.sort (a: b: let
+    x = lib.toLower a.name;
+    y = lib.toLower b.name;
+  in
+    if x == y
+    then a.number < b.number
+    else x < y) (mapAttrsToList (number: e: {
+      inherit number;
+      inherit (e) name;
+    })
+    extensions);
+  # a CiscoIPPhoneDirectory holds at most 32 entries (Cisco Unified IP Phone
+  # Services Application Development Notes)
+  maxEntries = 32;
 
   # `device` is Cisco's device type, which the default configuration keys a
   # model's load by, and `term` the load file a factory phone fetches
@@ -220,7 +246,22 @@
       <transportLayerProtocol>2</transportLayerProtocol>
       <dialToneSetting>2</dialToneSetting>
       <encrConfig>false</encrConfig>
+      <directoryURL>${text directoryUrl}</directoryURL>
     </device>
+  '';
+
+  directoryXml = ''
+    <CiscoIPPhoneDirectory>
+      <Title>Extensions</Title>
+      <Prompt>Select an entry</Prompt>
+    ${block 2 (concatMapStrings (e: ''
+        <DirectoryEntry>
+          <Name>${text e.name}</Name>
+          <Telephone>${text e.number}</Telephone>
+        </DirectoryEntry>
+      '')
+      entries)}
+    </CiscoIPPhoneDirectory>
   '';
 
   # what a phone with no file of its own takes, and the load of each model
@@ -343,8 +384,11 @@ in {
               text = dialTemplate;
               tftp = true;
             };
+            "directory.xml".text = directoryXml;
           };
       };
+
+      warnings = lib.optional (builtins.length entries > maxEntries) "services.asterix.phones: the 7942G and 7962G show at most ${toString maxEntries} entries of a directory, so their directories button lists only the first ${toString maxEntries} of ${toString (builtins.length entries)} extensions by name.";
 
       system.checks = lib.optional (cfg.firmware != null) firmwareCheck;
     })

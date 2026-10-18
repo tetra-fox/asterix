@@ -424,6 +424,9 @@ services.asterix.phones = {
 - Every number the phones dial from `pbx-internal` dials at its last digit,
   unless it starts another number. Those, and any other number, dial after
   3 s, or at once with the Dial key.
+- The directories button lists the extensions by name, from `directory.xml`,
+  which the phones fetch over HTTP on `port` each time. They show at most 32
+  entries, and evaluation warns above that.
 - These phones have no web password, so `adminPassword` doesn't apply, and
   they take no `settings`.
 - The line password stays at 12 characters or fewer in guides for these

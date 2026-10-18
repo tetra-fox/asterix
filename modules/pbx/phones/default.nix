@@ -117,7 +117,7 @@
 
   # the port devices send TFTP requests to, which the server answers from
   tftpPort = 69;
-  serveTftp = cfg.directories != [] || builtins.any (file: file.tftp) (attrValues cfg.files);
+  serveTftp = builtins.any (file: file.tftp) (attrValues cfg.files);
 
   fileType = types.submodule {
     options = {
@@ -249,7 +249,7 @@
             exit 1
           fi
           cp -L --no-preserve=mode,ownership "$file" ${runtimeDir}/
-          echo "$name tftp" >> ${runtimeManifest}
+          echo "$name" >> ${runtimeManifest}
         done
       done
 
@@ -405,7 +405,7 @@ in {
       visible = false;
       type = types.listOf types.path;
       default = [];
-      description = "Directories whose files are served as they are, over HTTP and TFTP, to anyone in `allowedNetworks`, such as firmware. Their names are read at service start.";
+      description = "Directories whose files are served as they are, over HTTP, to anyone in `allowedNetworks`, such as firmware. Their names are read at service start.";
     };
 
     httpPorts = mkOption {

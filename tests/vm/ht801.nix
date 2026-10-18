@@ -153,8 +153,8 @@ in
             ]:
                 assert expected in xml, f"{expected} missing from {xml}"
 
-        with subtest("a firmware folder is served as it is over http on 80 and 6970 and over tftp, and the 7962G's file names its load"):
-            for url in ["http://10.0.20.10/img.sbn", "http://10.0.20.10:6970/img.sbn", "tftp://10.0.20.10/img.sbn"]:
+        with subtest("a firmware folder is served as it is over http on 80 and 6970, and the 7962G's file names its load"):
+            for url in ["http://10.0.20.10/img.sbn", "http://10.0.20.10:6970/img.sbn"]:
                 body = adapters.succeed(f"curl -sf --interface 10.0.20.21 {url}").strip()
                 assert body == "firmware", f"{url}: {body!r}"
             xml = adapters.succeed("curl -sf --interface 10.0.20.21 http://10.0.20.10:6970/SEP0062EC000205.cnf.xml")

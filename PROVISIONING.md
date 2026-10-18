@@ -386,7 +386,7 @@ don't work. On the adapters, line n is port n.
 
 The phones of Cisco's own call manager, on SIP firmware. Each gets
 `SEP<MAC>.cnf.xml`, plus `XMLDefault.cnf.xml` and `dialplan.xml` for all of
-them, over TFTP and over HTTP on port 6970, which the phones try first.
+them, over HTTP on `port` and on 6970, which the phones fetch everything from.
 
 ```nix
 services.asterix.phones = {
@@ -410,8 +410,9 @@ services.asterix.phones = {
    (`SEP<MAC>.cnf.xml.sgn`), which the PBX can't make.
 3. **Watch** `journalctl -u asterix-provisioning`. A phone on SCCP or another
    load fetches the five `.sbn` images twice, once for the load its reset
-   chose and once for the one its file names, then registers. The SIP loads
-   fetch everything over HTTP on 6970.
+   chose and once for the one its file names, then registers. The 9.x loads,
+   SCCP and SIP, fetch everything over HTTP on 6970, so the PBX serves these
+   phones nothing over TFTP. Older loads that only use TFTP aren't supported.
 
 - asterix doesn't ship the firmware. `firmware.directory` takes the
   files of `cmterm-7942_7962-sip.9-4-2SR3-1.zip`: the load's `.loads` file,

@@ -1,10 +1,10 @@
 # Provisioning for the Cisco 7942G and 7962G on SIP firmware: each device gets
 # a `SEP<MAC>.cnf.xml` (the configuration Cisco's call manager writes) in which
-# each line registers as its endpoint, served over TFTP and over HTTP on port
-# 6970, which the 9.x loads try first. With `cisco.firmware`, a factory or SCCP
-# phone that DHCP option 150 sends here also loads that SIP firmware. The
-# directories button lists the extensions, from `directory.xml` in Cisco's
-# phone service format.
+# each line registers as its endpoint, served over HTTP on port 6970 too, from
+# which the 9.x loads, SCCP and SIP, fetch every file. With `cisco.firmware`, a
+# factory or SCCP phone that DHCP option 150 sends here also loads that SIP
+# firmware. The directories button lists the extensions, from `directory.xml`
+# in Cisco's phone service format.
 #
 # The elements are those a 7962G on SIP 9.4(2)SR3 took from a hand-written
 # file, after the examples of github.com/lparakhin/-Cisco-7962G-SIP. Cisco
@@ -371,19 +371,12 @@ in {
             nameValuePair "SEP${lib.toUpper device.mac}.cnf.xml" {
               text = deviceXml device;
               escape = "xml";
-              tftp = true;
               inherit (device) allowedAddress;
             })
           validDevices
           // {
-            "XMLDefault.cnf.xml" = {
-              text = defaultXml;
-              tftp = true;
-            };
-            "dialplan.xml" = {
-              text = dialTemplate;
-              tftp = true;
-            };
+            "XMLDefault.cnf.xml".text = defaultXml;
+            "dialplan.xml".text = dialTemplate;
             "directory.xml".text = directoryXml;
           };
       };

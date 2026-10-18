@@ -212,7 +212,8 @@ in {
       files = config.services.asterix.phones.files;
     in {
       expr = {
-        names = builtins.attrNames (lib.filterAttrs (_: file: file.tftp) files);
+        names = builtins.attrNames files;
+        tftp = builtins.attrNames (lib.filterAttrs (_: file: file.tftp) files);
         buttons = builtins.filter (line: line != null) (map (line: builtins.match ".*<line button=\"([0-9]+)\">.*<name>([0-9]+)</name>.*" line) (lib.splitString "</line>" files."SEP0062EC000205.cnf.xml".text));
         dialTemplate = files."dialplan.xml".text;
         endpoints = lib.genAttrs ["201" "202" "2"] (name: config.services.asterisk.pjsip.endpoints.${name}.settings);
@@ -220,7 +221,8 @@ in {
         directory = files."directory.xml".text;
       };
       expected = {
-        names = ["SEP0062EC000205.cnf.xml" "XMLDefault.cnf.xml" "dialplan.xml"];
+        names = ["SEP0062EC000205.cnf.xml" "XMLDefault.cnf.xml" "dialplan.xml" "directory.xml"];
+        tftp = [];
         buttons = [["1" "201"] ["3" "202"]];
         dialTemplate = ''
           <DIALTEMPLATE>

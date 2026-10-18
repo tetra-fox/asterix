@@ -16,9 +16,9 @@ use provisioning_server::{load, serve, tftp};
 // first file descriptor systemd passes sockets on (sd_listen_fds(3))
 const SD_LISTEN_FDS_START: RawFd = 3;
 
-// the sockets systemd passes, by their FileDescriptorName=: the HTTP listener
-// `http`, and `tftp` if files are served over TFTP
-fn systemd_sockets() -> Result<(TcpListener, Option<UdpSocket>), String> {
+// the sockets systemd passes, by their FileDescriptorName=: one or more HTTP
+// listeners `http`, and `tftp` if files are served over TFTP
+fn systemd_sockets() -> Result<(Vec<TcpListener>, Option<UdpSocket>), String> {
     let for_us = std::env::var("LISTEN_PID").is_ok_and(|pid| pid == std::process::id().to_string());
     let count: Option<usize> = std::env::var("LISTEN_FDS")
         .ok()
@@ -30,19 +30,24 @@ fn systemd_sockets() -> Result<(TcpListener, Option<UdpSocket>), String> {
             "expected sockets from systemd (LISTEN_PID, LISTEN_FDS, LISTEN_FDNAMES)".into(),
         );
     }
-    let (mut http, mut tftp) = (None, None);
+    let (mut http, mut tftp) = (Vec::new(), None);
     for (fd, name) in (SD_LISTEN_FDS_START..).zip(names) {
         // SAFETY: systemd passed this process a socket on each fd it names, of the
         // kind its socket unit says
         match name {
-            "http" => http = Some(unsafe { TcpListener::from_raw_fd(fd) }),
+            "http" => http.push(unsafe { TcpListener::from_raw_fd(fd) }),
             "tftp" => tftp = Some(unsafe { UdpSocket::from_raw_fd(fd) }),
             other => return Err(format!("unexpected socket `{other}` from systemd")),
         }
     }
-    let http = http.ok_or("no `http` socket from systemd")?;
-    http.set_nonblocking(true)
-        .map_err(|e| format!("listening socket: {e}"))?;
+    if http.is_empty() {
+        return Err("no `http` socket from systemd".into());
+    }
+    for listener in &http {
+        listener
+            .set_nonblocking(true)
+            .map_err(|e| format!("listening socket: {e}"))?;
+    }
     if let Some(tftp) = &tftp {
         tftp.set_nonblocking(true)
             .map_err(|e| format!("tftp socket: {e}"))?;
@@ -56,7 +61,8 @@ fn run() -> Result<(), String> {
         return Err("usage: provisioning-server ROOT MANIFEST".into());
     };
     let files = Arc::new(load(Path::new(root), manifest)?);
-    let (listener, tftp) = systemd_sockets()?;
+    let (mut listeners, tftp) = systemd_sockets()?;
+    let first = listeners.remove(0);
     tokio::runtime::Builder::new_current_thread()
         .enable_io()
         .enable_time()
@@ -68,7 +74,17 @@ fn run() -> Result<(), String> {
                     .map_err(|e| format!("tftp socket: {e}"))?;
                 tokio::spawn(tftp::serve(socket, files.clone()));
             }
-            serve(listener, files).await
+            // each listener has its own connection limits, see serve
+            for listener in listeners {
+                let files = files.clone();
+                tokio::spawn(async move {
+                    if let Err(message) = serve(listener, files).await {
+                        eprintln!("provisioning-server: {message}");
+                        std::process::exit(1);
+                    }
+                });
+            }
+            serve(first, files).await
         })
 }
 

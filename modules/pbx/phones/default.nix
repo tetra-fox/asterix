@@ -234,7 +234,7 @@
       for template in ${templates}/*; do
         cp -L --no-preserve=mode,ownership "$template" ${runtimeDir}/
       done
-      cp ${manifest} ${runtimeManifest}
+      cp --no-preserve=mode,ownership ${manifest} ${runtimeManifest}
 
       directories=(${lib.escapeShellArgs (map (directory: "${directory}") cfg.directories)})
       for directory in "''${directories[@]}"; do

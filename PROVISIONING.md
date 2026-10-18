@@ -405,11 +405,13 @@ services.asterix.phones = {
    factory reset phone fetches its load file from there, before its menu can
    name another server.
 2. **Reset the phone** if it was used before: hold `#` while it powers up until
-   the line buttons flash, then dial `123456789*0#`. This also clears the
-   settings and trust list of its old call manager.
+   the line buttons flash, then dial `123456789*0#`. A phone that still holds
+   its old call manager's trust list asks only for signed files
+   (`SEP<MAC>.cnf.xml.sgn`), which the PBX can't make.
 3. **Watch** `journalctl -u asterix-provisioning`. A phone on SCCP or another
    load fetches the five `.sbn` images twice, once for the load its reset
-   chose and once for the one its file names, then registers.
+   chose and once for the one its file names, then registers. The SIP loads
+   fetch everything over HTTP on 6970.
 
 - asterix doesn't ship the firmware. `firmware.directory` takes the
   files of `cmterm-7942_7962-sip.9-4-2SR3-1.zip`: the load's `.loads` file,

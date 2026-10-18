@@ -3,7 +3,7 @@
 // that are not allowed; this program restricts single files to single
 // addresses.
 //
-//   provisioning-server ROOT MANIFEST
+//   asterix-provisioning-server ROOT MANIFEST
 
 use std::net::{TcpListener, UdpSocket};
 use std::os::fd::{FromRawFd, RawFd};
@@ -11,7 +11,7 @@ use std::path::Path;
 use std::process::ExitCode;
 use std::sync::Arc;
 
-use provisioning_server::{load, serve, tftp};
+use asterix_provisioning_server::{load, serve, tftp};
 
 // first file descriptor systemd passes sockets on (sd_listen_fds(3))
 const SD_LISTEN_FDS_START: RawFd = 3;
@@ -58,7 +58,7 @@ fn systemd_sockets() -> Result<(Vec<TcpListener>, Option<UdpSocket>), String> {
 fn run() -> Result<(), String> {
     let args: Vec<String> = std::env::args().collect();
     let [_, root, manifest] = args.as_slice() else {
-        return Err("usage: provisioning-server ROOT MANIFEST".into());
+        return Err("usage: asterix-provisioning-server ROOT MANIFEST".into());
     };
     let files = Arc::new(load(Path::new(root), manifest)?);
     let (mut listeners, tftp) = systemd_sockets()?;
@@ -79,7 +79,7 @@ fn run() -> Result<(), String> {
                 let files = files.clone();
                 tokio::spawn(async move {
                     if let Err(message) = serve(listener, files).await {
-                        eprintln!("provisioning-server: {message}");
+                        eprintln!("asterix-provisioning-server: {message}");
                         std::process::exit(1);
                     }
                 });
@@ -92,7 +92,7 @@ fn main() -> ExitCode {
     match run() {
         Ok(()) => ExitCode::SUCCESS,
         Err(message) => {
-            eprintln!("provisioning-server: {message}");
+            eprintln!("asterix-provisioning-server: {message}");
             ExitCode::FAILURE
         }
     }

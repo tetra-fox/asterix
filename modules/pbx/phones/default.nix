@@ -1,10 +1,10 @@
 # Provisioning files for phones and adapters, served over HTTP by
-# pkgs/provisioning-server from a systemd socket. Vendor modules add their
+# pkgs/asterix-provisioning-server from a systemd socket. Vendor modules add their
 # models to `models` and write the files of their `devices` into `files`, as
 # users may by hand. Secret references in the text are substituted at service
 # start into a tmpfs, so the store only holds placeholders. Secrets given as
 # systemd credentials (`credential "name"`) must also be loaded into
-# asterisk-provisioning.service.
+# asterix-provisioning.service.
 {
   config,
   lib,
@@ -103,14 +103,14 @@
   macs = map (device: device.mac) (attrValues cfg.devices);
   sharesMac = device: builtins.length (builtins.filter (mac: mac == device.mac) macs) > 1;
 
-  runtimeDir = "/run/asterisk-provisioning";
+  runtimeDir = "/run/asterix-provisioning";
 
-  server = pkgs.callPackage ../../../pkgs/provisioning-server/package.nix {};
+  server = pkgs.callPackage ../../../pkgs/asterix-provisioning-server/package.nix {};
 
   # one line per file: `NAME`, then the ADDRESS that alone may fetch it, if one
   # does, and `tftp` if it is served over TFTP too. The renderer adds the files
   # of `directories` at service start
-  manifest = pkgs.writeText "asterisk-provisioning-manifest" (
+  manifest = pkgs.writeText "asterix-provisioning-manifest" (
     concatStrings (mapAttrsToList (name: file: "${name}${optionalString (file.allowedAddress != null) " ${file.allowedAddress}"}${optionalString file.tftp " tftp"}\n") cfg.files)
   );
   runtimeManifest = "${runtimeDir}/.manifest";
@@ -158,7 +158,7 @@
     };
   };
 
-  templates = pkgs.linkFarm "asterisk-provisioning" (
+  templates = pkgs.linkFarm "asterix-provisioning" (
     mapAttrsToList (name: file: {
       inherit name;
       path = pkgs.writeText name file.text;
@@ -167,7 +167,7 @@
   );
 
   secretRefs = unique (lib.concatMap (file: secrets.fromText file.text) (attrValues cfg.files));
-  secretManifest = pkgs.writeText "asterisk-provisioning-secrets" (secrets.manifest {} secretRefs);
+  secretManifest = pkgs.writeText "asterix-provisioning-secrets" (secrets.manifest {} secretRefs);
 
   # files with secrets, by how their values are escaped
   filesFor = escape: attrNames (filterAttrs (_: file: file.escape == escape && secrets.fromText file.text != []) cfg.files);
@@ -220,7 +220,7 @@
   invalidAddresses = filterAttrs (_: file: file.allowedAddress != null && !isAddress file.allowedAddress) cfg.files;
 
   renderer = pkgs.writeShellApplication {
-    name = "asterisk-provisioning-render";
+    name = "asterix-provisioning-render";
     runtimeInputs = with pkgs; [
       coreutils
       gnugrep
@@ -241,11 +241,11 @@
         for file in "$directory"/*; do
           name=''${file##*/}
           if [[ ! $name =~ ^[A-Za-z0-9_+-][A-Za-z0-9_.+-]*$ ]]; then
-            echo "asterisk-provisioning: $file: file names may only contain letters, digits and _.+-" >&2
+            echo "asterix-provisioning: $file: file names may only contain letters, digits and _.+-" >&2
             exit 1
           fi
           if [ -e "${runtimeDir}/$name" ]; then
-            echo "asterisk-provisioning: $file has the name of another served file" >&2
+            echo "asterix-provisioning: $file has the name of another served file" >&2
             exit 1
           fi
           cp -L --no-preserve=mode,ownership "$file" ${runtimeDir}/
@@ -259,7 +259,7 @@
           render-secrets ${escape} ${secretManifest} ${lib.escapeShellArgs (filesFor escape)}
         '') ["none" "line" "xml"]}
       if grep -rqF '@NIX_ASTERISK_SECRET:' ${runtimeDir}; then
-        echo "asterisk-provisioning: unresolved secret placeholder" >&2
+        echo "asterix-provisioning: unresolved secret placeholder" >&2
         exit 1
       fi
 
@@ -483,7 +483,7 @@ in {
       })
       secretRefs;
 
-    systemd.sockets.asterisk-provisioning = {
+    systemd.sockets.asterix-provisioning = {
       description = "Phone provisioning";
       wantedBy = ["sockets.target"];
       listenStreams = map (format.hostPort cfg.listenAddress) (lib.unique ([cfg.port] ++ cfg.httpPorts));
@@ -495,7 +495,7 @@ in {
       };
     };
 
-    systemd.sockets.asterisk-provisioning-tftp = mkIf serveTftp {
+    systemd.sockets.asterix-provisioning-tftp = mkIf serveTftp {
       description = "Phone provisioning over TFTP";
       wantedBy = ["sockets.target"];
       listenDatagrams = [(format.hostPort cfg.listenAddress tftpPort)];
@@ -504,12 +504,12 @@ in {
         IPAddressDeny = "any";
         IPAddressAllow = cfg.allowedNetworks;
         FileDescriptorName = "tftp";
-        Service = "asterisk-provisioning.service";
+        Service = "asterix-provisioning.service";
       };
     };
 
-    systemd.services.asterisk-provisioning = let
-      sockets = ["asterisk-provisioning.socket"] ++ lib.optional serveTftp "asterisk-provisioning-tftp.socket";
+    systemd.services.asterix-provisioning = let
+      sockets = ["asterix-provisioning.socket"] ++ lib.optional serveTftp "asterix-provisioning-tftp.socket";
     in {
       description = "Phone provisioning";
       # started at boot rather than on the first request, so a missing secret
@@ -520,14 +520,14 @@ in {
       serviceConfig = {
         Type = "exec";
         Sockets = sockets;
-        ExecStartPre = "${renderer}/bin/asterisk-provisioning-render";
+        ExecStartPre = "${renderer}/bin/asterix-provisioning-render";
         ExecStart = "${lib.getExe server} ${runtimeDir} ${runtimeManifest}";
         Restart = "on-failure";
         DynamicUser = true;
         LoadCredential = map (ref: "${secrets.credentialName ref}:${ref._secret}") (
           lib.filter (ref: ref ? _secret) secretRefs
         );
-        RuntimeDirectory = "asterisk-provisioning";
+        RuntimeDirectory = "asterix-provisioning";
         RuntimeDirectoryMode = "0700";
         UMask = "0077";
 

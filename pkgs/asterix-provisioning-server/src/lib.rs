@@ -1,4 +1,4 @@
-// The request handling of provisioning-server, over HTTP and TFTP.
+// The request handling of asterix-provisioning-server, over HTTP and TFTP.
 
 pub mod tftp;
 

@@ -249,7 +249,7 @@ in {
     })
 
     (mkIf (rcfg.keepDays != null) {
-      systemd.services.asterisk-recordings-expire = {
+      systemd.services.asterix-recordings-expire = {
         description = "Delete call recordings older than ${toString rcfg.keepDays} days";
         # Asterisk creates the directory as it starts
         unitConfig.ConditionPathIsDirectory = directory;
@@ -277,7 +277,7 @@ in {
           ];
         };
       };
-      systemd.timers.asterisk-recordings-expire = {
+      systemd.timers.asterix-recordings-expire = {
         wantedBy = ["timers.target"];
         timerConfig = {
           OnCalendar = "daily";

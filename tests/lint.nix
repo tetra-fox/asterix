@@ -28,7 +28,7 @@ in {
   '';
 
   # the server and its tests, with warnings as errors
-  clippy = self.packages.${pkgs.stdenv.hostPlatform.system}.provisioning-server.overrideAttrs (old: {
+  clippy = self.packages.${pkgs.stdenv.hostPlatform.system}.asterix-provisioning-server.overrideAttrs (old: {
     pname = "${old.pname}-clippy";
     nativeBuildInputs = old.nativeBuildInputs ++ [pkgs.clippy];
     buildPhase = "cargo clippy --all-targets --offline -- -D warnings";

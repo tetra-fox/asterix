@@ -97,7 +97,7 @@ in
       + builtins.readFile ./tones.py
       + ''
         start_all()
-        pbx.wait_for_unit("asterisk-provisioning.service")
+        pbx.wait_for_unit("asterix-provisioning.service")
         base = pbx.succeed("readlink -f /run/current-system").strip()
         # nothing on the adapters node waits for network-online.target: wait for its address
         adapters.wait_until_succeeds("ip -o address show to 10.0.20.21 -tentative | grep -q .")
@@ -135,12 +135,12 @@ in
                 assert expected in xml, f"{expected} missing from {xml}"
 
         with subtest("each adapter's file is only readable by the provisioning user, and the secrets are only in that runtime copy"):
-            pbx.succeed("systemctl is-active asterisk-provisioning.socket asterisk-provisioning.service")
-            files = pbx.succeed("stat -c '%A %U %n' /run/asterisk-provisioning/cfg*.xml").splitlines()
+            pbx.succeed("systemctl is-active asterix-provisioning.socket asterix-provisioning.service")
+            files = pbx.succeed("stat -c '%A %U %n' /run/asterix-provisioning/cfg*.xml").splitlines()
             assert files == [
-                f"-r-------- asterisk-provisioning /run/asterisk-provisioning/cfgc074ad000{ext}.xml" for ext in ["101", "102"]
+                f"-r-------- asterix-provisioning /run/asterix-provisioning/cfgc074ad000{ext}.xml" for ext in ["101", "102"]
             ], files
-            renderer = pbx.succeed("systemctl cat asterisk-provisioning.service | grep -o '/nix/store/[^ ]*-asterisk-provisioning-render' | head -1").strip()
+            renderer = pbx.succeed("systemctl cat asterix-provisioning.service | grep -o '/nix/store/[^ ]*-asterix-provisioning-render' | head -1").strip()
             # the renderer, the file templates it copies and the linkFarm of them
             paths = [p for p in pbx.succeed(f"nix-store -qR {renderer}").split() if "provisioning" in p or "-cfg" in p]
             assert any(p.endswith("-cfgc074ad000101.xml") for p in paths), paths
@@ -170,7 +170,7 @@ in
             }
             # sops-nix's reloadUnits and restartUnits of the two examples
             assert "asterisk.service" in acted.get("reloading", []), output
-            assert "asterisk-provisioning.service" in acted.get("restarting", []), output
+            assert "asterix-provisioning.service" in acted.get("restarting", []), output
             assert all("asterisk.service" not in acted.get(a, []) for a in ["stopping", "starting", "restarting"]), output
             wait_journal(pbx, cursor, "asterisk-config: module reload res_pjsip.so")
             assert "rotated-102-by-deploy" in asterisk(pbx, "pjsip show auth 102")

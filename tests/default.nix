@@ -124,7 +124,7 @@ in
     vm-upgrade = import ./vm/upgrade.nix {inherit pkgs self;};
 
     # builds the server and runs its unit tests
-    provisioning-server = self.packages.${pkgs.stdenv.hostPlatform.system}.provisioning-server;
+    asterix-provisioning-server = self.packages.${pkgs.stdenv.hostPlatform.system}.asterix-provisioning-server;
 
     # every option has a description and the reference builds
     docs = import ../docs {inherit pkgs self;};

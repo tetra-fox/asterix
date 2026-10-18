@@ -41,13 +41,13 @@
 
     packages = forAllSystems (pkgs: {
       docs = import ./docs {inherit pkgs self;};
-      provisioning-server = pkgs.callPackage ./pkgs/provisioning-server/package.nix {};
+      asterix-provisioning-server = pkgs.callPackage ./pkgs/asterix-provisioning-server/package.nix {};
     });
 
     # the same toolchain that builds the server, plus the tools to work on it
     devShells = forAllSystems (pkgs: {
       default = pkgs.mkShell {
-        inputsFrom = [self.packages.${pkgs.stdenv.hostPlatform.system}.provisioning-server];
+        inputsFrom = [self.packages.${pkgs.stdenv.hostPlatform.system}.asterix-provisioning-server];
         packages = [
           pkgs.clippy
           pkgs.rust-analyzer

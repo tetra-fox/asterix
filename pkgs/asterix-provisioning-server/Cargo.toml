@@ -1,5 +1,5 @@
 [package]
-name = "provisioning-server"
+name = "asterix-provisioning-server"
 version = "0.1.0"
 edition = "2024"
 description = "Serves phone provisioning files to the addresses allowed to fetch them"

@@ -42,7 +42,7 @@ services.asterix = {
    | Snom                  | 66 = `http://10.0.20.10`, no 67   | asks Snom's redirection service first                      |
    | Yealink               | 66 = `http://10.0.20.10`          |                                                            |
 
-4. **Deploy and watch** `journalctl -u asterisk-provisioning`, which logs every
+4. **Deploy and watch** `journalctl -u asterix-provisioning`, which logs every
    request. A device registers once it has its file.
 
 [`examples/household-intercom-ht801.nix`](examples/household-intercom-ht801.nix)
@@ -89,7 +89,7 @@ All under `services.asterix.phones`.
 - `services.asterix.openFirewall` opens the HTTP port, and UDP 69 when TFTP is
   in use, on the network's interface, or on every interface if it has none.
   With a 7942G or 7962G it also opens TCP 6970.
-- After a password changes, restart `asterisk-provisioning.service` (sops-nix:
+- After a password changes, restart `asterix-provisioning.service` (sops-nix:
   `restartUnits`) and reboot the device.
 
 ## Supported devices
@@ -407,7 +407,7 @@ services.asterix.phones = {
 2. **Reset the phone** if it was used before: hold `#` while it powers up until
    the line buttons flash, then dial `123456789*0#`. This also clears the
    settings and trust list of its old call manager.
-3. **Watch** `journalctl -u asterisk-provisioning`. A phone on SCCP or another
+3. **Watch** `journalctl -u asterix-provisioning`. A phone on SCCP or another
    load fetches the five `.sbn` images twice, once for the load its reset
    chose and once for the one its file names, then registers.
 

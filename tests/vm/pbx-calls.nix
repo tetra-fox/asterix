@@ -310,7 +310,7 @@ in
             # more than the WAV header
             assert int(size) > 44, size
             pbx.succeed(f"touch -d '25 hours ago' {monitor}/{name}", f"runuser -u asterisk -- touch {monitor}/recent.wav")
-            pbx.succeed("systemctl start asterisk-recordings-expire.service")
+            pbx.succeed("systemctl start asterix-recordings-expire.service")
             assert pbx.succeed(f"ls {monitor}").split() == ["recent.wav"]
 
         def emergency(caller, dialled, number):

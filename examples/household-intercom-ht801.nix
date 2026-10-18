@@ -6,7 +6,7 @@
 }: {
   # the files embed these passwords: render them again when one changes
   sops.secrets = lib.genAttrs ["ht801-admin" "sip-101" "sip-102"] (_: {
-    restartUnits = ["asterisk-provisioning.service"];
+    restartUnits = ["asterix-provisioning.service"];
   });
 
   services.asterix.phones = {

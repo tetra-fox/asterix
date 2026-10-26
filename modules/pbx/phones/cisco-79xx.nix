@@ -4,7 +4,7 @@
 # which the 9.x loads, SCCP and SIP, fetch every file. With `cisco.firmware`, a
 # factory or SCCP phone that DHCP option 150 sends here also loads that SIP
 # firmware. The directories button lists the extensions, from `directory.xml`
-# in Cisco's phone service format.
+# in Cisco's phone service format, through the menu `directories.xml`.
 #
 # The elements are those a 7962G on SIP 9.4(2)SR3 took from a hand-written
 # file, after the examples of github.com/lparakhin/-Cisco-7962G-SIP. Cisco
@@ -40,11 +40,11 @@
   inherit ((import ../../../lib {inherit lib;}).format) hostPort;
   pbxLib = import ../lib.nix {inherit lib;};
 
-  directoryUrl = "http://${hostPort pcfg.listenAddress (
+  fileUrl = name: "http://${hostPort pcfg.listenAddress (
     if pcfg.port == 80
     then null
     else pcfg.port
-  )}/directory.xml";
+  )}/${name}";
 
   # the extensions by name, then number
   entries = lib.sort (a: b: let
@@ -250,8 +250,21 @@
       <dialToneSetting>2</dialToneSetting>
       <encrConfig>false</encrConfig>
       <advertiseG722Codec>1</advertiseG722Codec>
-      <directoryURL>${text directoryUrl}</directoryURL>
+      <directoryURL>${text (fileUrl "directories.xml")}</directoryURL>
     </device>
+  '';
+
+  # the phone adds the items of the menu at directoryURL under its call logs,
+  # and shows nothing for a directory there
+  directoriesXml = ''
+    <CiscoIPPhoneMenu>
+      <Title>Directories</Title>
+      <Prompt>Select a directory</Prompt>
+      <MenuItem>
+        <Name>Extensions</Name>
+        <URL>${text (fileUrl "directory.xml")}</URL>
+      </MenuItem>
+    </CiscoIPPhoneMenu>
   '';
 
   directoryXml = ''
@@ -381,6 +394,7 @@ in {
           // {
             "XMLDefault.cnf.xml".text = defaultXml;
             "dialplan.xml".text = dialTemplate;
+            "directories.xml".text = directoriesXml;
             "directory.xml".text = directoryXml;
           };
       };

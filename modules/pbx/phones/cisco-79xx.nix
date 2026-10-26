@@ -240,12 +240,16 @@
         <loggingDisplay>1</loggingDisplay>
         <loadServer></loadServer>
         <sshAccess>1</sshAccess>
+        <g722CodecSupport>2</g722CodecSupport>
+        <handsetWidebandEnable>1</handsetWidebandEnable>
+        <headsetWidebandEnable>1</headsetWidebandEnable>
       </vendorConfig>
       <versionStamp>1</versionStamp>
       <deviceSecurityMode>1</deviceSecurityMode>
       <transportLayerProtocol>2</transportLayerProtocol>
       <dialToneSetting>2</dialToneSetting>
       <encrConfig>false</encrConfig>
+      <advertiseG722Codec>1</advertiseG722Codec>
       <directoryURL>${text directoryUrl}</directoryURL>
     </device>
   '';

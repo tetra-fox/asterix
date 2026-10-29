@@ -95,19 +95,33 @@
   in
     endpoint != null && !endpoint.behindNat && (endpoint.settings.force_rport or null) == false;
 
+  # the phone auto-answers every call to a line or none, and ignores the
+  # headers of a page, so only pagingLines answer by themselves
+  pagingLines = pbxLib.pagingLines extensions;
+
   line = n: name: let
     inherit (acfg.pjsip.endpoints.${name}) auth;
-    displayName = extensions.${name}.name or name;
+    paging = pagingLines ? ${name};
+    displayName = extensions.${pagingLines.${name} or name}.name or name;
   in ''
     <line button="${toString n}">
       <featureID>9</featureID>
-      <featureLabel>${text name}</featureLabel>
+      <featureLabel>${
+      if paging
+      then "Paging"
+      else text name
+    }</featureLabel>
       <proxy>USECALLMANAGER</proxy>
       <port>${toString pcfg.sipPort}</port>
       <name>${text name}</name>
       <displayName>${text displayName}</displayName>
       <autoAnswer>
-        <autoAnswerEnabled>2</autoAnswerEnabled>
+        <autoAnswerEnabled>${
+      if paging
+      then "1"
+      else "0"
+    }</autoAnswerEnabled>
+        <autoAnswerMode>Auto Answer with Speakerphone</autoAnswerMode>
       </autoAnswer>
       <callWaiting>3</callWaiting>
       <authName>${text auth.username}</authName>
@@ -373,7 +387,7 @@ in {
       ];
 
       # an extension the phone registers as answers on the port it names
-      services.asterisk.pjsip.endpoints = lib.genAttrs (builtins.filter (name: extensions ? ${name}) lineEndpoints) (_: {
+      services.asterisk.pjsip.endpoints = lib.genAttrs (builtins.filter (name: extensions ? ${name} || pagingLines ? ${name}) lineEndpoints) (_: {
         settings = {
           force_rport = mkDefault false;
           rewrite_contact = mkDefault false;

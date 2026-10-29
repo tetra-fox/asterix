@@ -205,21 +205,23 @@ in {
         };
       };
 
-      pjsip.endpoints = lib.mapAttrs (_: e: let
-        name = networkOf e;
-        n = cfg.networks.${name};
-      in
-        mkIf (name != null && cfg.networks ? ${name}) {
-          transport = mkDefault (pbxLib.pinned name n);
-          settings = mkIf (n.subnets != []) {
-            contact_deny = mkDefault [
-              "0.0.0.0/0.0.0.0"
-              "::/0"
-            ];
-            contact_permit = mkDefault n.subnets;
-          };
-        })
-      cfg.extensions;
+      pjsip.endpoints =
+        lib.mapAttrs (_: e: let
+          name = networkOf e;
+          n = cfg.networks.${name};
+        in
+          mkIf (name != null && cfg.networks ? ${name}) {
+            transport = mkDefault (pbxLib.pinned name n);
+            settings = mkIf (n.subnets != []) {
+              contact_deny = mkDefault [
+                "0.0.0.0/0.0.0.0"
+                "::/0"
+              ];
+              contact_permit = mkDefault n.subnets;
+            };
+          })
+        # a pagingLine is on its extension's network
+        (cfg.extensions // lib.mapAttrs (_: number: cfg.extensions.${number}) (pbxLib.pagingLines cfg.extensions));
     };
   };
 }

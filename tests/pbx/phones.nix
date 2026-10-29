@@ -277,6 +277,74 @@ in {
       };
     };
 
+    # a 7962G auto-answers on speaker only the pagingLine of its extension,
+    # which pages ring instead of the extension, on its network, and which
+    # calls out as the extension
+    testCisco79xxPagingLine = let
+      config = evalConfig [
+        ({config, ...}: {
+          imports = [self.nixosModules.default];
+          services.asterix = {
+            enable = true;
+            networks.voip.subnets = ["10.0.20.0/24"];
+            extensions = {
+              "201" = {
+                name = "bob";
+                password = config.lib.asterisk.secret "/run/secrets/201";
+                pagingLine.password = config.lib.asterisk.secret "/run/secrets/201-page";
+              };
+              "202".password = config.lib.asterisk.secret "/run/secrets/202";
+            };
+            paging.all = {
+              number = "650";
+              members = ["201" "202"];
+            };
+            phones = {
+              listenAddress = "10.0.20.10";
+              devices.desk = {
+                model = "cisco-7962g";
+                mac = "00:62:ec:00:02:05";
+                lines = ["201" null null null null "201-page"];
+              };
+            };
+          };
+        })
+      ];
+      endpoints = config.services.asterisk.pjsip.endpoints;
+      dials = lib.mapAttrs (_: steps: builtins.filter (lib.hasPrefix "Dial(") (map (step: "${step.app}(${lib.concatStringsSep "," step.args})") steps));
+    in {
+      expr = {
+        lines = builtins.filter (line: line != null) (map (line: builtins.match ".*<line button=\"([0-9]+)\">.*<featureLabel>([^<]*)</featureLabel>.*<displayName>([^<]*)</displayName>.*<autoAnswerEnabled>([01])</autoAnswerEnabled>.*<autoAnswerMode>([^<]*)</autoAnswerMode>.*" line) (lib.splitString "</line>" config.services.asterix.phones.files."SEP0062EC000205.cnf.xml".text));
+        endpoint = {
+          inherit (endpoints."201-page") context callerId settings transport;
+          password = endpoints."201-page".auth.password._secret;
+        };
+        dials = removeAttrs (dials config.services.asterisk.dialplan.contexts.pbx-paging-all.extensions) ["s" "headers"];
+      };
+      expected = {
+        lines = [
+          ["1" "201" "bob" "0" "Auto Answer with Speakerphone"]
+          ["6" "Paging" "bob" "1" "Auto Answer with Speakerphone"]
+        ];
+        endpoint = {
+          context = "pbx-internal";
+          callerId = ''"bob" <201>'';
+          settings = {
+            contact_deny = ["0.0.0.0/0.0.0.0" "::/0"];
+            contact_permit = ["10.0.20.0/24"];
+            force_rport = false;
+            rewrite_contact = false;
+          };
+          transport = "voip";
+          password = "/run/secrets/201-page";
+        };
+        dials = {
+          "201" = ["Dial(\${PJSIP_DIAL_CONTACTS(201-page)},,ib(pbx-paging-all^headers^1))"];
+          "202" = ["Dial(\${PJSIP_DIAL_CONTACTS(202)},,ib(pbx-paging-all^headers^1))"];
+        };
+      };
+    };
+
     testFanvilFile = {
       expr = lib.mapAttrs (_: file: {inherit (file) text escape allowedAddress;}) (files {
         services.asterisk.pjsip.endpoints."202".auth.username = "kitchen";

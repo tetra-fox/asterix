@@ -262,6 +262,12 @@ in rec {
   # calls only the first reachable one
   devices = number: "\${PJSIP_DIAL_CONTACTS(${number})}";
 
+  # the endpoint of an extension's pagingLine
+  pagingEndpoint = number: "${number}-page";
+
+  # the numbers of the extensions with a pagingLine, keyed by its endpoint
+  pagingLines = extensions: lib.mapAttrs' (number: _: lib.nameValuePair (pagingEndpoint number) number) (lib.filterAttrs (_: e: e.pagingLine != null) extensions);
+
   # Dial's option that has pbx-caller-id put the caller ID pbx set in the
   # P-Asserted-Identity of the call to `trunk`, whose From names its account
   callerIdOption = trunk: let

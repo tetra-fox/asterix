@@ -423,6 +423,16 @@
       assertion = "services.asterix.voicemail.mailboxes: these numbers are the mailboxes of extensions with voicemail: 201.";
     };
 
+    pagingLineOfAnExtension = {
+      module = {config, ...}: {
+        services.asterix.extensions = {
+          "201".pagingLine.password = config.lib.asterisk.secret "/run/secrets/201-page";
+          "201-page".password = config.lib.asterisk.secret "/run/secrets/201-page-ext";
+        };
+      };
+      assertion = "services.asterix.extensions: these numbers are the endpoints of other extensions' pagingLine: 201-page.";
+    };
+
     # trunks, extensions and hours that pbx objects name but nobody defines;
     # each trunk of a number's list counts
     danglingReferences = {

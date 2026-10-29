@@ -59,6 +59,22 @@
         default = null;
         description = "Mailbox `<number>@default` for the extension. A mailbox number cannot start with `*` or `#` (see {option}`services.asterisk.voicemail.mailboxes`).";
       };
+      pagingLine = mkOption {
+        type = types.nullOr (types.submodule {
+          options.password = mkOption {
+            type = secretOrString;
+            example = lib.literalExpression "config.lib.asterisk.secret config.sops.secrets.sip-201-page.path";
+            description = "SIP password of the line, normally a secret reference.";
+          };
+        });
+        default = null;
+        description = ''
+          A line that only takes pages, for phones that auto-answer a line but
+          ignore a page's auto-answer headers, such as the Cisco 7942G and
+          7962G. It is endpoint `<number>-page`, which pages to the extension
+          ring instead of its devices; list it in a device's `lines`.
+        '';
+      };
       network = mkOption {
         type = types.nullOr types.str;
         default = null;
@@ -139,6 +155,8 @@
   # (res/res_pjsip/pjsip_configuration.c, caller_id_handler)
   longNames = filterAttrs (_: e: builtins.stringLength e.name > 79) cfg.extensions;
 
+  sharedEndpoints = builtins.filter (endpoint: cfg.extensions ? ${endpoint}) (builtins.attrNames (pbxLib.pagingLines cfg.extensions));
+
   codes = cfg.featureCodes;
   forwards = kind: codes.forward.${kind}.on != null;
   anyForward = builtins.any forwards (builtins.attrNames pbxLib.forwardSounds);
@@ -211,6 +229,10 @@ in {
           lib.concatMapStringsSep ", " (number: ''"${number}" (${toString (builtins.stringLength longNames.${number}.name)} bytes)'') (builtins.attrNames longNames)
         }.";
       }
+      {
+        assertion = sharedEndpoints == [];
+        message = "services.asterix.extensions: these numbers are the endpoints of other extensions' pagingLine: ${lib.concatStringsSep ", " sharedEndpoints}.";
+      }
     ];
 
     services.asterisk = {
@@ -231,7 +253,16 @@ in {
             named_pickup_group = groups;
           });
         })
-        cfg.extensions;
+        cfg.extensions
+        # a call from the line is one from the extension
+        // mapAttrs (_: number: let
+          e = cfg.extensions.${number};
+        in {
+          context = mkDefault "pbx-internal";
+          callerId = mkDefault ''"${lib.escape ["\\" "\""] e.name}" <${number}>'';
+          auth.password = mkDefault e.pagingLine.password;
+          rtpTimeout = mkDefault 60;
+        }) (pbxLib.pagingLines cfg.extensions);
 
       # the voicemail menu's VoiceMailMain needs app_voicemail, which the core
       # loads only once a mailbox exists

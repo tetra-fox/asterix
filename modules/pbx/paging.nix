@@ -58,7 +58,9 @@
         description = ''
           SIP headers added to each page, as `Name: value`. The defaults
           are the auto-answer requests most desk phones understand. The
-          phone must also allow auto-answer.
+          phone must also allow auto-answer. Phones that ignore them answer
+          pages on a `pagingLine` of
+          {option}`services.asterix.extensions`.
         '';
       };
     };
@@ -88,8 +90,8 @@
           paging.headers
           ++ [(pbxLib.app "Return" [])];
       }
-      # each member rings on every device, unless it is the caller's own
-      # extension or, with skipBusy, not idle
+      # each member rings on every device, or on its pagingLine, unless it is
+      # the caller's own extension or, with skipBusy, not idle
       // lib.genAttrs paging.members (member:
         [(pbxLib.app "GotoIf" [''$["''${PBX_PAGER}" = "PJSIP/${member}"]?done''])]
         ++ lib.optionals paging.skipBusy [
@@ -98,7 +100,11 @@
         ]
         ++ [
           (pbxLib.app "Dial" [
-            (pbxLib.devices member)
+            (pbxLib.devices (
+              if cfg.extensions.${member}.pagingLine or null != null
+              then pbxLib.pagingEndpoint member
+              else member
+            ))
             ""
             "ib(${context}^headers^1)"
           ])

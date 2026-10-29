@@ -429,6 +429,11 @@ services.asterix.phones = {
   `directories.xml`, and Extensions lists them by name, from `directory.xml`.
   The phones fetch both over HTTP on `port` each time. They show at most 32
   entries, and evaluation warns above that.
+- A line auto-answers every call or none, and the phones ignore the headers
+  a page asks to auto-answer with. To answer pages, give the extension a
+  `pagingLine` and put its endpoint, `<number>-page`, on a free button.
+  That line answers on speaker by itself, labelled Paging, and pages ring
+  it instead of the extension.
 - These phones have no web password, so `adminPassword` doesn't apply, and
   they take no `settings`.
 
